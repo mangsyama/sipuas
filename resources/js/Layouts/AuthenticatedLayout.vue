@@ -1,0 +1,1588 @@
+<script setup>
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue';
+import Dropdown from '@/Components/Dropdown.vue';
+import DropdownLink from '@/Components/DropdownLink.vue';
+import NotificationItem from '@/Components/NotificationItem.vue';
+import { Link, usePage, router } from '@inertiajs/vue3';
+import { Sun, Moon, Languages, LayoutDashboard, FileText, User, X, ChevronRight, ChevronLeft, ChevronDown, Settings, LogOut, Activity, Users, FileBarChart2, History, Shield, ShieldAlert, UserCheck, ArrowLeft, Database, Search, Building2, Layers, MapPin, Hospital, Palette, Play, Type, Bell, Clock, CheckCircle2, AlertTriangle, AlertCircle, HelpCircle, Wrench, Check, CheckCheck, Eye, MessageSquareCode, QrCode, Radio, Award, BarChart3 } from '@lucide/vue';
+
+
+
+const sidebarOpen = ref(false);
+const isDark = ref(false);
+const sidebarCollapsed = ref(false);
+const sidebarNav = ref(null);
+const isLoggingOut = ref(false);
+
+const handleLogout = () => {
+    if (isLoggingOut.value) return;
+    isLoggingOut.value = true;
+    router.post(route('logout'), {}, {
+        onFinish: () => {
+            isLoggingOut.value = false;
+        },
+    });
+};
+
+const saveSidebarScroll = () => {
+    if (sidebarNav.value && !sidebarCollapsed.value) {
+        sessionStorage.setItem('sidebar-scroll', sidebarNav.value.scrollTop);
+    }
+};
+
+const toggleTheme = () => {
+    isDark.value = !isDark.value;
+    if (isDark.value) {
+        document.documentElement.classList.add('dark');
+        localStorage.setItem('theme', 'dark');
+    } else {
+        document.documentElement.classList.remove('dark');
+        localStorage.setItem('theme', 'light');
+    }
+};
+
+const toggleSidebar = () => {
+    sidebarOpen.value = !sidebarOpen.value;
+};
+
+const closeSidebar = () => {
+    sidebarOpen.value = false;
+};
+
+const handleDemoToast = (event) => {
+    if (event.detail) {
+        showNotificationToast(event.detail);
+    }
+};
+
+const customAlert = ref({
+    show: false,
+    title: '',
+    text: '',
+    icon: 'success', // success, error, warning, question
+    confirmText: 'OK',
+    cancelText: '',
+    onConfirm: null,
+    onCancel: null
+});
+
+const handleCustomAlert = (event) => {
+    if (event.detail && event.detail.options) {
+        const opts = event.detail.options;
+        customAlert.value = {
+            show: true,
+            title: opts.title || '',
+            text: opts.text || '',
+            icon: opts.icon || 'success',
+            confirmText: opts.confirmText || 'OK',
+            cancelText: opts.cancelText || '',
+            onConfirm: () => {
+                customAlert.value.show = false;
+                if (event.detail.callback) {
+                    event.detail.callback({ isConfirmed: true });
+                }
+            },
+            onCancel: () => {
+                customAlert.value.show = false;
+                if (event.detail.callback) {
+                    event.detail.callback({ isConfirmed: false, isDismissed: true });
+                }
+            }
+        };
+    }
+};
+
+onMounted(() => {
+    isDark.value = document.documentElement.classList.contains('dark');
+    window.addEventListener('theme-changed', () => {
+        isDark.value = document.documentElement.classList.contains('dark');
+    });
+    sidebarCollapsed.value = localStorage.getItem('sidebar-collapsed') === 'true';
+
+    // Restore scroll position synchronously only if expanded to avoid layout bugs when collapsed
+    if (!sidebarCollapsed.value) {
+        const savedScroll = sessionStorage.getItem('sidebar-scroll');
+        if (savedScroll && sidebarNav.value) {
+            sidebarNav.value.scrollTop = parseInt(savedScroll, 10);
+        }
+    }
+
+    registerNotificationListeners();
+    window.addEventListener('show-demo-toast', handleDemoToast);
+    window.addEventListener('trigger-custom-alert', handleCustomAlert);
+    document.addEventListener('click', closeMobileNotificationsOnOutsideClick);
+});
+
+onUnmounted(() => {
+    window.removeEventListener('show-demo-toast', handleDemoToast);
+    window.removeEventListener('trigger-custom-alert', handleCustomAlert);
+    document.removeEventListener('click', closeMobileNotificationsOnOutsideClick);
+});
+
+const toggleSidebarCollapse = () => {
+    sidebarCollapsed.value = !sidebarCollapsed.value;
+    localStorage.setItem('sidebar-collapsed', sidebarCollapsed.value ? 'true' : 'false');
+    
+    if (sidebarNav.value) {
+        if (sidebarCollapsed.value) {
+            // Reset scroll to 0 when collapsed to keep icons fully visible
+            sidebarNav.value.scrollTop = 0;
+        } else {
+            // Restore scroll when expanded
+            const savedScroll = sessionStorage.getItem('sidebar-scroll');
+            if (savedScroll) {
+                sidebarNav.value.scrollTop = parseInt(savedScroll, 10);
+            }
+        }
+    }
+};
+
+const getInitialOpenMenus = () => {
+    const defaults = {
+        'menu.user_management': route().current('users.approvals') ||
+            route().current('users.approvals.show') ||
+            route().current('users.index') ||
+            route().current('users.show') ||
+            route().current('users.edit'),
+        'menu.service_management': route().current('service-management.rooms') ||
+            route().current('service-management.categories') ||
+            route().current('service-management.supporting-units'),
+        'menu.design_components': route().current('design-system.index') ||
+            route().current('design-system.buttons-badges') ||
+            route().current('design-system.forms') ||
+            route().current('design-system.modals-alerts') ||
+            route().current('design-system.tables') ||
+            route().current('design-system.cards')
+    };
+
+    if (typeof window !== 'undefined') {
+        try {
+            const saved = localStorage.getItem('open-menus');
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                const merged = {};
+                for (const key in defaults) {
+                    merged[key] = defaults[key] || parsed[key] || false;
+                }
+                return merged;
+            }
+        } catch (e) {
+            console.error('Error parsing open-menus from localStorage:', e);
+        }
+    }
+    return defaults;
+};
+
+const openMenus = ref(getInitialOpenMenus());
+
+const toggleMenu = (label) => {
+    if (openMenus.value[label] !== undefined) {
+        openMenus.value[label] = !openMenus.value[label];
+    } else {
+        openMenus.value[label] = true;
+    }
+    if (typeof window !== 'undefined') {
+        localStorage.setItem('open-menus', JSON.stringify(openMenus.value));
+    }
+};
+
+const isChildActive = (children) => {
+    return children.some(child => isItemActive(child));
+};
+
+const isItemActive = (child) => {
+    if (route().current(child.routeName)) return true;
+    if (child.routeName === 'users.approvals' && route().current('users.approvals.show')) return true;
+    if (child.routeName === 'users.index' && (route().current('users.edit') || route().current('users.show'))) return true;
+    if (child.routeName === 'reports-management.index' && route().current('reports-management.show')) return true;
+    if (child.routeName === 'reports.history' && route().current('reports.show')) return true;
+    if (child.routeName === 'settings.index' && route().current('profile.edit')) return true;
+    if (child.routeName === 'services.index' && (route().current('services.index') || route().current('services.medik') || route().current('services.non-medik') || route().current('services.units.show'))) return true;
+    return false;
+};
+
+const isRouteActive = (item) => {
+    if (item.routeName && route().current(item.routeName)) {
+        return true;
+    }
+    if (item.routeName === 'users.approvals' && route().current('users.approvals.show')) {
+        return true;
+    }
+    if (item.routeName === 'users.index' && (route().current('users.edit') || route().current('users.show'))) {
+        return true;
+    }
+    if (item.routeName === 'reports-management.index' && route().current('reports-management.show')) {
+        return true;
+    }
+    if (item.routeName === 'reports.history' && route().current('reports.show')) {
+        return true;
+    }
+    if (item.routeName === 'settings.index' && route().current('profile.edit')) {
+        return true;
+    }
+    if (item.routeName === 'services.index' && (route().current('services.index') || route().current('services.medik') || route().current('services.non-medik') || route().current('services.units.show'))) {
+        return true;
+    }
+    return false;
+};
+
+const user = computed(() => page.props.auth?.user);
+const permissions = computed(() => page.props.auth?.page_permissions || []);
+
+const hasAccess = (permKey) => permissions.value.includes(permKey);
+
+const menuGroups = computed(() => {
+    return [
+        {
+            title: 'Menu Utama',
+            items: [
+                { label: 'Dashboard Utama', routeName: 'dashboard', icon: LayoutDashboard }
+            ]
+        },
+        {
+            title: 'Modul Kasi',
+            items: [
+                { label: 'Aduan & Verifikasi', routeName: 'kasi.dashboard', icon: FileText },
+                { label: 'Digital Logbook Staf', routeName: 'kasi.logbook', icon: History }
+            ]
+        },
+        {
+            title: 'Modul Kabid',
+            items: [
+                { label: 'Command Center', routeName: 'executive.dashboard', icon: Activity },
+                { label: 'Responsivitas Kasi', routeName: 'executive.kasi-responsiveness', icon: BarChart3 },
+                { label: 'Leaderboard Staf', routeName: 'executive.leaderboard', icon: Award }
+            ]
+        },
+        {
+            title: 'System / Integrasi',
+            items: [
+                { label: 'WhatsApp Gateway', routeName: 'admin.wa-gateway.index', icon: MessageSquareCode }
+            ]
+        },
+        {
+            title: 'Area Publik Pasien',
+            items: [
+                { label: 'Form Laporan', routeName: 'report.create', icon: QrCode }
+            ]
+        }
+    ];
+});
+
+const triggerSupportBack = () => {
+    window.dispatchEvent(new CustomEvent('services-back-clicked'));
+};
+
+const page = usePage();
+const backRoute = computed(() => {
+    if (route().current('kasi.verify') || route().current('kasi.logbook')) {
+        return route('kasi.dashboard');
+    }
+    if (route().current('executive.kasi-responsiveness') || route().current('executive.leaderboard')) {
+        return route('executive.dashboard');
+    }
+    if (route().current('users.edit') || route().current('users.show')) {
+        return route('users.index');
+    }
+    if (route().current('profile.edit') || route().current('design-system.*')) {
+        return route('settings.index');
+    }
+    if (route().current('reports.show')) {
+        return route('reports.history');
+    }
+    if (route().current('reports-management.show')) {
+        return route('reports-management.index');
+    }
+    if (route().current('users.approvals.show')) {
+        return route('users.approvals');
+    }
+    if (route().current('services.units.show') && page.props.unit) {
+        const isMedik = page.props.unit.division?.name?.toLowerCase().includes('medik') && 
+                       !page.props.unit.division?.name?.toLowerCase().includes('non-medik');
+        return isMedik ? route('services.medik') : route('services.non-medik');
+    }
+    return route('services.index');
+});
+
+const showBackButton = computed(() => {
+    return route().current('kasi.verify') ||
+           route().current('kasi.logbook') ||
+           route().current('executive.kasi-responsiveness') ||
+           route().current('executive.leaderboard') ||
+           route().current('services.medik') || 
+           route().current('services.non-medik') || 
+           route().current('profile.edit') || 
+           route().current('services.units.show') || 
+           route().current('reports.show') || 
+           route().current('reports-management.show') ||
+           route().current('users.approvals.show') ||
+           route().current('users.edit') ||
+           route().current('users.show') ||
+           route().current('design-system.*');
+});
+
+const globalSearchQuery = ref('');
+const showSearchResults = ref(false);
+
+// Notification state
+const showMobileNotifications = ref(false);
+const showDesktopNotifications = ref(false);
+const showMobileProfileDropdown = ref(false);
+const mobileNotificationsPanel = ref(null);
+const pendingApprovalsCount = ref(page.props.auth?.pending_approvals_count ?? 0);
+const pendingReportsCount = ref(page.props.auth?.pending_reports_count ?? 0);
+const getCachedNotifications = () => {
+    if (typeof window !== 'undefined') {
+        const cached = sessionStorage.getItem('cached-notifications');
+        if (cached) {
+            try {
+                return JSON.parse(cached);
+            } catch (e) {
+                return [];
+            }
+        }
+    }
+    return [];
+};
+
+const notifications = ref(page.props.notifications && Array.isArray(page.props.notifications) ? page.props.notifications : getCachedNotifications());
+
+watch(
+    () => page.props.notifications,
+    (value) => {
+        if (value && Array.isArray(value)) {
+            notifications.value = value;
+        }
+    }
+);
+
+watch(
+    notifications,
+    (newVal) => {
+        try {
+            sessionStorage.setItem('cached-notifications', JSON.stringify(newVal));
+        } catch (e) {
+            // ignore
+        }
+    },
+    { deep: true }
+);
+
+watch(
+    () => page.props.auth?.pending_approvals_count,
+    (value) => {
+        if (value !== undefined && value !== null) {
+            pendingApprovalsCount.value = value;
+        }
+    }
+);
+
+watch(
+    () => page.props.auth?.pending_reports_count,
+    (value) => {
+        if (value !== undefined && value !== null) {
+            pendingReportsCount.value = value;
+        }
+    }
+);
+
+const unreadNotifications = computed(() => notifications.value.filter(notification => !notification.read_at));
+
+const totalUnreadCount = ref(page.props.unread_notifications_count ?? 0);
+
+watch(
+    () => page.props.unread_notifications_count,
+    (value) => {
+        if (value !== undefined && value !== null) {
+            totalUnreadCount.value = value;
+        }
+    }
+);
+
+const unreadCount = computed(() => Math.max(totalUnreadCount.value, unreadNotifications.value.length));
+const hiddenNotificationsCount = computed(() => Math.max(0, unreadCount.value - unreadNotifications.value.length));
+
+const normalizeNotificationPayload = (notification) => {
+    const title = notification.title ?? notification.data?.title ?? null;
+    const message = notification.message ?? notification.data?.message ?? null;
+    const route = notification.route ?? notification.data?.route ?? null;
+    const rawType = notification.data?.type ?? notification.type ?? 'ticket';
+    const type = (rawType === 'ticket' || rawType === 'user' || rawType === 'progress' || rawType === 'done' || rawType === 'success' || rawType === 'error' || rawType === 'warning')
+        ? rawType
+        : (typeof rawType === 'string' && rawType.includes('Ticket') ? 'ticket' : 'user');
+    const priority = notification.priority ?? notification.data?.priority ?? null;
+
+    return {
+        id: notification.id ?? `notif-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+        type,
+        title,
+        message,
+        route,
+        priority,
+        user_id: notification.user_id ?? notification.data?.user_id ?? null,
+        read_at: notification.read_at ?? null,
+        created_at: notification.created_at ?? new Date().toISOString(),
+        time: notification.created_at ? new Date(notification.created_at).toLocaleString() : null,
+    };
+};
+
+const toasts = ref([]);
+
+const removeToast = (id) => {
+    toasts.value = toasts.value.filter(t => t.id !== id);
+};
+
+const showNotificationToast = (normalized) => {
+    const id = Date.now() + Math.random();
+    toasts.value.push({
+        id,
+        title: normalized.title,
+        message: normalized.message,
+        type: normalized.type,
+        route: normalized.route,
+        priority: normalized.priority
+    });
+
+    // Auto-remove after 6 seconds
+    setTimeout(() => {
+        removeToast(id);
+    }, 6000);
+};
+
+const registerNotificationListeners = () => {
+    if (typeof window !== 'undefined' && window.Echo && page.props.auth?.user?.id) {
+        const channelName = `App.Models.User.${page.props.auth.user.id}`;
+
+        window.Echo.private(channelName)
+            .notification((notification) => {
+                const normalized = normalizeNotificationPayload(notification);
+                notifications.value.unshift(normalized);
+                totalUnreadCount.value += 1;
+
+                // Show real-time visual toast
+                showNotificationToast(normalized);
+
+                if (normalized.type === 'user' || (normalized.route && normalized.route.includes('users.approvals'))) {
+                    pendingApprovalsCount.value += 1;
+                } else if (normalized.type === 'ticket' || (normalized.route && normalized.route.includes('reports-management'))) {
+                    pendingReportsCount.value += 1;
+                }
+
+                // Auto-refresh active Inertia page data silently without page reload
+                router.reload({ preserveScroll: true });
+            });
+
+        window.Echo.channel('tickets')
+            .listen('.TicketRealtimeUpdated', (e) => {
+                // Auto-refresh active Inertia page data silently when ticket events occur
+                router.reload({ preserveScroll: true });
+            });
+    }
+};
+
+const markAsRead = (notif) => {
+    if (!notif.id) return;
+
+    // Mark locally first for instant UI feedback
+    const idx = notifications.value.findIndex(n => n.id === notif.id);
+    if (idx !== -1 && !notifications.value[idx].read_at) {
+        notifications.value[idx].read_at = new Date().toISOString();
+        totalUnreadCount.value = Math.max(0, totalUnreadCount.value - 1);
+    }
+
+    showDesktopNotifications.value = false;
+    showMobileNotifications.value = false;
+
+    let targetRoute = notif.route;
+    if (targetRoute && typeof targetRoute === 'string') {
+        // Fix any old notification payload created with 127.0.0.1:8000
+        targetRoute = targetRoute.replace('http://127.0.0.1:8000', window.location.origin);
+    }
+
+    // Fire & forget markAsRead request so page navigation is never blocked
+    router.post(route('notifications.markAsRead', { id: notif.id }), {}, {
+        preserveScroll: true,
+        preserveState: true,
+    });
+
+    if (targetRoute) {
+        router.visit(targetRoute);
+    }
+};
+
+const markAllAsRead = () => {
+    // Mark all locally first
+    notifications.value.forEach(n => {
+        if (!n.read_at) {
+            n.read_at = new Date().toISOString();
+        }
+    });
+    totalUnreadCount.value = 0;
+
+    // Send to server
+    router.post(route('notifications.markAllAsRead'), {}, {
+        preserveScroll: true,
+        preserveState: true,
+    });
+};
+
+const goToMobileNotifications = () => {
+    showMobileNotifications.value = true;
+    showMobileProfileDropdown.value = false;
+};
+
+const goToDesktopNotifications = () => {
+    showDesktopNotifications.value = !showDesktopNotifications.value;
+    showMobileNotifications.value = false;
+};
+
+const closeMobileProfileDropdown = () => {
+    showMobileProfileDropdown.value = false;
+    showMobileNotifications.value = false;
+};
+
+const onMobileProfileOpenChange = (value) => {
+    showMobileProfileDropdown.value = value;
+    if (value) {
+        showMobileNotifications.value = false;
+    }
+};
+
+const closeMobileNotificationsOnOutsideClick = (e) => {
+    if (!showMobileNotifications.value || !mobileNotificationsPanel.value) return;
+    if (e.target instanceof Node && !mobileNotificationsPanel.value.contains(e.target)) {
+        showMobileNotifications.value = false;
+    }
+};
+
+const searchableItems = [
+    { label: 'Dashboard', routeName: 'dashboard', description: 'Ringkasan data & status utama' },
+    { label: 'Layanan Penunjang', routeName: 'services.index', description: 'Pelaporan Medik & Non-Medik' },
+    { label: 'Laporan & Export', routeName: 'reports.index', description: 'Unduh laporan PDF & CSV' },
+    { label: 'Riwayat Pelaporan', routeName: 'reports.history', description: 'Daftar riwayat tiket' },
+    { label: 'Manajemen Ruangan', routeName: 'service-management.rooms', description: 'Pengelolaan data master ruangan dan lokasi' },
+    { label: 'Kategori Permasalahan', routeName: 'service-management.categories', description: 'Pengelolaan data master kategori permasalahan aset & operasional' },
+    { label: 'Layanan Penunjang (Managemen Layanan)', routeName: 'service-management.supporting-units', description: 'Pengelolaan data divisi dan unit penunjang' },
+    { label: 'Persetujuan Registrasi', routeName: 'users.approvals', description: 'Persetujuan pendaftar pengguna baru' },
+    { label: 'Daftar Pengguna', routeName: 'users.index', description: 'Kelola data pengguna sistem' },
+    { label: 'Pengaturan Profil', routeName: 'settings.index', description: 'Ubah sandi, tema, dan profil' },
+    { label: 'Sistem Desain - Ringkasan', routeName: 'design-system.index', description: 'Ringkasan panduan warna, tema dark mode, & tipografi' },
+    { label: 'Sistem Desain - Tombol & Badge', routeName: 'design-system.buttons-badges', description: 'Koleksi komponen tombol, animasi loading, & badge status' },
+    { label: 'Sistem Desain - Formulir & Input', routeName: 'design-system.forms', description: 'Koleksi komponen input form, select, checkbox, & upload file' },
+    { label: 'Sistem Desain - Modal & Alert', routeName: 'design-system.modals-alerts', description: 'Koleksi modal popup transisi & notifikasi SweetAlert2' },
+    { label: 'Sistem Desain - Tabel & Pagination', routeName: 'design-system.tables', description: 'Desain layout tabel data, pagination, & state data kosong' },
+    { label: 'Sistem Desain - Kartu Statistik', routeName: 'design-system.cards', description: 'Koleksi layout kartu data statistik & visualisasi grid' },
+    { label: 'Notifikasi Saya', routeName: 'notifications.index', description: 'Semua riwayat notifikasi sistem dan tugas' },
+];
+
+const mobilePageTitles = [
+    { routeName: 'dashboard', label: 'Dashboard' },
+    { routeName: 'services.index', label: 'Layanan Penunjang' },
+    { routeName: 'services.medik', label: 'Penunjang Medik' },
+    { routeName: 'services.non-medik', label: 'Penunjang Non-Medik' },
+    { routeName: 'services.units.show', label: 'Unit Penunjang' },
+    { routeName: 'technicians.position', label: 'Posisi & Status Teknisi' },
+    { routeName: 'technicians.radar', label: 'Posisi & Status Teknisi' },
+    { routeName: 'service-management.working-hours', label: 'Jam Operasional' },
+    { routeName: 'reports.index', label: 'Laporan & Export' },
+    { routeName: 'reports.history', label: 'Riwayat Pelaporan' },
+    { routeName: 'reports.show', label: 'Detail Laporan Saya' },
+    { routeName: 'reports-management.index', label: 'Manajemen Laporan' },
+    { routeName: 'reports-management.show', label: 'Detail Manajemen Laporan' },
+    { routeName: 'service-management.rooms', label: 'Manajemen Ruangan' },
+    { routeName: 'service-management.categories', label: 'Kategori Permasalahan' },
+    { routeName: 'service-management.supporting-units', label: 'Layanan Penunjang' },
+    { routeName: 'users.approvals', label: 'Persetujuan Registrasi' },
+    { routeName: 'users.index', label: 'Daftar Pengguna' },
+    { routeName: 'users.show', label: 'Detail Pengguna' },
+    { routeName: 'users.edit', label: 'Edit Pengguna' },
+    { routeName: 'profile.edit', label: 'Profil Saya' },
+    { routeName: 'settings.index', label: 'Pengaturan Profil' },
+    { routeName: 'design-system.index', label: 'Sistem Desain - Ringkasan' },
+    { routeName: 'design-system.buttons-badges', label: 'Sistem Desain - Tombol & Badge' },
+    { routeName: 'design-system.forms', label: 'Sistem Desain - Formulir & Input' },
+    { routeName: 'design-system.modals-alerts', label: 'Sistem Desain - Modal & Alert' },
+    { routeName: 'design-system.tables', label: 'Sistem Desain - Tabel & Pagination' },
+    { routeName: 'design-system.cards', label: 'Sistem Desain - Kartu Statistik' },
+    { routeName: 'notifications.index', label: 'Semua Notifikasi' },
+    { routeName: 'admin.wa-gateway.index', label: 'WhatsApp Gateway' },
+    { routeName: 'admin.qr-code.index', label: 'Generator QR Code' },
+    { routeName: 'admin.qr-generator.index', label: 'Generator QR Code' },
+];
+
+const currentPageTitle = computed(() => {
+    if (route().current('services.units.show')) {
+        const unit = page.props.unit;
+        if (unit && unit.name) {
+            return unit.name;
+        }
+    }
+    const match = mobilePageTitles.find(item => route().current(item.routeName));
+    return match ? match.label : '';
+});
+
+const filteredSearchItems = computed(() => {
+    if (!globalSearchQuery.value.trim()) return [];
+    const query = globalSearchQuery.value.toLowerCase();
+    return searchableItems.filter(item => 
+        item.label.toLowerCase().includes(query) || 
+        item.description.toLowerCase().includes(query)
+    );
+});
+
+const getGroupInitials = (title) => {
+    if (title === 'Menu Utama') return 'MU';
+    if (title === 'Layanan & Laporan') return 'LL';
+    if (title === 'Master Data') return 'MD';
+    if (title === 'System / Integrasi') return 'SI';
+    if (title === 'Sistem') return 'S';
+    return title.substring(0, 2).toUpperCase();
+};
+</script>
+
+<template>
+    <div class="min-h-screen bg-gray-100 dark:bg-slate-950 overflow-x-hidden">
+
+        <!-- Navbar -->
+        <nav class="fixed top-0 left-0 right-0 z-40 w-full h-20 bg-gray-100/80 dark:bg-slate-950/80 backdrop-blur-md shadow-none transition-all duration-300 ease-in-out">
+            <div :class="['w-full px-4 lg:pr-4 transition-all duration-300 ease-in-out', sidebarCollapsed ? 'lg:pl-[96px]' : 'lg:pl-[304px]']">
+                <div class="flex h-20 items-center justify-between gap-3">
+
+                    <!-- Left: Back Button / Hamburger and Global Search -->
+                    <div class="flex items-center flex-1">
+                        <!-- Tombol Back (Desktop - Hanya tampil di sub-halaman layanan penunjang atau profile) -->
+                        <Link
+                            v-if="showBackButton"
+                            :href="backRoute"
+                            prefetch
+                            @click="route().current('profile.edit') || route().current('services.units.show') || route().current('reports.show') || route().current('reports-management.show') || route().current('design-system.*') ? null : triggerSupportBack"
+                            class="hidden lg:inline-flex items-center justify-center h-11 w-11 rounded-xl bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-100/80 dark:hover:bg-slate-800/80 transition duration-150 focus:outline-none shadow-sm border border-white dark:border-slate-800 mr-3 flex-shrink-0"
+                            title="Kembali"
+                        >
+                            <ArrowLeft class="h-5 w-5 text-slate-500 dark:text-slate-400" />
+                        </Link>
+
+                        <!-- Mobile Controls (Hamburger & Back Button) -->
+                        <div class="lg:hidden flex items-center gap-3 mr-4 flex-shrink-0">
+                            <!-- Tombol Back jika di dalam sub-halaman layanan penunjang atau profile (Mobile) -->
+                            <Link
+                                v-if="showBackButton"
+                                :href="backRoute"
+                                prefetch
+                                @click="route().current('profile.edit') || route().current('services.units.show') || route().current('reports.show') || route().current('reports-management.show') || route().current('design-system.*') ? null : triggerSupportBack"
+                                class="inline-flex items-center justify-center h-12 w-12 rounded-full bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 shadow-md border border-white dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 transition duration-150 focus:outline-none"
+                                aria-label="Kembali"
+                            >
+                                <ArrowLeft class="h-6 w-6 text-slate-700 dark:text-slate-200" />
+                            </Link>
+                            <!-- Hamburger — jika di halaman biasa (Mobile) -->
+                            <button
+                                v-else
+                                @click="toggleSidebar"
+                                type="button"
+                                id="sidebar-toggle-btn"
+                                class="inline-flex items-center justify-center h-12 w-12 rounded-full bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 shadow-md border border-white dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 transition duration-150 focus:outline-none"
+                                :aria-label="sidebarOpen ? 'Tutup Sidebar' : 'Buka Sidebar'"
+                            >
+                                <svg class="h-6 w-6" stroke="currentColor" fill="none" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                                </svg>
+                            </button>
+                            <div class="min-w-0">
+                                <span v-if="currentPageTitle" class="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+                                    {{ currentPageTitle }}
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Global Search (Desktop Only) -->
+                        <div class="hidden lg:block relative flex-1">
+                            <div class="relative">
+                                <Search class="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
+                                <input
+                                    v-model="globalSearchQuery"
+                                    type="text"
+                                    @focus="showSearchResults = true"
+                                    @blur="setTimeout(() => { showSearchResults = false }, 200)"
+                                    :placeholder="__('menu.search_placeholder')"
+                                    class="w-full h-11 pl-10 pr-10 border border-white dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 text-sm focus:outline-none focus:ring-0 focus:border-white dark:focus:border-slate-800 transition-all duration-150 placeholder:text-slate-400 dark:placeholder:text-slate-500 shadow-sm"
+                                />
+                                <!-- Clear Button -->
+                                <button
+                                    v-if="globalSearchQuery"
+                                    @click="globalSearchQuery = ''"
+                                    type="button"
+                                    class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5 rounded-lg"
+                                >
+                                    <X class="h-3.5 w-3.5" />
+                                </button>
+                             </div>
+ 
+                             <!-- Floating Results Panel -->
+                             <div v-if="showSearchResults && filteredSearchItems.length > 0" class="absolute left-0 right-0 mt-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-lg z-50 overflow-hidden py-1.5 max-h-72 overflow-y-auto">
+                                 <div class="px-3.5 py-1 text-[10px] font-extrabold uppercase tracking-widest text-slate-400 dark:text-slate-500 border-b border-slate-100 dark:border-slate-800 mb-1">
+                                     {{ __('menu.search_results') }}
+                                 </div>
+                                 <Link 
+                                     v-for="item in filteredSearchItems" 
+                                     :key="item.routeName"
+                                     :href="route(item.routeName)"
+                                     prefetch
+                                     class="flex flex-col px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition duration-150"
+                                 >
+                                     <span class="text-xs font-bold text-slate-900 dark:text-white">{{ __(item.label) }}</span>
+                                     <span class="text-[10px] text-slate-400 dark:text-slate-500 leading-normal">{{ item.description }}</span>
+                                 </Link>
+                             </div>
+                             <div v-else-if="showSearchResults && globalSearchQuery.trim() !== ''" class="absolute left-0 right-0 mt-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-lg z-50 p-4 text-center text-xs text-slate-400 dark:text-slate-500">
+                                 {{ __('menu.search_empty') }}
+                             </div>
+                        </div>
+                    </div>
+
+                    <!-- Kanan: User Dropdown & Mode Toggles -->
+                    <div class="flex items-center gap-3 flex-shrink-0">
+                        <!-- Desktop Toggles (Tema, Notifikasi & Bahasa) -->
+                        <div class="hidden lg:flex items-center gap-3">
+                            <!-- Switch Bahasa (Desktop) -->
+                            <Link
+                                :href="route('lang.switch', $page.props.locale === 'id' ? 'en' : 'id')"
+                                class="inline-flex items-center justify-center h-11 px-4 rounded-xl bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-100/80 dark:hover:bg-slate-800/80 transition duration-150 focus:outline-none gap-2 text-sm font-semibold select-none shadow-sm border border-white dark:border-slate-800"
+                                :title="__('Switch Language')"
+                            >
+                                <Languages class="h-4.5 w-4.5 text-slate-400 dark:text-slate-500" />
+                                <span class="uppercase text-[11px] font-extrabold px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-white/10 text-emerald-700 dark:text-white">
+                                    {{ $page.props.locale === 'id' ? 'ID' : 'EN' }}
+                                </span>
+                            </Link>
+
+                            <!-- Switch Tema (Desktop) -->
+                            <button
+                                @click="toggleTheme"
+                                type="button"
+                                class="inline-flex items-center justify-center h-11 w-11 rounded-xl bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-100/80 dark:hover:bg-slate-800/80 transition duration-150 focus:outline-none shadow-sm border border-white dark:border-slate-800"
+                                :title="__('Switch Theme')"
+                            >
+                                <Sun v-if="!isDark" class="h-5 w-5 text-amber-500" />
+                                <Moon v-else class="h-5 w-5 text-white" />
+                            </button>
+
+                            <!-- Notifikasi (Desktop) -->
+                            <Dropdown align="right" width="96" :open="showDesktopNotifications" @update:open="showDesktopNotifications = $event">
+                                <template #trigger>
+                                    <button
+                                        type="button"
+                                        class="relative inline-flex items-center justify-center h-11 w-11 rounded-xl bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-100/80 dark:hover:bg-slate-800/80 transition duration-150 focus:outline-none shadow-sm border border-white dark:border-slate-800"
+                                        title="Notifikasi"
+                                    >
+                                        <Bell class="h-5 w-5 text-slate-500 dark:text-slate-400" />
+                                        <span 
+                                            v-if="unreadCount > 0 && !showDesktopNotifications"
+                                            class="absolute -top-1 -right-1 h-5 min-w-5 px-1 flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold ring-2 ring-slate-50 dark:ring-slate-950"
+                                        >
+                                            {{ unreadCount }}
+                                        </span>
+                                    </button>
+                                </template>
+                                <template #content>
+                                     <!-- Header -->
+                                     <div class="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+                                         <div class="flex items-center gap-2">
+                                             <span class="text-sm font-bold text-slate-800 dark:text-slate-200">{{ __('Notifications') }}</span>
+                                             <span 
+                                                 v-if="unreadCount > 0" 
+                                                 class="h-5 min-w-5 px-1.5 flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold"
+                                             >{{ unreadCount }}</span>
+                                         </div>
+                                     </div>
+
+                                     <!-- Notification List -->
+                                     <div class="max-h-80 overflow-y-auto">
+                                         <div v-if="unreadNotifications.length === 0" class="py-12 text-center text-xs text-slate-400 dark:text-slate-500 font-medium">
+                                             Tidak ada notifikasi baru
+                                         </div>
+                                         <template v-else>
+                                             <NotificationItem
+                                                 v-for="notif in unreadNotifications"
+                                                 :key="notif.id"
+                                                 :notification="notif"
+                                                 variant="dropdown"
+                                                 @click="markAsRead(notif)"
+                                             />
+
+                                             <!-- Hidden Notifications Count Notice -->
+                                             <div v-if="hiddenNotificationsCount > 0" class="px-4 py-3 bg-amber-50/70 dark:bg-amber-950/30 border-t border-amber-100 dark:border-amber-900/50 text-center">
+                                                 <p class="text-[11px] font-medium text-amber-800 dark:text-amber-300">
+                                                     Masih ada <strong class="font-black text-amber-900 dark:text-amber-200">{{ hiddenNotificationsCount }}</strong> notifikasi belum dibaca lainnya.
+                                                 </p>
+                                                 <p class="text-[10px] text-amber-700 dark:text-amber-400 mt-0.5 font-medium">
+                                                     Klik <strong class="font-bold">"Lihat Semua"</strong> di bawah untuk membuka seluruh riwayat.
+                                                 </p>
+                                             </div>
+                                         </template>
+                                     </div>                                      
+                                      <!-- Footer -->
+                                      <div class="px-4 py-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2 bg-slate-50/50 dark:bg-slate-900/50">
+                                          <button 
+                                              v-if="unreadCount > 0" 
+                                              @click="markAllAsRead" 
+                                              class="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition duration-150"
+                                          >
+                                              <Check class="h-3.5 w-3.5" />
+                                              {{ __('Mark All as Read') }}
+                                          </button>
+                                          <div v-else class="inline-flex items-center gap-1 text-[11px] text-slate-400 dark:text-slate-500 font-medium">
+                                              <CheckCheck class="h-3.5 w-3.5 text-emerald-500" />
+                                              Semua terbaca
+                                          </div>
+                                          
+                                          <Link 
+                                              :href="route('notifications.index')" 
+                                              @click="showDesktopNotifications = false"
+                                              class="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition duration-150"
+                                          >
+                                              <Eye class="h-3.5 w-3.5" />
+                                              Lihat Semua
+                                          </Link>
+                                      </div>
+                                </template>
+                            </Dropdown>
+                        </div>
+
+                        <!-- Dropdown Profil -->
+                        <div class="relative">
+                            <Dropdown align="right" width="56" :open="showMobileProfileDropdown" @update:open="onMobileProfileOpenChange">
+                                <template #trigger>
+                                    <button
+                                        type="button"
+                                        @click.stop="showMobileProfileDropdown = !showMobileProfileDropdown"
+                                        class="relative inline-flex items-center justify-center h-12 rounded-full bg-white dark:bg-slate-800 shadow-md border border-white dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 transition duration-150 focus:outline-none
+                                               w-12 lg:w-auto lg:h-11 lg:rounded-xl lg:pl-4 lg:pr-3 lg:gap-2 lg:bg-white lg:dark:bg-slate-900 lg:shadow-sm lg:border lg:border-white lg:dark:border-slate-800 lg:hover:bg-slate-100/80 lg:dark:hover:bg-slate-800/80"
+                                    >
+                                        <!-- Nama — hanya tampil di desktop -->
+                                        <span class="hidden lg:block whitespace-nowrap text-sm font-medium text-slate-700 dark:text-slate-300">{{ $page.props.auth.user.name }}</span>
+                                        <!-- Avatar icon User (Sekarang kembali di kanan nama pada desktop) -->
+                                        <span class="relative h-8 w-8 lg:h-7 lg:w-7 rounded-full bg-transparent lg:bg-slate-100 lg:dark:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center flex-shrink-0 transition-all duration-150">
+                                            <User class="h-4.5 w-4.5 lg:h-4 lg:w-4" />
+                                        </span>
+                                        <span
+                                            v-if="unreadCount > 0 && !showMobileNotifications && !showMobileProfileDropdown"
+                                            class="absolute -top-1 -right-1 h-5 min-w-5 px-1 inline-flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold ring-2 ring-slate-50 dark:ring-slate-950 lg:hidden"
+                                        >{{ unreadCount }}</span>
+                                        <!-- Chevron di paling kanan — hanya tampil di desktop -->
+                                        <svg class="hidden lg:block h-4 w-4 text-slate-400 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                            <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+                                        </svg>
+                                    </button>
+                                </template>
+                                <template #content>
+                                    <!-- Info user di header dropdown -->
+                                    <div class="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+                                        <p class="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">{{ $page.props.auth.user.name }}</p>
+                                        <p class="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">{{ $page.props.auth.user.email }}</p>
+                                    </div>
+                                    
+                                    <!-- Profil -->
+                                    <Link
+                                        :href="route('profile.edit')"
+                                        prefetch
+                                        class="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50/50 dark:hover:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800/80 transition duration-150"
+                                    >
+                                        <User class="h-4 w-4 text-slate-400" />
+                                        <span>{{ __('Profile') }}</span>
+                                    </Link>
+
+                                    <!-- Pengaturan -->
+                                    <Link
+                                        v-if="hasAccess('settings.index')"
+                                        :href="route('settings.index')"
+                                        prefetch
+                                        class="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50/50 dark:hover:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800/80 transition duration-150"
+                                    >
+                                        <Settings class="h-4 w-4 text-slate-400" />
+                                        <span>{{ __('menu.settings') }}</span>
+                                    </Link>
+
+                                    <!-- Notifikasi (Mobile) -->
+                                    <button
+                                        @click.stop="goToMobileNotifications"
+                                        type="button"
+                                        class="lg:hidden flex items-center justify-between w-full px-4 py-2.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50/50 dark:hover:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800/80 transition duration-150 text-left focus:outline-none"
+                                    >
+                                        <div class="flex items-center gap-3">
+                                            <Bell class="h-4 w-4 text-slate-400" />
+                                            <span class="font-medium">Notifikasi</span>
+                                        </div>
+                                        <span 
+                                            v-if="unreadCount > 0" 
+                                            class="h-5 min-w-5 px-1.5 flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold"
+                                        >{{ unreadCount }}</span>
+                                    </button>
+
+                                    <!-- Switch Bahasa -->
+                                    <Link
+                                        :href="route('lang.switch', $page.props.locale === 'id' ? 'en' : 'id')"
+                                        class="lg:hidden flex items-center gap-3 w-full px-4 py-2.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50/50 dark:hover:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800/80 transition duration-150"
+                                        :title="__('Switch Language')"
+                                    >
+                                        <Languages class="h-4 w-4 text-slate-400" />
+                                        <span class="flex-1 text-left font-medium">{{ __('Language') }}</span>
+                                        <span class="text-[10px] font-extrabold uppercase bg-emerald-50 dark:bg-white/10 text-emerald-700 dark:text-white px-2 py-0.5 rounded">
+                                            {{ $page.props.locale === 'id' ? 'ID' : 'EN' }}
+                                        </span>
+                                    </Link>
+
+                                    <!-- Switch Tema -->
+                                    <button
+                                        @click.stop="toggleTheme"
+                                        type="button"
+                                        class="lg:hidden flex items-center justify-between w-full px-4 py-2.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50/50 dark:hover:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800/80 transition duration-150 text-left focus:outline-none"
+                                    >
+                                        <div class="flex items-center gap-3">
+                                            <Sun v-if="!isDark" class="h-4 w-4 text-amber-500" />
+                                            <Moon v-else class="h-4 w-4 text-white" />
+                                            <span class="font-medium">{{ __('Dark Mode') }}</span>
+                                        </div>
+                                        <div 
+                                            :class="[
+                                                'w-8 h-4 rounded-full p-0.5 transition-colors duration-200',
+                                                isDark ? 'bg-white' : 'bg-slate-200 dark:bg-slate-800'
+                                            ]"
+                                        >
+                                            <div 
+                                                :class="[
+                                                    isDark ? 'bg-slate-900 w-3 h-3 rounded-full shadow-md transform transition-all duration-200' : 'bg-white w-3 h-3 rounded-full shadow-md transform transition-all duration-200',
+                                                    isDark ? 'translate-x-4' : 'translate-x-0'
+                                                ]"
+                                            />
+                                        </div>
+                                    </button>
+
+                                     <!-- Logout -->
+                                     <button
+                                         type="button"
+                                         @click="handleLogout"
+                                         :disabled="isLoggingOut"
+                                         class="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition duration-150 text-left disabled:opacity-60 cursor-pointer"
+                                     >
+                                         <svg v-if="isLoggingOut" class="animate-spin h-4 w-4 text-red-600 dark:text-red-400 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                         </svg>
+                                         <LogOut v-else class="h-4 w-4 flex-shrink-0" />
+                                         <span>{{ isLoggingOut ? __('auth.logout_processing') : __('Log out') }}</span>
+                                     </button>
+                                </template>
+                            </Dropdown>
+                            <!-- Overlay to close notification panel on outside click -->
+                                                         <!-- Backdrop for closing mobile notifications dropdown on click outside -->
+                             <Transition
+                                 enter-active-class="transition ease-out duration-200"
+                                 enter-from-class="opacity-0"
+                                 enter-to-class="opacity-100"
+                                 leave-active-class="transition ease-in duration-150"
+                                 leave-from-class="opacity-100"
+                                 leave-to-class="opacity-0"
+                             >
+                                 <div
+                                     v-if="showMobileNotifications"
+                                     class="fixed inset-0 z-50 lg:hidden"
+                                     @click="showMobileNotifications = false"
+                                     aria-hidden="true"
+                                 />
+                             </Transition>
+
+                             <!-- Mobile Notifications Panel with fixed positioning to avoid screen edge collision -->
+                             <Transition
+                                 enter-active-class="transition ease-out duration-200"
+                                 enter-from-class="opacity-0 scale-95 translate-y-1"
+                                 enter-to-class="opacity-100 scale-100 translate-y-0"
+                                 leave-active-class="transition ease-in duration-150"
+                                 leave-from-class="opacity-100 scale-100 translate-y-0"
+                                 leave-to-class="opacity-0 scale-95 translate-y-1"
+                             >
+                                 <div ref="mobileNotificationsPanel" v-if="showMobileNotifications" @click.stop class="lg:hidden fixed left-4 right-4 top-[74px] z-[99] bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-100 dark:border-slate-800 overflow-hidden w-auto">
+                                     <div class="px-4 py-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                                         <div class="flex items-center gap-3">
+                                             <Bell class="h-4 w-4 text-slate-500 dark:text-slate-400" />
+                                             <span class="text-sm font-bold text-slate-800 dark:text-slate-200">{{ __('Notifications') }}</span>
+                                             <span 
+                                                 v-if="unreadCount > 0" 
+                                                 class="h-5 min-w-5 px-1.5 flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold"
+                                             >{{ unreadCount }}</span>
+                                         </div>
+                                         <button
+                                             @click.stop="showMobileNotifications = false"
+                                             type="button"
+                                             class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-2 rounded-md"
+                                             aria-label="Tutup notifikasi"
+                                         >
+                                             <X class="h-4 w-4" />
+                                         </button>
+                                     </div>
+                                     <div class="max-h-80 overflow-y-auto">
+                                         <div v-if="unreadNotifications.length === 0" class="py-12 text-center text-xs text-slate-400 dark:text-slate-500 font-medium">
+                                             Tidak ada notifikasi baru
+                                         </div>
+                                         <template v-else>
+                                             <NotificationItem
+                                                 v-for="notif in unreadNotifications"
+                                                 :key="notif.id"
+                                                 :notification="notif"
+                                                 variant="dropdown"
+                                                 @click="markAsRead(notif)"
+                                             />
+
+                                             <!-- Hidden Notifications Count Notice -->
+                                             <div v-if="hiddenNotificationsCount > 0" class="px-4 py-3 bg-amber-50/70 dark:bg-amber-950/30 border-t border-amber-100 dark:border-amber-900/50 text-center">
+                                                 <p class="text-[11px] font-medium text-amber-800 dark:text-amber-300">
+                                                     Masih ada <strong class="font-black text-amber-900 dark:text-amber-200">{{ hiddenNotificationsCount }}</strong> notifikasi belum dibaca lainnya.
+                                                 </p>
+                                                 <p class="text-[10px] text-amber-700 dark:text-amber-400 mt-0.5 font-medium">
+                                                     Klik <strong class="font-bold">"Lihat Semua"</strong> di bawah untuk membuka seluruh riwayat.
+                                                 </p>
+                                             </div>
+                                         </template>
+                                     </div>
+                                      <!-- Footer -->
+                                      <div class="px-4 py-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2 bg-slate-50/50 dark:bg-slate-900/50">
+                                          <button 
+                                              v-if="unreadCount > 0" 
+                                              @click="markAllAsRead" 
+                                              class="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition duration-150"
+                                          >
+                                              <Check class="h-3.5 w-3.5" />
+                                              {{ __('Mark All as Read') }}
+                                          </button>
+                                          <div v-else class="inline-flex items-center gap-1 text-[11px] text-slate-400 dark:text-slate-500 font-medium">
+                                              <CheckCheck class="h-3.5 w-3.5 text-emerald-500 dark:text-white" />
+                                              Semua terbaca
+                                          </div>
+                                          
+                                          <Link 
+                                              :href="route('notifications.index')" 
+                                              @click="showMobileNotifications = false"
+                                              class="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition duration-150"
+                                          >
+                                              <Eye class="h-3.5 w-3.5" />
+                                              Lihat Semua
+                                          </Link>
+                                      </div>
+                                 </div>
+                             </Transition>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+
+        </nav>
+
+        <!-- Toast Floating Container -->
+        <div class="fixed top-24 right-6 z-[9999] flex flex-col gap-3 w-80 max-w-[calc(100vw-3rem)] pointer-events-none">
+            <TransitionGroup
+                enter-active-class="transform ease-out duration-300 transition"
+                enter-from-class="translate-y-2 opacity-0 translate-x-4"
+                enter-to-class="translate-y-0 opacity-100 translate-x-0"
+                leave-active-class="transition ease-in duration-200"
+                leave-from-class="opacity-100"
+                leave-to-class="opacity-0 translate-x-4"
+            >
+                <div
+                    v-for="toast in toasts"
+                    :key="toast.id"
+                    @click="toast.route ? router.visit(toast.route) : null"
+                    class="pointer-events-auto flex items-start gap-3.5 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md shadow-xl cursor-pointer transition-all duration-200 hover:scale-[1.02] hover:border-emerald-500/50 dark:hover:border-emerald-400/50"
+                >
+                    <!-- Icon -->
+                    <div :class="[
+                        'h-9 w-9 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5',
+                        toast.priority === 'URGENT' || toast.type === 'error' ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-500 border border-rose-200/50 dark:border-rose-900/50' :
+                        (toast.type === 'success' || toast.type === 'done') ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/50' :
+                        'bg-slate-100 dark:bg-white/10 text-slate-600 dark:text-white border border-slate-200/50 dark:border-white/10'
+                    ]">
+                        <CheckCircle2 v-if="toast.type === 'success' || toast.type === 'done'" class="h-4.5 w-4.5" />
+                        <ShieldAlert v-else-if="toast.type === 'error'" class="h-4.5 w-4.5" />
+                        <Bell v-else-if="toast.type === 'ticket' || (typeof toast.type === 'string' && toast.type.includes('Ticket'))" class="h-4.5 w-4.5" />
+                        <Clock v-else-if="toast.type === 'progress'" class="h-4.5 w-4.5" />
+                        <User v-else-if="toast.type === 'user'" class="h-4.5 w-4.5" />
+                        <CheckCircle2 v-else class="h-4.5 w-4.5" />
+                    </div>
+                    <!-- Content -->
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-1.5">
+                            <span v-if="toast.priority === 'URGENT'" class="px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase bg-rose-500 text-white flex-shrink-0 animate-pulse">URGENT</span>
+                            <p class="text-xs font-bold text-slate-900 dark:text-white leading-normal truncate">{{ toast.title }}</p>
+                        </div>
+                        <p class="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed mt-1 line-clamp-3">{{ toast.message }}</p>
+                    </div>
+                    <!-- Close Button -->
+                    <button @click.stop="removeToast(toast.id)" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 h-5 w-5 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition flex-shrink-0 mt-0.5">
+                        <X class="h-3.5 w-3.5" />
+                    </button>
+                </div>
+            </TransitionGroup>
+        </div>
+
+        <!-- Custom Alert Modal (Glassmorphism Swal Alternative) -->
+        <Teleport to="body">
+            <Transition
+                enter-active-class="transition ease-out duration-200"
+                enter-from-class="opacity-0"
+                enter-to-class="opacity-100"
+                leave-active-class="transition ease-in duration-150"
+                leave-from-class="opacity-100"
+                leave-to-class="opacity-0"
+            >
+                <div v-if="customAlert.show" class="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+                    <!-- Backdrop overlay -->
+                    <div @click="customAlert.cancelText ? customAlert.onCancel() : customAlert.onConfirm()" class="fixed inset-0 bg-black/40 backdrop-blur-xs transition-opacity"></div>
+
+                    <!-- Modal Card -->
+                    <div class="relative bg-white/95 dark:bg-slate-900/95 border border-slate-100 dark:border-slate-800 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden p-7 flex flex-col items-center text-center transform transition-all duration-200 scale-100 backdrop-blur-md">
+                        <!-- Status Icon -->
+                        <div :class="[
+                            'h-20 w-20 rounded-full flex items-center justify-center mb-5 flex-shrink-0',
+                            customAlert.icon === 'success' ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-500' :
+                            customAlert.icon === 'error' ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-500' :
+                            customAlert.icon === 'warning' ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-500' :
+                            'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-500'
+                        ]">
+                            <CheckCircle2 v-if="customAlert.icon === 'success'" class="h-10 w-10" />
+                            <AlertCircle v-else-if="customAlert.icon === 'error'" class="h-10 w-10" />
+                            <AlertTriangle v-else-if="customAlert.icon === 'warning'" class="h-10 w-10" />
+                            <HelpCircle v-else class="h-10 w-10" />
+                        </div>
+
+                        <!-- Info Content -->
+                        <h3 class="text-base font-extrabold text-slate-900 dark:text-white leading-tight px-2">{{ customAlert.title }}</h3>
+                        <p class="text-sm text-slate-500 dark:text-slate-400 mt-3 leading-relaxed px-1">{{ customAlert.text }}</p>
+
+                        <!-- Action Buttons -->
+                        <div class="flex items-center gap-3 w-full mt-6">
+                            <button
+                                v-if="customAlert.cancelText"
+                                @click="customAlert.onCancel"
+                                class="flex-1 h-11 text-sm font-bold rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-300 transition duration-150 focus:outline-none"
+                            >
+                                {{ customAlert.cancelText }}
+                            </button>
+                            <button
+                                v-if="customAlert.confirmText"
+                                @click="customAlert.onConfirm"
+                                :class="[
+                                    'flex-1 h-11 text-sm font-bold rounded-xl text-white shadow-sm transition duration-150 focus:outline-none',
+                                    customAlert.icon === 'success' ? 'bg-emerald-600 hover:bg-emerald-700' :
+                                    customAlert.icon === 'error' ? 'bg-rose-600 hover:bg-rose-700' :
+                                    customAlert.icon === 'warning' ? 'bg-amber-600 hover:bg-amber-700' :
+                                    'bg-emerald-600 hover:bg-emerald-700'
+                                ]"
+                            >
+                                {{ customAlert.confirmText }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </Transition>
+        </Teleport>
+
+        <!-- Layout Body -->
+        <div class="flex w-full relative">
+
+            <!-- Mobile Sidebar Overlay -->
+            <div
+                v-if="sidebarOpen"
+                @click="closeSidebar"
+                class="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm lg:hidden"
+                aria-hidden="true"
+            />
+
+            <!-- Sidebar -->
+            <aside
+                :class="[
+                    'fixed top-0 left-0 h-screen z-50 flex flex-col transition-all duration-300 ease-in-out',
+                    'bg-white dark:bg-slate-900',
+                    'shadow-lg lg:shadow-sm dark:shadow-none lg:border-r lg:border-white dark:border-slate-800/80',
+                    sidebarCollapsed ? 'w-72 lg:w-20' : 'w-72',
+                    sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+                ]"
+            >
+                <!-- Sidebar Header (Mobile & Desktop) -->
+                <div :class="['relative flex items-center border-b border-slate-100 dark:border-slate-800 select-none px-4 py-4 transition-all duration-300', sidebarCollapsed ? 'justify-center' : 'justify-center']">
+                    <!-- If collapsed, show logo and reveal expand icon on hover -->
+                    <div v-if="sidebarCollapsed">
+                        <button 
+                            @click="toggleSidebarCollapse"
+                            class="relative group h-12 w-12 rounded-xl flex items-center justify-center flex-shrink-0 transition-all duration-200"
+                            title="Expand Sidebar"
+                        >
+                            <img src="/images/logo-sidebar.png" alt="SIPUAS" class="h-full w-full object-contain dark:brightness-0 dark:invert transition-all duration-200 group-hover:opacity-0" />
+                            <ChevronRight class="absolute inset-0 m-auto h-5.5 w-5.5 text-emerald-600 dark:text-white opacity-0 group-hover:opacity-100 transition-all duration-200" />
+                        </button>
+                    </div>
+                    
+                    <Link v-else :href="route('dashboard')" prefetch class="flex items-center justify-center w-full px-6">
+                        <img src="/images/logo-sidebar.png" alt="SIPUAS" class="h-12 max-w-full w-auto object-contain dark:brightness-0 dark:invert transition-all duration-200 mx-auto" />
+                    </Link>
+                    
+                    <!-- Desktop collapse toggle & Close button (Mobile only) -->
+                    <div class="absolute right-3 flex items-center gap-1">
+                        <button 
+                            v-if="!sidebarCollapsed"
+                            @click="toggleSidebarCollapse" 
+                            class="hidden lg:flex items-center justify-center p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+                            title="Minimize Sidebar"
+                        >
+                            <ChevronLeft class="h-4 w-4" />
+                        </button>
+                        <button @click="closeSidebar" class="lg:hidden p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition">
+                            <X class="h-5 w-5" />
+                        </button>
+                    </div>
+                </div>
+                <!-- Nav Items — hanya link halaman, tanpa user info -->
+                <nav 
+                    ref="sidebarNav"
+                    @scroll="saveSidebarScroll"
+                    :class="['flex-1 overflow-y-auto transition-all duration-300', sidebarCollapsed ? 'px-2 py-2 space-y-2' : 'px-4 py-4 space-y-6']"
+                >
+                    <div v-for="(group, groupIndex) in menuGroups" :key="group.title" :class="sidebarCollapsed ? 'space-y-2' : 'space-y-1.5'">
+                        
+                        <!-- Judul Kategori Kelompok -->
+                        <div 
+                            v-if="!sidebarCollapsed"
+                            class="px-3 text-[10px] font-extrabold uppercase tracking-widest text-slate-400 dark:text-slate-500/80 mb-2 block transition-all"
+                        >
+                            {{ __(group.title) }}
+                        </div>
+                        <!-- Collapsed: simple line separator (skip first group) -->
+                        <div 
+                            v-else-if="groupIndex > 0"
+                            class="border-b border-slate-100 dark:border-slate-800 -mx-2 my-2"
+                        />
+
+                        <!-- Daftar Item di Kelompok -->
+                        <template v-for="item in group.items" :key="item.label">
+
+                            <!-- External link (buka tab baru) -->
+                            <a
+                                v-if="item.external"
+                                :href="item.href"
+                                target="_blank"
+                                @click="closeSidebar"
+                                :class="[
+                                    sidebarCollapsed 
+                                        ? 'h-11 w-11 mx-auto flex items-center justify-center rounded-xl transition-all duration-150' 
+                                        : 'group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition duration-150',
+                                    'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-emerald-600 dark:hover:text-white'
+                                ]"
+                                :title="sidebarCollapsed ? __(item.label) : ''"
+                            >
+                                <component :is="item.icon" class="h-5 w-5 flex-shrink-0 text-slate-400 group-hover:text-emerald-500 dark:group-hover:text-white transition duration-150" />
+                                <span v-if="!sidebarCollapsed" class="flex-1 min-w-0 truncate">{{ __(item.label) }}</span>
+                                <ChevronRight v-if="!sidebarCollapsed" class="h-3.5 w-3.5 opacity-0 group-hover:opacity-100 transition duration-150 text-slate-400" />
+                            </a>
+
+                            <!-- Dropdown Menu Item (bila ada children) -->
+                            <div v-else-if="item.children" :class="sidebarCollapsed ? '' : 'space-y-1'">
+                                
+                                <!-- Collapsed: wrapped in a bordered group container -->
+                                <div 
+                                    v-if="sidebarCollapsed"
+                                    :class="[
+                                        'flex flex-col items-center gap-1 rounded-xl mx-1 transition-all duration-200',
+                                        openMenus[item.label] 
+                                            ? 'border border-slate-200 dark:border-slate-700/60 bg-slate-50/50 dark:bg-slate-800/20 py-2' 
+                                            : 'border border-transparent py-0'
+                                    ]"
+                                >
+                                    <!-- Parent icon button -->
+                                    <button
+                                        @click="toggleMenu(item.label)"
+                                        :class="[
+                                            'relative group h-11 w-11 flex items-center justify-center rounded-xl transition-all duration-150 focus:outline-none',
+                                            isChildActive(item.children)
+                                                ? 'bg-emerald-50/50 dark:bg-white/10 text-emerald-700 dark:text-white'
+                                                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-emerald-600 dark:hover:text-white'
+                                        ]"
+                                        :title="__(item.label)"
+                                    >
+                                        <component
+                                            :is="item.icon"
+                                            :class="[
+                                                'h-5 w-5 flex-shrink-0 transition duration-150',
+                                                isChildActive(item.children)
+                                                    ? 'text-emerald-600 dark:text-white'
+                                                    : 'text-slate-400 group-hover:text-emerald-500 dark:group-hover:text-white'
+                                            ]"
+                                        />
+                                        <!-- Tiny dot when collapsed & closed -->
+                                        <span 
+                                            v-if="item.label === 'menu.user_management' && !openMenus[item.label] && pendingApprovalsCount > 0"
+                                            class="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-amber-500 ring-2 ring-white dark:ring-slate-900"
+                                        />
+                                        <!-- Small chevron indicator on hover -->
+                                        <ChevronDown 
+                                            :class="[
+                                                'absolute -bottom-0.5 left-1/2 -translate-x-1/2 h-3 w-3 transition-all duration-200',
+                                                openMenus[item.label] 
+                                                    ? 'opacity-60 rotate-180' 
+                                                    : 'opacity-0 group-hover:opacity-50',
+                                                isChildActive(item.children)
+                                                    ? 'text-emerald-500 dark:text-white'
+                                                    : 'text-slate-400'
+                                            ]"
+                                        />
+                                    </button>
+                                    <!-- Child icons (collapsed) -->
+                                    <template v-if="openMenus[item.label]">
+                                        <Link
+                                            v-for="child in item.children"
+                                            :key="child.label"
+                                            :href="route(child.routeName)"
+                                            prefetch
+                                            @click="closeSidebar"
+                                            :class="[
+                                                'relative h-9 w-9 flex items-center justify-center rounded-lg transition-all duration-150',
+                                                isItemActive(child)
+                                                    ? 'bg-emerald-600 text-white shadow-sm dark:bg-white/15 dark:text-white dark:shadow-none'
+                                                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-emerald-600 dark:hover:text-white'
+                                            ]"
+                                            :title="__(child.label)"
+                                        >
+                                            <component
+                                                v-if="child.icon"
+                                                :is="child.icon"
+                                                :class="[
+                                                    'h-4 w-4 flex-shrink-0 transition duration-150',
+                                                    isItemActive(child)
+                                                        ? 'text-white dark:text-white'
+                                                        : 'text-slate-400 group-hover:text-emerald-500 dark:group-hover:text-white'
+                                                ]"
+                                            />
+                                            <!-- Tiny Dot indicator for pending items when collapsed -->
+                                            <span 
+                                                v-if="child.routeName === 'users.approvals' && openMenus[item.label] && pendingApprovalsCount > 0"
+                                                class="absolute top-1 right-1 h-2 w-2 rounded-full bg-amber-500 ring-2 ring-white dark:ring-slate-900"
+                                            />
+                                        </Link>
+                                    </template>
+                                </div>
+
+                                <!-- Expanded: standard dropdown -->
+                                <template v-else>
+                                    <button
+                                        @click="toggleMenu(item.label)"
+                                        :class="[
+                                            'w-full group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition duration-150 text-left focus:outline-none',
+                                            isChildActive(item.children)
+                                                ? 'bg-emerald-50/50 dark:bg-white/10 text-emerald-700 dark:text-white'
+                                                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-emerald-600 dark:hover:text-white'
+                                        ]"
+                                    >
+                                        <component
+                                            :is="item.icon"
+                                            :class="[
+                                                'h-5 w-5 flex-shrink-0 transition duration-150',
+                                                isChildActive(item.children)
+                                                    ? 'text-emerald-600 dark:text-white'
+                                                    : 'text-slate-400 group-hover:text-emerald-500 dark:group-hover:text-white'
+                                            ]"
+                                        />
+                                        <span class="flex-1 min-w-0 truncate">{{ __(item.label) }}</span>
+                                        
+                                        <!-- Right slot: Badge or Chevron -->
+                                        <div class="relative w-5 h-5 flex items-center justify-center ml-auto flex-shrink-0">
+                                            <!-- Dropdown Arrow SVG (hidden when closed and badge is present, shown on hover/open) -->
+                                            <svg 
+                                                :class="[
+                                                    'h-4 w-4 transition-all duration-200 absolute',
+                                                    openMenus[item.label] ? 'rotate-180' : '',
+                                                    isChildActive(item.children)
+                                                        ? 'text-emerald-600 dark:text-white'
+                                                        : 'text-slate-400 group-hover:text-emerald-500 dark:group-hover:text-white',
+                                                    (item.label === 'menu.user_management' && !openMenus[item.label] && pendingApprovalsCount > 0)
+                                                        ? 'opacity-0 scale-75 group-hover:opacity-100 group-hover:scale-100'
+                                                        : 'opacity-100 scale-100'
+                                                ]" 
+                                                xmlns="http://www.w3.org/2000/svg" 
+                                                viewBox="0 0 20 20" 
+                                                fill="currentColor"
+                                            >
+                                                <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+                                            </svg>
+ 
+                                            <!-- Parent Badge when Closed (hidden on hover, shown by default) -->
+                                            <span 
+                                                v-if="item.label === 'menu.user_management' && !openMenus[item.label] && pendingApprovalsCount > 0"
+                                                class="w-5 h-5 flex items-center justify-center rounded-full text-[10px] font-extrabold bg-amber-500 text-white shadow-sm absolute transition-all duration-200 group-hover:opacity-0 group-hover:scale-75"
+                                            >
+                                                {{ pendingApprovalsCount }}
+                                            </span>
+                                        </div>
+                                    </button>
+                                    
+                                    <!-- Submenu Items (expanded) -->
+                                    <div v-show="openMenus[item.label]" class="space-y-1 mt-1">
+                                        <Link
+                                            v-for="child in item.children"
+                                            :key="child.label"
+                                            :href="route(child.routeName)"
+                                            prefetch
+                                            @click="closeSidebar"
+                                            :class="[
+                                                'group flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition duration-150',
+                                                isItemActive(child)
+                                                    ? 'bg-emerald-600 text-white shadow-sm font-semibold dark:bg-white/15 dark:text-white dark:shadow-none'
+                                                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-emerald-600 dark:hover:text-white'
+                                            ]"
+                                        >
+                                            <component
+                                                v-if="child.icon"
+                                                :is="child.icon"
+                                                :class="[
+                                                    'h-4 w-4 flex-shrink-0 transition duration-150 ml-6',
+                                                    isItemActive(child)
+                                                        ? 'text-white dark:text-white'
+                                                        : 'text-slate-400 group-hover:text-emerald-500 dark:group-hover:text-white'
+                                                ]"
+                                            />
+                                            <span class="flex-1 min-w-0 truncate">{{ __(child.label) }}</span>
+                                            <span 
+                                                v-if="child.routeName === 'users.approvals' && openMenus[item.label] && pendingApprovalsCount > 0"
+                                                class="ml-auto w-5 h-5 flex items-center justify-center rounded-full text-[10px] font-extrabold bg-amber-500 text-white shadow-sm flex-shrink-0"
+                                            >
+                                                {{ pendingApprovalsCount }}
+                                            </span>
+                                        </Link>
+                                    </div>
+                                </template>
+                            </div>
+ 
+                            <!-- Internal Inertia link -->
+                            <Link
+                                v-else
+                                :href="route(item.routeName)"
+                                prefetch
+                                @click="closeSidebar"
+                                :class="[
+                                    sidebarCollapsed 
+                                        ? 'h-11 w-11 mx-auto flex items-center justify-center rounded-xl transition-all duration-150 relative' 
+                                        : 'group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150 relative',
+                                    isRouteActive(item)
+                                        ? 'bg-emerald-600 text-white shadow-sm font-semibold dark:bg-white/15 dark:text-white dark:shadow-none'
+                                        : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-emerald-600 dark:hover:text-white'
+                                ]"
+                                :title="sidebarCollapsed ? __(item.label) : ''"
+                            >
+                                <component
+                                    :is="item.icon"
+                                    :class="[
+                                        'h-5 w-5 flex-shrink-0 transition duration-150',
+                                        isRouteActive(item)
+                                            ? 'text-white dark:text-white'
+                                            : 'text-slate-400 group-hover:text-emerald-500 dark:group-hover:text-white'
+                                    ]"
+                                />
+                                <span v-if="!sidebarCollapsed" class="flex-1 min-w-0 truncate">{{ __(item.label) }}</span>
+                                
+                                <!-- Badge/Icon Container for regular link -->
+                                <div v-if="!sidebarCollapsed" class="relative w-5 h-5 flex items-center justify-center ml-auto flex-shrink-0">
+                                    <!-- Badge for reports management -->
+                                    <span 
+                                        v-if="item.routeName === 'reports-management.index' && pendingReportsCount > 0"
+                                        :class="[
+                                            'w-5 h-5 flex items-center justify-center rounded-full text-[10px] font-extrabold bg-amber-500 text-white shadow-sm absolute transition-all duration-200',
+                                            isRouteActive(item) ? 'opacity-100 scale-100 group-hover:opacity-0 group-hover:scale-75' : 'opacity-100 scale-100'
+                                        ]"
+                                    >
+                                        {{ pendingReportsCount }}
+                                    </span>
+
+                                    <!-- ChevronRight (panah ke kanan) ketika aktif -->
+                                    <ChevronRight
+                                        v-if="isRouteActive(item)"
+                                        :class="[
+                                            'h-3.5 w-3.5 text-white dark:text-white absolute transition-all duration-200',
+                                            (item.routeName === 'reports-management.index' && pendingReportsCount > 0) ? 'opacity-0 scale-75 group-hover:opacity-100 group-hover:scale-100' : 'opacity-100'
+                                        ]"
+                                    />
+                                </div>
+
+                                <!-- Tiny dot when collapsed -->
+                                <span 
+                                    v-if="item.routeName === 'reports-management.index' && pendingReportsCount > 0 && sidebarCollapsed"
+                                    class="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-amber-500 ring-2 ring-white dark:ring-slate-900"
+                                />
+                            </Link>
+
+                        </template>
+                    </div>
+                </nav>
+            </aside>
+
+            <!-- Main Content -->
+            <main :class="['flex-1 min-w-0 w-full pt-16 min-h-screen transition-all duration-300 ease-in-out', sidebarCollapsed ? 'lg:ml-20' : 'lg:ml-72']">
+                <!-- Page Heading slot (jika ada) -->
+                <header
+                    v-if="$slots.header"
+                    class="w-full bg-white dark:bg-slate-900 shadow-sm dark:shadow-none dark:border-b dark:border-slate-800"
+                >
+                    <div class="w-full px-4 sm:px-6 py-5">
+                        <slot name="header" />
+                    </div>
+                </header>
+
+                <!-- Default slot content -->
+                <slot />
+            </main>
+        </div>
+
+        <!-- Fullscreen Logout Loading Backdrop Overlay -->
+        <Teleport to="body">
+            <Transition
+                enter-active-class="transition ease-out duration-200"
+                enter-from-class="opacity-0"
+                enter-to-class="opacity-100"
+                leave-active-class="transition ease-in duration-150"
+                leave-from-class="opacity-100"
+                leave-to-class="opacity-0"
+            >
+                <div v-if="isLoggingOut" class="fixed inset-0 z-[99999] flex flex-col items-center justify-center bg-slate-950/60 backdrop-blur-md text-white select-none">
+                    <div class="p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl flex flex-col items-center gap-4 max-w-xs text-center">
+                        <div class="relative flex items-center justify-center">
+                            <div class="w-12 h-12 rounded-full border-4 border-red-200 dark:border-red-900/60 border-t-red-600 dark:border-t-red-400 animate-spin"></div>
+                            <LogOut class="h-5 w-5 text-red-600 dark:text-red-400 absolute" />
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-extrabold text-slate-900 dark:text-white">{{ __('auth.logout_title') }}</h4>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">{{ __('auth.logout_desc') }}</p>
+                        </div>
+                    </div>
+                </div>
+            </Transition>
+        </Teleport>
+    </div>
+</template>
+
+<style scoped>
+/* Navbar blur effect is now handled with backdrop-blur-md class */
+:deep(input[type="text"]:focus),
+:deep(input:focus),
+:deep(input:active),
+:deep(input:focus-within),
+:deep(input:focus-visible),
+:deep(button:focus),
+:deep(button:active),
+:deep(button:focus-within),
+:deep(button:focus-visible) {
+    outline: none !important;
+    outline-width: 0 !important;
+    box-shadow: none !important;
+    --tw-shadow: none !important;
+    --tw-shadow-colored: none !important;
+    --tw-ring-shadow: none !important;
+    --tw-ring-color: transparent !important;
+    -webkit-tap-highlight-color: transparent !important;
+}
+</style>
