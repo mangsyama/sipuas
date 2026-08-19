@@ -154,7 +154,7 @@ const copyReceipt = () => {
 </script>
 
 <template>
-    <Head title="Formulir Suara Pasien — SIPUAS" />
+    <Head title="Formulir Suara Pasien" />
 
     <div class="min-h-screen flex flex-col justify-between relative overflow-hidden font-sans p-4 sm:p-6 text-slate-900 dark:text-slate-100">
         <!-- Background Image with Blur & Dark Overlay -->
@@ -511,7 +511,7 @@ const copyReceipt = () => {
 
         <!-- Footer Copyright -->
         <footer class="w-full max-w-xl mx-auto px-4 pt-4 pb-2 text-center text-xs text-white/80 dark:text-slate-400 z-0 font-medium drop-shadow">
-            &copy; {{ new Date().getFullYear() }} SIPUAS — Sistem Integrasi Pelayanan Publik & Akuntabilitas Staf
+            &copy; {{ new Date().getFullYear() }} SIPUAS - Sistem Integrasi Pelayanan Publik & Akuntabilitas Staf
         </footer>
     </div>
 </template>

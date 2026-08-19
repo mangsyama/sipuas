@@ -37,7 +37,7 @@ const redZoneUnits = ref([
 </script>
 
 <template>
-    <Head title="Executive Command Center — Kabid Pelayanan" />
+    <Head title="Executive Command Center" />
 
     <AuthenticatedLayout>
         <div class="py-4 px-4 sm:px-4 lg:px-4 animate-spa-fade-in space-y-4">

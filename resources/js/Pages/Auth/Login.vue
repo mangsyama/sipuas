@@ -37,7 +37,7 @@ const submit = () => {
 
 <template>
     <GuestLayout>
-        <Head title="Masuk SIPUAS" />
+        <Head title="Masuk" />
 
         <div v-if="status" class="mb-4 font-medium text-sm text-emerald-600 dark:text-emerald-400 text-center">
             {{ status }}

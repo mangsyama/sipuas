@@ -1208,7 +1208,7 @@ const getGroupInitials = (title) => {
                 ]"
             >
                 <!-- Sidebar Header (Mobile & Desktop) -->
-                <div :class="['relative flex items-center border-b border-slate-100 dark:border-slate-800 select-none px-4 py-4 transition-all duration-300', sidebarCollapsed ? 'justify-center' : 'justify-center']">
+                <div :class="['relative flex h-20 items-center border-b border-slate-100 dark:border-slate-800 select-none px-4 transition-all duration-300', sidebarCollapsed ? 'justify-center' : 'justify-center']">
                     <!-- If collapsed, show logo and reveal expand icon on hover -->
                     <div v-if="sidebarCollapsed">
                         <button 
@@ -1216,13 +1216,13 @@ const getGroupInitials = (title) => {
                             class="relative group h-12 w-12 rounded-xl flex items-center justify-center flex-shrink-0 transition-all duration-200"
                             title="Expand Sidebar"
                         >
-                            <img src="/images/logo-sidebar.png" alt="SIPUAS" class="h-full w-full object-contain dark:brightness-0 dark:invert transition-all duration-200 group-hover:opacity-0" />
+                            <img src="/images/logo-sidebar.png" alt="SIPUAS" class="h-9 w-9 object-contain dark:brightness-0 dark:invert transition-all duration-200 group-hover:opacity-0" />
                             <ChevronRight class="absolute inset-0 m-auto h-5.5 w-5.5 text-emerald-600 dark:text-white opacity-0 group-hover:opacity-100 transition-all duration-200" />
                         </button>
                     </div>
                     
                     <Link v-else :href="route('dashboard')" prefetch class="flex items-center justify-center w-full px-6">
-                        <img src="/images/logo-sidebar.png" alt="SIPUAS" class="h-12 max-w-full w-auto object-contain dark:brightness-0 dark:invert transition-all duration-200 mx-auto" />
+                        <img src="/images/logo-sidebar.png" alt="SIPUAS" class="h-9 max-w-full w-auto object-contain dark:brightness-0 dark:invert transition-all duration-200 mx-auto" />
                     </Link>
                     
                     <!-- Desktop collapse toggle & Close button (Mobile only) -->

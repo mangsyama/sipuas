@@ -5,7 +5,7 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="{{ csrf_token() }}">
 
-        <title inertia>{{ config('app.name', 'Laravel') }}</title>
+        <title inertia>{{ config('app.name', 'SIPUAS') }}</title>
 
         <!-- Favicon -->
         <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=4">

@@ -24,7 +24,7 @@ const submit = () => {
 
 <template>
     <GuestLayout>
-        <Head title="Lupa Kata Sandi - SIPUAS" />
+        <Head title="Lupa Kata Sandi" />
 
         <div class="text-center mb-6">
             <h2 class="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">Lupa Kata Sandi</h2>

@@ -22,7 +22,7 @@ const copyReceipt = () => {
 </script>
 
 <template>
-    <Head title="Konfirmasi Laporan — SI-PUAS" />
+    <Head title="Konfirmasi Laporan" />
 
     <div class="min-h-screen flex flex-col justify-between relative overflow-hidden font-sans p-4 sm:p-6 text-slate-900 dark:text-slate-100">
         <!-- Background Image with Blur & Overlay (Sama seperti Halaman Login) -->
@@ -75,7 +75,7 @@ const copyReceipt = () => {
         </main>
 
         <footer class="w-full max-w-md mx-auto px-4 pt-4 pb-2 text-center text-xs text-white/80 dark:text-slate-400 z-10 font-medium drop-shadow">
-            &copy; {{ new Date().getFullYear() }} SIPUAS — Sistem Integrasi Pelayanan Publik & Akuntabilitas Staf
+            &copy; {{ new Date().getFullYear() }} SIPUAS - Sistem Integrasi Pelayanan Publik & Akuntabilitas Staf
         </footer>
     </div>
 </template>

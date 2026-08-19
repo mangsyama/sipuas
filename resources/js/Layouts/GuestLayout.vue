@@ -21,7 +21,7 @@
 
             <!-- Footer Copyright -->
             <div class="mt-6 text-center text-xs text-white/80 dark:text-slate-400 font-medium drop-shadow">
-                &copy; {{ new Date().getFullYear() }} SIPUAS. All rights reserved.
+                &copy; {{ new Date().getFullYear() }} SIPUAS - Sistem Integrasi Pelayanan Publik & Akuntabilitas Staf
             </div>
         </div>
     </div>

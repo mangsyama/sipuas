@@ -76,7 +76,7 @@ const redZoneBreakdown = ref([
 </script>
 
 <template>
-    <Head title="Dashboard Utama — SI-PUAS" />
+    <Head title="Dashboard" />
 
     <AuthenticatedLayout>
         <div class="py-4 px-4 sm:px-4 lg:px-4 animate-spa-fade-in space-y-4">
@@ -125,7 +125,7 @@ const redZoneBreakdown = ref([
             <!-- Module Quick Shortcuts Bar (PRD Navigation Grid) -->
             <div class="bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-4">
                 <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
-                    <h3 class="text-xs font-extrabold uppercase tracking-wider text-slate-400">Akses Cepat Modul Sistem SI-PUAS</h3>
+                    <h3 class="text-xs font-extrabold uppercase tracking-wider text-slate-400">Akses Cepat Modul Sistem SIPUAS</h3>
                     <span class="text-xs text-slate-400 font-medium">Berdasarkan Peran PRD</span>
                 </div>
 

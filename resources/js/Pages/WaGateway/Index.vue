@@ -42,7 +42,7 @@ let pollTimeout = null;
 
 const testForm = useForm({
     phone: '',
-    message: 'Halo! Ini adalah pesan uji coba dari WhatsApp Gateway SI-PUAS.'
+    message: 'Halo! Ini adalah pesan uji coba dari WhatsApp Gateway SIPUAS.'
 });
 
 const scheduleNextCheck = () => {
@@ -105,7 +105,7 @@ const sendTestMessage = () => {
         preserveScroll: true,
         onSuccess: () => {
             testForm.reset('message');
-            testForm.message = 'Halo! Ini merupakan pesan uji coba dari WhatsApp Gateway SI-PUAS.';
+            testForm.message = 'Halo! Ini merupakan pesan uji coba dari WhatsApp Gateway SIPUAS.';
         }
     });
 };

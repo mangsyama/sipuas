@@ -38,7 +38,7 @@ const submit = () => {
 
 <template>
     <GuestLayout>
-        <Head title="Atur Ulang Kata Sandi - SIPUAS" />
+        <Head title="Atur Ulang Kata Sandi" />
 
         <div class="text-center mb-6">
             <h2 class="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">Atur Ulang Kata Sandi</h2>

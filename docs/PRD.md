@@ -1,10 +1,10 @@
 # **Dokumen Kebutuhan Produk (PRD)**
 
-## **SI-PUAS: Sistem Informasi Suara Pasien untuk Akuntabilitas Staf (Versi Mandiri)**
+## **SIPUAS: Sistem Informasi Suara Pasien untuk Akuntabilitas Staf (Versi Mandiri)**
 
 ## **1\. Ringkasan Produk (*Product Overview*)**
 
-**SI-PUAS** adalah aplikasi web berbasis kecerdasan buatan (AI) yang memproses umpan balik (keluhan dan pujian) dari pasien atau keluarga pasien secara langsung (*real-time*).  
+**SIPUAS** adalah aplikasi web berbasis kecerdasan buatan (AI) yang memproses umpan balik (keluhan dan pujian) dari pasien atau keluarga pasien secara langsung (*real-time*).  
 Sistem ini mentransformasi laporan mentah pasien menjadi indikator kinerja terukur (*KPI / Digital Logbook*) bagi staf rumah sakit, sekaligus menyediakan dasbor pemantauan tingkat manajerial (*Executive Dashboard*) bagi jimpinan tanpa memerlukan integrasi kompleks ke SIMRS (*standalone*).
 
 ### **Tujuan Utama**
@@ -25,7 +25,7 @@ Sistem ini mentransformasi laporan mentah pasien menjadi indikator kinerja teruk
 
 ## **3\. Arsitektur Halaman & Struktur Aplikasi (*Sitemap*)**
 
-Aplikasi SI-PUAS  
+Aplikasi SIPUAS  
 ├── 🌐 Area Publik (Tanpa Login)  
 │   ├── Halaman 1: Formulir Laporan Pasien (via QR Code)  
 │   └── Halaman 2: Konfirmasi / Struk Laporan Digital  
