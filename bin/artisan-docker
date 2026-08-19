@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Run Laravel artisan inside the sipuas-php container where pdo_sqlsrv is installed.
+CONTAINER=sipuas-php
+PROJECT_DIR=/var/www/sipuas
+
+if ! sudo docker ps --format '{{.Names}}' | grep -q "^${CONTAINER}$"; then
+  echo "Container ${CONTAINER} is not running. Start it with:"
+  echo "  sudo docker compose up -d"
+  exit 1
+fi
+
+sudo docker exec ${CONTAINER} php ${PROJECT_DIR}/artisan "$@"

@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Lightweight wrapper to run `php` inside the sipuas-php container.
+# Usage: ./bin/php-docker <php-args...>
+
+CONTAINER=sipuas-php
+PROJECT_DIR=/var/www/sipuas
+
+if ! sudo docker ps --format '{{.Names}}' | grep -q "^${CONTAINER}$"; then
+  echo "Container ${CONTAINER} is not running. Start it with:"
+  echo "  sudo docker compose up -d" >&2
+  exit 1
+fi
+
+sudo docker exec -u www-data -w ${PROJECT_DIR} -it ${CONTAINER} php "$@"

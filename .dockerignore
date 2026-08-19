@@ -1,0 +1,13 @@
+.git
+node_modules
+vendor
+!vendor/tightenco/ziggy
+.env
+storage/*.key
+storage/*.sqlite
+storage/framework/cache/data
+public/storage
+storage/app/public/*
+!storage/app/public/.gitignore
+storage/logs/*
+!storage/logs/.gitignore
