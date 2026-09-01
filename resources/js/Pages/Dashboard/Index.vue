@@ -80,20 +80,15 @@ const redZoneBreakdown = ref([
 
     <AuthenticatedLayout>
         <div class="py-4 px-4 sm:px-4 lg:px-4 animate-spa-fade-in space-y-4">
-            <!-- Welcome Card (Header Lama) -->
+            <!-- Welcome Card (Header) -->
             <div class="p-[1px] rounded-2xl bg-gradient-to-r from-emerald-600 to-emerald-800 dark:bg-none dark:bg-slate-800 shadow-sm">
                 <div class="overflow-hidden bg-gradient-to-r from-emerald-600 to-emerald-800 dark:from-slate-900 dark:to-slate-900 rounded-[15px] text-white p-6 sm:p-8 relative flex items-center justify-between gap-4 sm:gap-6">
                     <!-- Text Info -->
-                    <div class="relative z-10 flex-1 min-w-0 pr-20 sm:pr-24">
+                    <div class="relative z-10 flex-1 min-w-0">
                         <h3 class="text-2xl font-black tracking-tight mb-1">SIPUAS</h3>
                         <p class="text-emerald-100 dark:text-slate-300 text-sm font-medium leading-relaxed break-words">
                             Sistem Integrasi Pelayanan Publik & Akuntabilitas Staf
                         </p>
-                    </div>
-
-                    <!-- Right White Logo -->
-                    <div class="absolute right-6 sm:right-8 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center h-16 w-16 opacity-85 hover:opacity-100 transition-opacity pointer-events-none select-none">
-                        <img src="/images/logo-sidebar.png" alt="SIPUAS" class="h-full w-full object-contain brightness-0 invert" />
                     </div>
 
                     <!-- Decorative background patterns -->
