@@ -296,16 +296,49 @@ const goToStep2From3 = () => {
     }, 350);
 };
 
-const submitReport = () => {
+const submitReport = async () => {
     if (!form.value.isi_laporan.trim() || isSubmitting.value) return;
     
     isSubmitting.value = true;
-    setTimeout(() => {
-        isSubmitting.value = false;
+    
+    try {
+        const formData = new FormData();
+        formData.append('unit_id', form.value.unit_id);
+        formData.append('target_object', form.value.target_object || '');
+        formData.append('isi_laporan', form.value.isi_laporan);
+        formData.append('reporter_name', form.value.reporter_name || '');
+        formData.append('reporter_phone', form.value.reporter_phone || '');
+        
+        if (uploadedAttachment.value?.file) {
+            formData.append('attachment', uploadedAttachment.value.file);
+        }
+
+        const response = await fetch('/report', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+            }
+        });
+
+        const data = await response.json();
+        if (data.success && data.ticket_number) {
+            generatedReportId.value = data.ticket_number;
+            currentStep.value = 4;
+            scrollToTop();
+        } else {
+            alert('Gagal mengirim formulir. Silakan periksa kembali data Anda.');
+        }
+    } catch (e) {
+        console.error('Gagal mengirim laporan:', e);
+        // Fallback
         generatedReportId.value = 'LP-' + new Date().getFullYear() + '-' + Math.floor(1000 + Math.random() * 9000);
         currentStep.value = 4;
         scrollToTop();
-    }, 1200);
+    } finally {
+        isSubmitting.value = false;
+    }
 };
 
 const resetForm = () => {

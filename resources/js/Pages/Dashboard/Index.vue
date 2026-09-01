@@ -27,52 +27,62 @@ const props = defineProps({
     user: {
         type: Object,
         default: () => null
+    },
+    statsData: {
+        type: Array,
+        default: null
+    },
+    recentReports: {
+        type: Array,
+        default: null
+    },
+    redZoneBreakdown: {
+        type: Array,
+        default: null
     }
 });
 
-const statsData = ref([
-    { label: 'Total Laporan Pasien', value: '248', desc: 'Seluruh aduan & pujian masuk', icon: FileText, color: 'text-emerald-600 dark:text-white', bg: 'bg-emerald-50 dark:bg-white/10' },
-    { label: 'Apresiasi Pujian', value: '182', desc: '73.4% dari total laporan', icon: TrendingUp, color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-950/40' },
-    { label: 'Komplain Pelayanan', value: '66', desc: '26.6% memerlukan verifikasi', icon: TrendingDown, color: 'text-rose-600 dark:text-rose-400', bg: 'bg-rose-50 dark:bg-rose-950/40' },
-    { label: 'Indeks Kepuasan RS', value: '88.5%', desc: 'Tingkat kepuasan pasien', icon: Activity, color: 'text-emerald-600 dark:text-white', bg: 'bg-emerald-50 dark:bg-white/10' },
-]);
-
-const recentFeed = ref([
-    {
-        id: 'LP-2026-08-001',
-        time: 'Hari Ini, 14:30',
-        unit: 'Instalasi Farmasi',
-        content: 'Ambil obat lama sekali, sudah antre 2 jam petugasnya malah asyik ngobrol dan lambat melayani.',
-        sentiment: 'NEGATIF',
-        category: 'Waktu Tunggu & Pelayanan',
-        status: 'PENDING'
-    },
-    {
-        id: 'LP-2026-08-002',
-        time: 'Hari Ini, 13:15',
-        unit: 'Instalasi Farmasi',
-        content: 'Perawat Sinta sangat ramah dan sigap membantu mengurus administrasi resep obat ibu saya.',
-        sentiment: 'POSITIF',
-        category: 'Pelayanan Ramah',
-        status: 'VERIFIED'
-    },
-    {
-        id: 'LP-2026-08-003',
-        time: 'Hari Ini, 11:00',
-        unit: 'Instalasi Gawat Darurat (IGD)',
-        content: 'Dokter jaga di IGD sangat cepat tanggap memberikan pertolongan medis pertama.',
-        sentiment: 'POSITIF',
-        category: 'Kecepatan Medis',
-        status: 'VERIFIED'
+const statsData = computed(() => {
+    if (props.statsData && props.statsData.length > 0) {
+        return props.statsData.map((item, idx) => {
+            const icons = [FileText, Clock, CheckCircle2, Activity];
+            const colors = [
+                'text-emerald-600 dark:text-white',
+                'text-amber-600 dark:text-amber-400',
+                'text-emerald-600 dark:text-emerald-400',
+                'text-emerald-600 dark:text-white'
+            ];
+            const bgs = [
+                'bg-emerald-50 dark:bg-white/10',
+                'bg-amber-50 dark:bg-amber-950/40',
+                'bg-emerald-50 dark:bg-emerald-950/40',
+                'bg-emerald-50 dark:bg-white/10'
+            ];
+            return {
+                label: item.label,
+                value: item.value,
+                desc: item.trend || '',
+                icon: icons[idx % icons.length],
+                color: colors[idx % colors.length],
+                bg: bgs[idx % bgs.length]
+            };
+        });
     }
-]);
+    return [
+        { label: 'Total Suara Masuk', value: '0', desc: 'Belum ada laporan', icon: FileText, color: 'text-emerald-600 dark:text-white', bg: 'bg-emerald-50 dark:bg-white/10' },
+        { label: 'Menunggu Verifikasi', value: '0', desc: 'Tidak ada antrean', icon: Clock, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-950/40' },
+        { label: 'Terverifikasi (Selesai)', value: '0', desc: '0% tingkat selesai', icon: CheckCircle2, color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-950/40' },
+        { label: 'Sentimen Positif', value: '0', desc: '0% kepuasan', icon: Activity, color: 'text-emerald-600 dark:text-white', bg: 'bg-emerald-50 dark:bg-white/10' },
+    ];
+});
 
-const redZoneBreakdown = ref([
-    { unit: 'Instalasi Farmasi', count: 42, percent: 84, status: 'HIGH_RISK' },
-    { unit: 'Instalasi Gawat Darurat (IGD)', count: 35, percent: 70, status: 'MEDIUM_RISK' },
-    { unit: 'Kasir & Pendaftaran', count: 28, percent: 56, status: 'MEDIUM_RISK' },
-    { unit: 'Poliklinik Rawat Jalan', count: 18, percent: 36, status: 'LOW_RISK' }
-]);
+const recentFeed = computed(() => {
+    return props.recentReports || [];
+});
+
+const redZoneBreakdown = computed(() => {
+    return props.redZoneBreakdown || [];
+});
 </script>
 
 <template>
@@ -208,7 +218,15 @@ const redZoneBreakdown = ref([
                         </Link>
                     </div>
 
-                    <div class="space-y-3">
+                    <div v-if="recentFeed.length === 0" class="py-12 text-center space-y-2">
+                        <div class="h-10 w-10 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mx-auto">
+                            <FileText class="h-5 w-5" />
+                        </div>
+                        <p class="text-xs font-bold text-slate-500 dark:text-slate-400">Belum ada laporan atau aduan pasien masuk.</p>
+                        <p class="text-[11px] text-slate-400">Laporan baru dari pasien akan muncul di sini secara real-time.</p>
+                    </div>
+
+                    <div v-else class="space-y-3">
                         <div
                             v-for="feed in recentFeed"
                             :key="feed.id"
@@ -246,7 +264,15 @@ const redZoneBreakdown = ref([
                         <Link :href="route('executive.dashboard')" class="text-xs text-emerald-600 dark:text-emerald-400 font-bold hover:underline">Detail</Link>
                     </div>
 
-                    <div class="space-y-3">
+                    <div v-if="redZoneBreakdown.length === 0 || redZoneBreakdown.every(u => u.count === 0)" class="py-12 text-center space-y-2">
+                        <div class="h-10 w-10 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto">
+                            <CheckCircle2 class="h-5 w-5" />
+                        </div>
+                        <p class="text-xs font-bold text-emerald-700 dark:text-emerald-400">Semua Unit Bersih & Aman</p>
+                        <p class="text-[11px] text-slate-400">Tidak ada unit berisiko zona merah saat ini.</p>
+                    </div>
+
+                    <div v-else class="space-y-3">
                         <div v-for="unit in redZoneBreakdown" :key="unit.unit" class="space-y-1 text-xs">
                             <div class="flex justify-between font-medium">
                                 <span class="text-slate-700 dark:text-slate-300 truncate">{{ unit.unit }}</span>

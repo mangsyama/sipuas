@@ -4,7 +4,7 @@ import Dropdown from '@/Components/Dropdown.vue';
 import DropdownLink from '@/Components/DropdownLink.vue';
 import NotificationItem from '@/Components/NotificationItem.vue';
 import { Link, usePage, router } from '@inertiajs/vue3';
-import { Sun, Moon, Languages, LayoutDashboard, FileText, User, X, ChevronRight, ChevronLeft, ChevronDown, Settings, LogOut, Activity, Users, FileBarChart2, History, Shield, ShieldAlert, UserCheck, ArrowLeft, Database, Search, Building2, Layers, MapPin, Hospital, Palette, Play, Type, Bell, Clock, CheckCircle2, AlertTriangle, AlertCircle, HelpCircle, Wrench, Check, CheckCheck, Eye, MessageSquareCode, QrCode, Radio, Award, BarChart3 } from '@lucide/vue';
+import { Sun, Moon, Languages, LayoutDashboard, FileText, User, X, ChevronRight, ChevronLeft, ChevronDown, Settings, LogOut, Activity, Users, FileBarChart2, History, Shield, ShieldAlert, UserCheck, ArrowLeft, Database, Search, Building2, Layers, MapPin, Hospital, Palette, Play, Type, Bell, Clock, CheckCircle2, AlertTriangle, AlertCircle, HelpCircle, Wrench, Check, CheckCheck, Eye, MessageSquareCode, QrCode, Radio, Award, BarChart3, Sparkles } from '@lucide/vue';
 
 
 
@@ -255,8 +255,17 @@ const menuGroups = computed(() => {
             ]
         },
         {
+            title: 'Master Data',
+            items: [
+                { label: 'Master Pengguna', routeName: 'users.index', icon: Users },
+                { label: 'Master Unit & Ruangan', routeName: 'units.index', icon: Building2 },
+                { label: 'Master Staf & Pegawai', routeName: 'staff.index', icon: UserCheck }
+            ]
+        },
+        {
             title: 'System / Integrasi',
             items: [
+                { label: 'Integrasi AI', routeName: 'admin.ai-settings.index', icon: Sparkles },
                 { label: 'WhatsApp Gateway', routeName: 'admin.wa-gateway.index', icon: MessageSquareCode }
             ]
         },
@@ -565,6 +574,8 @@ const searchableItems = [
     { label: 'Layanan Penunjang (Managemen Layanan)', routeName: 'service-management.supporting-units', description: 'Pengelolaan data divisi dan unit penunjang' },
     { label: 'Persetujuan Registrasi', routeName: 'users.approvals', description: 'Persetujuan pendaftar pengguna baru' },
     { label: 'Daftar Pengguna', routeName: 'users.index', description: 'Kelola data pengguna sistem' },
+    { label: 'Master Unit & Ruangan', routeName: 'units.index', description: 'Pengelolaan data master unit kerja & ruangan RS' },
+    { label: 'Master Staf & Pegawai', routeName: 'staff.index', description: 'Pengelolaan direktori profil staf & saldo poin KPI' },
     { label: 'Pengaturan Profil', routeName: 'settings.index', description: 'Ubah sandi, tema, dan profil' },
     { label: 'Sistem Desain - Ringkasan', routeName: 'design-system.index', description: 'Ringkasan panduan warna, tema dark mode, & tipografi' },
     { label: 'Sistem Desain - Tombol & Badge', routeName: 'design-system.buttons-badges', description: 'Koleksi komponen tombol, animasi loading, & badge status' },
@@ -593,7 +604,9 @@ const mobilePageTitles = [
     { routeName: 'service-management.categories', label: 'Kategori Permasalahan' },
     { routeName: 'service-management.supporting-units', label: 'Layanan Penunjang' },
     { routeName: 'users.approvals', label: 'Persetujuan Registrasi' },
-    { routeName: 'users.index', label: 'Daftar Pengguna' },
+    { routeName: 'users.index', label: 'Master Pengguna' },
+    { routeName: 'units.index', label: 'Master Unit & Ruangan' },
+    { routeName: 'staff.index', label: 'Master Staf & Pegawai' },
     { routeName: 'users.show', label: 'Detail Pengguna' },
     { routeName: 'users.edit', label: 'Edit Pengguna' },
     { routeName: 'profile.edit', label: 'Profil Saya' },

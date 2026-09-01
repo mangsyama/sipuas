@@ -13,19 +13,19 @@ import {
     ShieldCheck
 } from '@lucide/vue';
 
-const topPerformers = ref([
-    { rank: 1, name: 'Citra Lestari, A.Md.AK', unit: 'Instalasi Farmasi', points: 110, praise_count: 12, badge: '🥇 Top Performer #1' },
-    { rank: 2, name: 'dr. Anindya Putri, Sp.A', unit: 'Poliklinik Anak', points: 105, praise_count: 11, badge: '🥈 Top Performer #2' },
-    { rank: 3, name: 'Ners Rian Hidayat, S.Kep', unit: 'Ruang Rawat Inap B', points: 98, praise_count: 10, badge: '🥉 Top Performer #3' },
-    { rank: 4, name: 'Sinta Dewi, A.Md.Farm', unit: 'Instalasi Farmasi', points: 90, praise_count: 8, badge: 'Top #4' },
-    { rank: 5, name: 'Eka Widya, A.Md.Rad', unit: 'Instalasi Radiologi', points: 88, praise_count: 7, badge: 'Top #5' }
-]);
+const props = defineProps({
+    topPerformers: {
+        type: Array,
+        default: null
+    },
+    bottomPerformers: {
+        type: Array,
+        default: null
+    }
+});
 
-const bottomPerformers = ref([
-    { rank: 1, name: 'Doni Pratama', unit: 'Kasir & Pendaftaran', complaint_deductions: 5, points: 40, note: 'Diperlukan Pembinaan Waktu Antrean' },
-    { rank: 2, name: 'Budi Santoso, S.Farm', unit: 'Instalasi Farmasi', complaint_deductions: 3, points: 55, note: 'Diperlukan Evaluasi Kecepatan Resep' },
-    { rank: 3, name: 'Hendra Setiawan', unit: 'Sarpras IPSRS', complaint_deductions: 3, points: 60, note: 'Diperlukan Pembinaan Respons AC' }
-]);
+const topPerformers = ref(props.topPerformers || []);
+const bottomPerformers = ref(props.bottomPerformers || []);
 </script>
 
 <template>
@@ -57,7 +57,7 @@ const bottomPerformers = ref([
                 <div class="flex items-center gap-2">
                     <button class="h-10 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 dark:bg-white dark:hover:bg-slate-200 text-white dark:text-slate-900 text-xs font-bold flex items-center gap-2 shadow-sm transition">
                         <Download class="h-4 w-4" />
-                        <span>Ekspor Leaderboard (PDF/Excel)</span>
+                        <span>Ekspor Laporan (PDF/Excel)</span>
                     </button>
                 </div>
             </div>
@@ -69,12 +69,20 @@ const bottomPerformers = ref([
                     <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
                         <div class="flex items-center gap-2">
                             <Award class="h-5 w-5 text-amber-500" />
-                            <h3 class="text-xs font-extrabold uppercase tracking-wider text-slate-900 dark:text-white">Top 5 Performers (Apresiasi Pujian Pasien)</h3>
+                            <h3 class="text-xs font-extrabold uppercase tracking-wider text-slate-900 dark:text-white">Top Performers (Apresiasi Pujian Pasien)</h3>
                         </div>
                         <span class="text-xs text-emerald-600 dark:text-emerald-400 font-bold">Terbaik RS</span>
                     </div>
 
-                    <div class="space-y-3">
+                    <div v-if="topPerformers.length === 0" class="py-12 text-center space-y-2">
+                        <div class="h-10 w-10 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mx-auto">
+                            <Award class="h-5 w-5" />
+                        </div>
+                        <p class="text-xs font-bold text-slate-500 dark:text-slate-400">Belum ada peringkat staf</p>
+                        <p class="text-[11px] text-slate-400">Peringkat performa akan terbentuk setelah ada verifikasi laporan apresiasi staf.</p>
+                    </div>
+
+                    <div v-else class="space-y-3">
                         <div
                             v-for="staf in topPerformers"
                             :key="staf.rank"
@@ -119,7 +127,15 @@ const bottomPerformers = ref([
                         <span class="text-xs text-rose-600 dark:text-rose-400 font-bold">Perlu Perhatian</span>
                     </div>
 
-                    <div class="space-y-3">
+                    <div v-if="bottomPerformers.length === 0" class="py-12 text-center space-y-2">
+                        <div class="h-10 w-10 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto">
+                            <CheckCircle2 class="h-5 w-5" />
+                        </div>
+                        <p class="text-xs font-bold text-emerald-700 dark:text-emerald-400">Tidak Ada Indikasi Pembinaan</p>
+                        <p class="text-[11px] text-slate-400">Semua staf unit berkinerja baik dan bebas dari keluhan berulang.</p>
+                    </div>
+
+                    <div v-else class="space-y-3">
                         <div
                             v-for="staf in bottomPerformers"
                             :key="staf.rank"

@@ -12,56 +12,14 @@ import {
     Download
 } from '@lucide/vue';
 
-const kasiData = ref([
-    {
-        id: 1,
-        name: 'Ahmad, S.Farm',
-        role: 'Kasi Farmasi',
-        unit: 'Instalasi Farmasi',
-        total_incoming: 42,
-        verified_count: 40,
-        pending_count: 2,
-        avg_response: '1.2 Jam',
-        response_rate: 95.2,
-        status: 'EXCELLENT'
-    },
-    {
-        id: 2,
-        name: 'dr. H. Rahmat, Sp.B',
-        role: 'Kasi Pelayanan Medik',
-        unit: 'Instalasi Gawat Darurat (IGD)',
-        total_incoming: 35,
-        verified_count: 32,
-        pending_count: 3,
-        avg_response: '1.5 Jam',
-        response_rate: 91.4,
-        status: 'EXCELLENT'
-    },
-    {
-        id: 3,
-        name: 'Drs. Supriyadi, M.Kes',
-        role: 'Kasi Administrasi & Keuangan',
-        unit: 'Kasir & Pendaftaran',
-        total_incoming: 28,
-        verified_count: 20,
-        pending_count: 8,
-        avg_response: '4.8 Jam',
-        response_rate: 71.4,
-        status: 'WARNING'
-    },
-    {
-        id: 4,
-        name: 'Nrs. Maria Ulfa, S.Kep',
-        role: 'Kasi Keperawatan',
-        unit: 'Ruang Rawat Inap',
-        total_incoming: 12,
-        verified_count: 11,
-        pending_count: 1,
-        avg_response: '1.8 Jam',
-        response_rate: 91.6,
-        status: 'NORMAL'
+const props = defineProps({
+    kasiData: {
+        type: Array,
+        default: null
     }
-]);
+});
+
+const kasiData = ref(props.kasiData || []);
 </script>
 
 <template>
@@ -137,7 +95,9 @@ const kasiData = ref([
                                 ]"
                             >
                                 <td class="py-4 px-4">
-                                    <div class="font-bold text-slate-900 dark:text-white text-sm">{{ kasi.name }}</div>
+                                    <div :class="['text-sm', kasi.name === 'Belum Ditugaskan' ? 'text-slate-400 dark:text-slate-500 italic' : 'font-bold text-slate-900 dark:text-white']">
+                                        {{ kasi.name }}
+                                    </div>
                                     <div class="text-[11px] text-slate-400">{{ kasi.role }} • {{ kasi.unit }}</div>
                                 </td>
                                 <td class="py-4 px-4 text-center font-bold">{{ kasi.total_incoming }}</td>
@@ -145,9 +105,10 @@ const kasiData = ref([
                                 <td class="py-4 px-4 text-center font-bold text-amber-600 dark:text-amber-400">{{ kasi.pending_count }}</td>
                                 <td class="py-4 px-4 text-center font-mono font-medium">{{ kasi.avg_response }}</td>
                                 <td class="py-4 px-4 text-center">
-                                    <span class="text-sm font-extrabold" :class="kasi.response_rate < 80 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'">
+                                    <span v-if="kasi.response_rate !== null" class="text-sm font-extrabold" :class="kasi.response_rate < 80 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'">
                                         {{ kasi.response_rate }}%
                                     </span>
+                                    <span v-else class="text-xs text-slate-400 font-medium">-</span>
                                 </td>
                                 <td class="py-4 px-4 text-center">
                                     <span
@@ -157,10 +118,16 @@ const kasiData = ref([
                                         <AlertTriangle class="h-3 w-3" /> Warning (&lt;80%)
                                     </span>
                                     <span
-                                        v-else
+                                        v-else-if="kasi.status === 'EXCELLENT' || kasi.status === 'GOOD'"
                                         class="px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase bg-emerald-100 text-emerald-800 dark:bg-white/10 dark:text-white border border-emerald-200 dark:border-white/20 inline-flex items-center gap-1"
                                     >
                                         <CheckCircle2 class="h-3 w-3" /> Sangat Baik
+                                    </span>
+                                    <span
+                                        v-else
+                                        class="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400"
+                                    >
+                                        Belum Ada Aduan
                                     </span>
                                 </td>
                             </tr>

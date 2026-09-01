@@ -1,9 +1,12 @@
 <?php
 
+use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\KabidController;
+use App\Http\Controllers\KasiController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\ReportController;
 use App\Http\Controllers\WaGatewayController;
 use Illuminate\Support\Facades\Route;
-use Inertia\Inertia;
 use Illuminate\Http\Request;
 
 Route::get('/', function () {
@@ -11,23 +14,13 @@ Route::get('/', function () {
 });
 
 // Public Patient Routes (Guest Mode - Tanpa Login)
-Route::get('/report', function (Request $request) {
-    return Inertia::render('Report/Create', [
-        'unitId' => $request->query('unit', ''),
-    ]);
-})->name('report.create');
+Route::get('/report', [ReportController::class, 'create'])->name('report.create');
+Route::post('/report', [ReportController::class, 'store'])->name('report.store');
+Route::get('/report/success', [ReportController::class, 'success'])->name('report.success');
 
-Route::get('/report/success', function (Request $request) {
-    return Inertia::render('Report/Success', [
-        'id' => $request->query('id', 'LP-2026-08-001'),
-    ]);
-})->name('report.success');
-
-Route::get('/dashboard', function (Request $request) {
-    return Inertia::render('Dashboard/Index', [
-        'user' => $request->user(),
-    ]);
-})->middleware(['auth', 'verified'])->name('dashboard');
+Route::get('/dashboard', [DashboardController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('dashboard');
 
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
@@ -35,30 +28,15 @@ Route::middleware('auth')->group(function () {
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
     // Modul Kepala Seksi (Kasi) — PRD System
-    Route::get('/kasi/dashboard', function () {
-        return Inertia::render('Kasi/Dashboard');
-    })->name('kasi.dashboard');
-
-    Route::get('/kasi/verify/{id?}', function ($id = 'LP-2026-08-001') {
-        return Inertia::render('Kasi/Verify', ['id' => $id]);
-    })->name('kasi.verify');
-
-    Route::get('/kasi/logbook', function () {
-        return Inertia::render('Kasi/Logbook');
-    })->name('kasi.logbook');
+    Route::get('/kasi/dashboard', [KasiController::class, 'dashboard'])->name('kasi.dashboard');
+    Route::get('/kasi/verify/{id?}', [KasiController::class, 'verify'])->name('kasi.verify');
+    Route::post('/kasi/verify/{id}/process', [KasiController::class, 'processVerification'])->name('kasi.verify.process');
+    Route::get('/kasi/logbook', [KasiController::class, 'logbook'])->name('kasi.logbook');
 
     // Modul Kabid Pelayanan — PRD System
-    Route::get('/executive/dashboard', function () {
-        return Inertia::render('Kabid/Dashboard');
-    })->name('executive.dashboard');
-
-    Route::get('/executive/kasi-responsiveness', function () {
-        return Inertia::render('Kabid/KasiResponsiveness');
-    })->name('executive.kasi-responsiveness');
-
-    Route::get('/executive/leaderboard', function () {
-        return Inertia::render('Kabid/Leaderboard');
-    })->name('executive.leaderboard');
+    Route::get('/executive/dashboard', [KabidController::class, 'dashboard'])->name('executive.dashboard');
+    Route::get('/executive/kasi-responsiveness', [KabidController::class, 'kasiResponsiveness'])->name('executive.kasi-responsiveness');
+    Route::get('/executive/leaderboard', [KabidController::class, 'leaderboard'])->name('executive.leaderboard');
 
     Route::get('/settings', function () {
         return redirect()->route('profile.edit');
@@ -67,12 +45,23 @@ Route::middleware('auth')->group(function () {
     Route::get('/notifications', function () {
         return redirect()->route('dashboard');
     })->name('notifications.index');
+    Route::post('/notifications/mark-as-read/{id?}', function () {
+        return response()->json(['success' => true]);
+    })->name('notifications.markAsRead');
+    Route::post('/notifications/mark-all-as-read', function () {
+        return response()->json(['success' => true]);
+    })->name('notifications.markAllAsRead');
 
     // WhatsApp Gateway Management
     Route::get('/wa-gateway', [WaGatewayController::class, 'index'])->name('admin.wa-gateway.index');
     Route::get('/wa-gateway/status', [WaGatewayController::class, 'status'])->name('admin.wa-gateway.status');
     Route::post('/wa-gateway/logout', [WaGatewayController::class, 'logout'])->name('admin.wa-gateway.logout');
     Route::post('/wa-gateway/test', [WaGatewayController::class, 'sendTest'])->name('admin.wa-gateway.test');
+
+    // AI Integration Management (Google Gemini / Groq / OpenAI)
+    Route::get('/ai-settings', [\App\Http\Controllers\AiSettingController::class, 'index'])->name('admin.ai-settings.index');
+    Route::post('/ai-settings', [\App\Http\Controllers\AiSettingController::class, 'update'])->name('admin.ai-settings.update');
+    Route::post('/ai-settings/test', [\App\Http\Controllers\AiSettingController::class, 'testConnection'])->name('admin.ai-settings.test');
 
     // Menu Route Placeholders
     Route::get('/services', fn () => redirect()->route('dashboard'))->name('services.index');
@@ -95,11 +84,31 @@ Route::middleware('auth')->group(function () {
     Route::get('/service-management/supporting-units', fn () => redirect()->route('dashboard'))->name('service-management.supporting-units');
     Route::get('/service-management/working-hours', fn () => redirect()->route('dashboard'))->name('service-management.working-hours');
 
-    Route::get('/users', fn () => redirect()->route('dashboard'))->name('users.index');
-    Route::get('/users/approvals', fn () => redirect()->route('dashboard'))->name('users.approvals');
-    Route::get('/users/approvals/{id}', fn () => redirect()->route('dashboard'))->name('users.approvals.show');
-    Route::get('/users/{id}', fn () => redirect()->route('dashboard'))->name('users.show');
-    Route::get('/users/{id}/edit', fn () => redirect()->route('dashboard'))->name('users.edit');
+    // Master Data 1: User Management (Akun Sistem SIPUAS)
+    Route::get('/users', [\App\Http\Controllers\UserManagementController::class, 'index'])->name('users.index');
+    Route::post('/users', [\App\Http\Controllers\UserManagementController::class, 'store'])->name('users.store');
+    Route::get('/users/{user}', [\App\Http\Controllers\UserManagementController::class, 'show'])->name('users.show');
+    Route::get('/users/{user}/edit', [\App\Http\Controllers\UserManagementController::class, 'edit'])->name('users.edit');
+    Route::put('/users/{user}', [\App\Http\Controllers\UserManagementController::class, 'update'])->name('users.update');
+    Route::delete('/users/{user}', [\App\Http\Controllers\UserManagementController::class, 'destroy'])->name('users.destroy');
+    Route::patch('/users/{user}/toggle-status', [\App\Http\Controllers\UserManagementController::class, 'toggleStatus'])->name('users.toggle-status');
+    Route::post('/users/{user}/reset-password', [\App\Http\Controllers\UserManagementController::class, 'resetPassword'])->name('users.reset-password');
+    Route::get('/users-approvals', fn () => redirect()->route('users.index'))->name('users.approvals');
+    Route::get('/users-approvals/{id}', fn () => redirect()->route('users.index'))->name('users.approvals.show');
+
+    // Master Data 2: Hospital Units / Ruangan Pelayanan
+    Route::get('/units', [\App\Http\Controllers\UnitManagementController::class, 'index'])->name('units.index');
+    Route::post('/units', [\App\Http\Controllers\UnitManagementController::class, 'store'])->name('units.store');
+    Route::put('/units/{unit}', [\App\Http\Controllers\UnitManagementController::class, 'update'])->name('units.update');
+    Route::delete('/units/{unit}', [\App\Http\Controllers\UnitManagementController::class, 'destroy'])->name('units.destroy');
+    Route::patch('/units/{unit}/toggle-status', [\App\Http\Controllers\UnitManagementController::class, 'toggleStatus'])->name('units.toggle-status');
+
+    // Master Data 3: Hospital Staff / Pegawai Unit & Saldo KPI
+    Route::get('/staff', [\App\Http\Controllers\StaffManagementController::class, 'index'])->name('staff.index');
+    Route::post('/staff', [\App\Http\Controllers\StaffManagementController::class, 'store'])->name('staff.store');
+    Route::put('/staff/{staff}', [\App\Http\Controllers\StaffManagementController::class, 'update'])->name('staff.update');
+    Route::delete('/staff/{staff}', [\App\Http\Controllers\StaffManagementController::class, 'destroy'])->name('staff.destroy');
+    Route::patch('/staff/{staff}/toggle-status', [\App\Http\Controllers\StaffManagementController::class, 'toggleStatus'])->name('staff.toggle-status');
 
     Route::get('/design-system', fn () => redirect()->route('dashboard'))->name('design-system.index');
     Route::get('/design-system/buttons-badges', fn () => redirect()->route('dashboard'))->name('design-system.buttons-badges');

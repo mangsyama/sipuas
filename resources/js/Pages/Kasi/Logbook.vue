@@ -14,48 +14,14 @@ import {
     ShieldCheck
 } from '@lucide/vue';
 
-const staffLogbooks = ref([
-    {
-        id: 1,
-        name: 'Sinta Dewi, A.Md.Farm',
-        nip: '19920412 201801 2 003',
-        role: 'Apoteker Pelaksana',
-        total_points: 90,
-        praise_count: 8,
-        complaint_count: 2,
-        last_update: '2026-08-06 14:35',
-        history: [
-            { id: 'LP-2026-08-001', type: 'PEMOTONGAN', points: -5, note: 'Kedisiplinan waktu tunggu antrean resep obat.', date: '2026-08-06' },
-            { id: 'LP-2026-08-002', type: 'PENAMBAHAN', points: 5, note: 'Apresiasi pelayanan ramah mengurus resep obat.', date: '2026-08-06' }
-        ]
-    },
-    {
-        id: 2,
-        name: 'Budi Santoso, S.Farm',
-        nip: '19880915 201503 1 002',
-        role: 'Petugas Penyerahan Obat',
-        total_points: 85,
-        praise_count: 5,
-        complaint_count: 3,
-        last_update: '2026-08-06 14:35',
-        history: [
-            { id: 'LP-2026-08-001', type: 'PEMOTONGAN', points: -5, note: 'Kedisiplinan waktu tunggu antrean resep obat.', date: '2026-08-06' }
-        ]
-    },
-    {
-        id: 3,
-        name: 'Citra Lestari, A.Md.AK',
-        nip: '19951102 202012 2 005',
-        role: 'Petugas Gudang Farmasi',
-        total_points: 110,
-        praise_count: 12,
-        complaint_count: 0,
-        last_update: '2026-08-05 10:15',
-        history: [
-            { id: 'LP-2026-08-004', type: 'PENAMBAHAN', points: 5, note: 'Edukasi dosis obat sangat jelas bagi pasien.', date: '2026-08-05' }
-        ]
+const props = defineProps({
+    staffLogbooks: {
+        type: Array,
+        default: null
     }
-]);
+});
+
+const staffLogbooks = ref(props.staffLogbooks || []);
 </script>
 
 <template>
@@ -86,7 +52,15 @@ const staffLogbooks = ref([
             </div>
 
             <!-- Staf Logbook Cards -->
-            <div class="space-y-4">
+            <div v-if="staffLogbooks.length === 0" class="bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 rounded-2xl p-12 text-center shadow-sm space-y-2">
+                <div class="h-12 w-12 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mx-auto">
+                    <Users class="h-6 w-6" />
+                </div>
+                <h3 class="text-sm font-bold text-slate-800 dark:text-slate-200">Belum Ada Data Staf Terdaftar</h3>
+                <p class="text-xs text-slate-400">Data rekam jejak KPI staf unit akan muncul di sini setelah staf ditambahkan.</p>
+            </div>
+
+            <div v-else class="space-y-4">
                 <div
                     v-for="staff in staffLogbooks"
                     :key="staff.id"

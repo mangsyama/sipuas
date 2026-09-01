@@ -16,55 +16,17 @@ import {
     History
 } from '@lucide/vue';
 
+const props = defineProps({
+    initialReports: {
+        type: Array,
+        default: null
+    }
+});
+
 const activeTab = ref('ALL');
 const searchQuery = ref('');
 
-const reports = ref([
-    {
-        id: 'LP-2026-08-001',
-        created_at: '2026-08-06 14:30',
-        unit: 'Instalasi Farmasi',
-        isi_laporan: 'Ambil obat lama sekali, sudah antre 2 jam petugasnya malah asyik ngobrol dan lambat melayani.',
-        ai_sentiment: 'NEGATIF',
-        ai_category: 'Waktu Tunggu & Pelayanan',
-        ai_score: -5,
-        status: 'PENDING',
-        verified_by: null
-    },
-    {
-        id: 'LP-2026-08-002',
-        created_at: '2026-08-06 13:15',
-        unit: 'Instalasi Farmasi',
-        isi_laporan: 'Perawat Sinta sangat ramah dan sigap membantu mengurus administrasi resep obat ibu saya.',
-        ai_sentiment: 'POSITIF',
-        ai_category: 'Pelayanan Ramah',
-        ai_score: 5,
-        status: 'VERIFIED',
-        verified_by: 'Kasi Farmasi (Ahmad, S.Farm)'
-    },
-    {
-        id: 'LP-2026-08-003',
-        created_at: '2026-08-06 11:00',
-        unit: 'Instalasi Farmasi',
-        isi_laporan: 'Ruang tunggu farmasi sangat panas dan AC tidak dingin sama sekali sejak pagi.',
-        ai_sentiment: 'NEGATIF',
-        ai_category: 'Sarana & Prasarana',
-        ai_score: -5,
-        status: 'PENDING',
-        verified_by: null
-    },
-    {
-        id: 'LP-2026-08-004',
-        created_at: '2026-08-05 16:45',
-        unit: 'Instalasi Farmasi',
-        isi_laporan: 'Penyampaian informasi dosis obat oleh petugas apoteker jelas dan mudah dipahami.',
-        ai_sentiment: 'POSITIF',
-        ai_category: 'Edukasi Pasien',
-        ai_score: 5,
-        status: 'VERIFIED',
-        verified_by: 'Kasi Farmasi (Ahmad, S.Farm)'
-    }
-]);
+const reports = ref(props.initialReports || []);
 
 const filteredReports = computed(() => {
     return reports.value.filter(r => {
