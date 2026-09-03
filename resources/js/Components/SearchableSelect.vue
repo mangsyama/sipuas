@@ -126,7 +126,7 @@ onUnmounted(() => {
             @click="toggleDropdown"
             :disabled="disabled"
             :class="[
-                'w-full h-11 px-4 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 text-slate-850 dark:text-slate-200 text-sm flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:focus:ring-white transition-all duration-150',
+                'w-full h-11 px-4 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 text-slate-850 dark:text-slate-200 text-sm flex items-center justify-between outline-none focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 transition-all duration-150',
                 disabled ? 'opacity-60 cursor-not-allowed bg-slate-100 dark:bg-slate-900/60' : 'cursor-pointer'
             ]"
         >
@@ -144,7 +144,7 @@ onUnmounted(() => {
             v-if="isOpen"
             :class="[
                 'mt-1.5 min-w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-2 space-y-2 animate-spa-fade-in shadow-2xl',
-                absolute ? 'absolute z-50 right-0 left-0' : 'relative z-10'
+                absolute ? 'absolute z-50 right-0 left-0' : 'relative z-20'
             ]"
         >
             <!-- Search Input -->
@@ -154,13 +154,13 @@ onUnmounted(() => {
                     v-model="searchQuery"
                     type="text"
                     :placeholder="searchPlaceholder"
-                    class="w-full h-9 pl-9 pr-3 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-emerald-500 dark:focus:ring-white"
+                    class="w-full h-9 pl-9 pr-3 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-slate-800 dark:text-slate-200 outline-none focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0"
                     @click.stop
                 />
             </div>
 
             <!-- Scrollable List -->
-            <div class="max-h-56 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
+            <div class="max-h-60 sm:max-h-72 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
                 <div
                     v-if="filteredOptions.length === 0"
                     class="p-3 text-center text-sm text-slate-400 dark:text-slate-500 font-medium whitespace-nowrap"
@@ -174,7 +174,7 @@ onUnmounted(() => {
                     type="button"
                     @click.stop="selectOption(opt)"
                     :class="[
-                        'w-full text-left px-3 py-2.5 rounded-lg text-sm flex items-center justify-between transition-colors duration-150 gap-3',
+                        'w-full text-left px-3 py-2.5 rounded-lg text-sm flex items-center justify-between transition-colors duration-150 gap-3 outline-none focus:outline-none focus:ring-0',
                         String(typeof opt === 'object' ? opt[valueKey] : opt) === String(modelValue)
                             ? 'bg-emerald-50 dark:bg-white/10 text-emerald-700 dark:text-white font-bold'
                             : 'hover:bg-slate-50 dark:hover:bg-slate-800/60 text-slate-700 dark:text-slate-300 font-medium'

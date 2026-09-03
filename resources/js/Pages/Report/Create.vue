@@ -395,10 +395,10 @@ const copyReceipt = () => {
         <!-- Main Form Card Container (Full-screen on Mobile, Card Modal on Desktop) -->
         <main class="w-full sm:max-w-xl mx-auto z-20 my-auto flex flex-col flex-1 sm:flex-initial py-0 sm:py-4">
             <!-- Solid Container Card with Integrated Header -->
-            <div class="w-full flex-1 sm:flex-initial flex flex-col overflow-hidden sm:rounded-2xl sm:border border-slate-200 bg-white sm:shadow-2xl transition-all duration-300 dark:border-slate-800 dark:bg-slate-900">
+            <div class="w-full flex-1 sm:flex-initial flex flex-col sm:rounded-2xl sm:border border-slate-200 bg-white sm:shadow-2xl transition-all duration-300 dark:border-slate-800 dark:bg-slate-900">
                 <!-- Card Header Section for Logo & Subtitle (Flat Solid) -->
                 <div
-                    class="border-b border-slate-200 bg-slate-50 p-5 sm:p-7 text-center dark:border-slate-800 dark:bg-slate-950"
+                    class="border-b border-slate-200 bg-slate-50 p-5 sm:p-7 text-center dark:border-slate-800 dark:bg-slate-950 sm:rounded-t-2xl"
                 >
                     <Link
                         href="/"
@@ -418,7 +418,7 @@ const copyReceipt = () => {
                 </div>
 
                 <!-- Card Body -->
-                <div class="flex-1 p-5 sm:p-8 bg-white dark:bg-slate-900 pb-44 sm:pb-8" :class="{ 'pointer-events-none': isTransitioning }">
+                <div class="flex-1 p-5 sm:p-8 bg-white dark:bg-slate-900 pb-44 sm:pb-8 sm:rounded-b-2xl" :class="{ 'pointer-events-none': isTransitioning }">
                     <!-- 4 Step Progress Bar Indicator -->
                     <div class="mb-6 sm:mb-8 px-1 sm:px-2">
                         <div class="grid grid-cols-4 relative">
@@ -510,6 +510,7 @@ const copyReceipt = () => {
                                     :options="units"
                                     valueKey="id"
                                     labelKey="name"
+                                    :absolute="false"
                                     placeholder="-- Pilih Lokasi Pelayanan Rumah Sakit --"
                                     searchPlaceholder="Cari unit pelayanan..."
                                 />

@@ -28,8 +28,11 @@ class KasiController extends Controller
         $reports = $query->latest()->get()->map(function ($r) {
             return [
                 'id' => $r->ticket_number,
-                'created_at' => $r->created_at ? $r->created_at->format('Y-m-d H:i') : '-',
+                'created_at' => $r->created_at ? $r->created_at->format('d M Y, H:i') : '-',
                 'unit' => $r->unit ? $r->unit->name : 'Unit Umum',
+                'target_object' => $r->target_object,
+                'shift_info' => $r->shift_info ?? 'Shift Normal',
+                'reporter_name' => $r->is_anonymous ? 'Anonim' : ($r->reporter_name ?: 'Anonim'),
                 'isi_laporan' => $r->isi_laporan,
                 'ai_sentiment' => $r->ai_sentiment,
                 'ai_category' => $r->ai_category ?? 'Pelayanan',

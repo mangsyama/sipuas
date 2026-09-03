@@ -75,69 +75,61 @@ const redZoneUnits = computed(() => props.redZoneUnits || []);
                 </div>
             </div>
 
-            <!-- Top 4 KPI Metrics Grid -->
+            <!-- Top 4 KPI Metrics Grid (Sesuai Desain & Ukuran Dashboard Utama) -->
             <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
                 <!-- Metric 1: Total RS Reports -->
-                <div class="bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-3">
-                    <div class="flex items-center justify-between">
-                        <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Total Suara Pasien RS</span>
-                        <div class="h-9 w-9 rounded-xl flex items-center justify-center bg-emerald-50 dark:bg-white/10 text-emerald-600 dark:text-white">
-                            <FileText class="h-4 w-4" />
-                        </div>
-                    </div>
-                    <div>
-                        <div class="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+                <div class="bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 rounded-2xl p-5 shadow-sm flex items-center justify-between">
+                    <div class="space-y-1">
+                        <span class="text-xs font-bold uppercase tracking-wider text-slate-400 block">Total Suara Pasien RS</span>
+                        <div class="text-3xl font-extrabold text-slate-900 dark:text-white leading-tight">
                             {{ executiveStats.total_rs_reports }}
                         </div>
-                        <p class="text-[11px] text-slate-400 mt-0.5 font-medium">Seluruh aduan & apresiasi masuk</p>
+                        <span class="text-[11px] text-slate-400 block">Seluruh aduan & apresiasi masuk</span>
+                    </div>
+                    <div class="h-12 w-12 rounded-xl flex items-center justify-center flex-shrink-0 bg-emerald-50 dark:bg-white/10">
+                        <FileText class="h-6 w-6 text-emerald-600 dark:text-white" />
                     </div>
                 </div>
 
                 <!-- Metric 2: Satisfaction Index -->
-                <div class="bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-3">
-                    <div class="flex items-center justify-between">
-                        <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Indeks Kepuasan RS</span>
-                        <div class="h-9 w-9 rounded-xl flex items-center justify-center bg-emerald-50 dark:bg-white/10 text-emerald-600 dark:text-white">
-                            <TrendingUp class="h-4 w-4" />
-                        </div>
-                    </div>
-                    <div>
-                        <div class="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400 tracking-tight">
+                <div class="bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 rounded-2xl p-5 shadow-sm flex items-center justify-between">
+                    <div class="space-y-1">
+                        <span class="text-xs font-bold uppercase tracking-wider text-slate-400 block">Indeks Kepuasan RS</span>
+                        <div class="text-3xl font-extrabold text-emerald-600 dark:text-emerald-400 leading-tight">
                             {{ executiveStats.satisfaction_index }}
                         </div>
-                        <p class="text-[11px] text-slate-400 mt-0.5 font-medium">Berdasarkan klasifikasi sentimen AI</p>
+                        <span class="text-[11px] text-slate-400 block">Berdasarkan klasifikasi sentimen AI</span>
+                    </div>
+                    <div class="h-12 w-12 rounded-xl flex items-center justify-center flex-shrink-0 bg-emerald-50 dark:bg-emerald-950/40">
+                        <TrendingUp class="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
                     </div>
                 </div>
 
                 <!-- Metric 3: Avg Kasi Response -->
-                <div class="bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-3">
-                    <div class="flex items-center justify-between">
-                        <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Rata-Rata Respons Kasi</span>
-                        <div class="h-9 w-9 rounded-xl flex items-center justify-center bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400">
-                            <Clock class="h-4 w-4" />
-                        </div>
-                    </div>
-                    <div>
-                        <div class="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+                <div class="bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 rounded-2xl p-5 shadow-sm flex items-center justify-between">
+                    <div class="space-y-1">
+                        <span class="text-xs font-bold uppercase tracking-wider text-slate-400 block">Rata-Rata Respons Kasi</span>
+                        <div class="text-3xl font-extrabold text-slate-900 dark:text-white leading-tight">
                             {{ executiveStats.avg_kasi_response_hours }}
                         </div>
-                        <p class="text-[11px] text-slate-400 mt-0.5 font-medium">Kecepatan verifikasi tindak lanjut</p>
+                        <span class="text-[11px] text-slate-400 block">Kecepatan verifikasi tindak lanjut</span>
+                    </div>
+                    <div class="h-12 w-12 rounded-xl flex items-center justify-center flex-shrink-0 bg-amber-50 dark:bg-amber-950/40">
+                        <Clock class="h-6 w-6 text-amber-600 dark:text-amber-400" />
                     </div>
                 </div>
 
                 <!-- Metric 4: Total KPI Points -->
-                <div class="bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-3">
-                    <div class="flex items-center justify-between">
-                        <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Total Akumulasi Poin Staf</span>
-                        <div class="h-9 w-9 rounded-xl flex items-center justify-center bg-emerald-50 dark:bg-white/10 text-emerald-600 dark:text-white">
-                            <Award class="h-4 w-4" />
-                        </div>
-                    </div>
-                    <div>
-                        <div class="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400 tracking-tight">
+                <div class="bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 rounded-2xl p-5 shadow-sm flex items-center justify-between">
+                    <div class="space-y-1">
+                        <span class="text-xs font-bold uppercase tracking-wider text-slate-400 block">Total Akumulasi Poin Staf</span>
+                        <div class="text-3xl font-extrabold text-emerald-600 dark:text-emerald-400 leading-tight">
                             {{ executiveStats.total_kpi_points }}
                         </div>
-                        <p class="text-[11px] text-slate-400 mt-0.5 font-medium">Total saldo performa staf rumah sakit</p>
+                        <span class="text-[11px] text-slate-400 block">Total saldo performa staf rumah sakit</span>
+                    </div>
+                    <div class="h-12 w-12 rounded-xl flex items-center justify-center flex-shrink-0 bg-emerald-50 dark:bg-white/10">
+                        <Award class="h-6 w-6 text-emerald-600 dark:text-white" />
                     </div>
                 </div>
             </div>
