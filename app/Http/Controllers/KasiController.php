@@ -110,8 +110,12 @@ class KasiController extends Controller
             'ai_confidence' => $report->ai_confidence ?? ($aiMeta['confidence'] ?? '95%'),
             'ai_summary' => $aiMeta['summary'] ?? ($aiMeta['explanation'] ?? null),
             'ai_urgency' => $aiMeta['urgency'] ?? ($report->priority === 'HIGH' ? 'TINGGI' : 'NORMAL'),
-            'ai_recommendation' => $aiMeta['recommendation'] ?? ($report->ai_sentiment === 'POSITIF' ? 'Berikan apresiasi poin reward pada shift kerja ini.' : 'Tindaklanjuti dengan pembinaan poin KPI untuk peningkatan mutu pelayanan.'),
-            'ai_provider' => $aiMeta['provider'] ?? 'Groq AI (Llama-3 / GPT-OSS)',
+            'ai_recommendation' => $aiMeta['action_recommendation'] ?? ($aiMeta['recommendation'] ?? ($report->ai_sentiment === 'POSITIF' 
+                ? 'Apresiasi Pelayanan Prima: Pelayanan dinilai sangat memuaskan oleh masyarakat. Direkomendasikan kepada Kepala Ruangan/Kasi untuk memberikan pengakuan formal dan mengalokasikan penambahan poin reward (+ Poin KPI) kepada staf bertugas guna menjaga standar keunggulan kerja.' 
+                : ($report->ai_sentiment === 'NEGATIF' 
+                    ? 'Tindak Lanjut Keluhan: Laporan menunjukkan adanya ketidakpuasan pelayanan. Disarankan Kepala Ruangan/Kasi segera mengklarifikasi kronologi kejadian bersama staf shift dinas, meninjau kesesuaian SOP, dan menerapkan penyesuaian poin pembinaan (- Poin KPI) jika terbukti ada kelalaian petugas.' 
+                    : 'Laporan Masukan Umum: Informasi ini bersifat saran atau terkait sarana/kondisi fisik lingkungan rumah sakit tanpa keterlibatan langsung pelanggaran individu staf. Sesuai regulasi, status ini adalah TINDAKAN NETRAL (0 Poin KPI) dan TIDAK mengubah saldo kinerja staf unit.'))),
+            'ai_provider' => $aiMeta['engine'] ?? ($aiMeta['provider'] ?? 'Sistem AI SIPUAS'),
             'shift_info' => $report->shift_info ?? 'Shift Pagi / Siang',
             'status' => $report->status,
             'priority' => $report->priority,
@@ -133,8 +137,10 @@ class KasiController extends Controller
      */
     public function processVerification(Request $request, $id)
     {
+        $isNeutral = $request->input('action_type') === 'NETRAL';
+
         $validated = $request->validate([
-            'selected_staff_ids' => 'required|array|min:1',
+            'selected_staff_ids' => $isNeutral ? 'nullable|array' : 'required|array|min:1',
             'action_type' => 'required|string|in:PENAMBAHAN,PEMOTONGAN,NETRAL',
             'points' => 'required|integer',
             'supervisor_notes' => 'nullable|string',
@@ -143,7 +149,9 @@ class KasiController extends Controller
         $report = Report::where('ticket_number', $id)->orWhere('id', $id)->firstOrFail();
 
         $points = (int) $validated['points'];
-        if ($validated['action_type'] === 'PEMOTONGAN' && $points > 0) {
+        if ($validated['action_type'] === 'NETRAL') {
+            $points = 0;
+        } elseif ($validated['action_type'] === 'PEMOTONGAN' && $points > 0) {
             $points = -$points;
         }
 
@@ -156,7 +164,8 @@ class KasiController extends Controller
         ]);
 
         // Sync report staff & update staff KPI logs
-        foreach ($validated['selected_staff_ids'] as $staffId) {
+        $selectedStaffIds = $validated['selected_staff_ids'] ?? [];
+        foreach ($selectedStaffIds as $staffId) {
             $staff = Staff::find($staffId);
             if (!$staff) continue;
 
@@ -165,7 +174,7 @@ class KasiController extends Controller
                 ['action_type' => $validated['action_type'], 'points' => $points]
             );
 
-            // Update Staff Balance Points
+            // Update Staff Balance Points only for PENAMBAHAN / PEMOTONGAN
             if ($validated['action_type'] === 'PENAMBAHAN') {
                 $staff->increment('praise_count');
                 $staff->increment('total_points', abs($points));

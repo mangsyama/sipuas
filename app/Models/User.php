@@ -59,22 +59,27 @@ class User extends Authenticatable
 
     public function isSuperAdmin(): bool
     {
-        return $this->role === 'SUPERADMIN';
+        return in_array($this->role, ['ADMINISTRATOR', 'SUPERADMIN']);
+    }
+
+    public function isAdministrator(): bool
+    {
+        return in_array($this->role, ['ADMINISTRATOR', 'SUPERADMIN']);
     }
 
     public function isKabid(): bool
     {
-        return $this->role === 'KABID' || $this->role === 'SUPERADMIN';
+        return $this->role === 'KABID' || in_array($this->role, ['ADMINISTRATOR', 'SUPERADMIN']);
     }
 
     public function isKasi(): bool
     {
-        return $this->role === 'KASI' || $this->role === 'SUPERADMIN';
+        return $this->role === 'KASI' || in_array($this->role, ['ADMINISTRATOR', 'SUPERADMIN']);
     }
 
     public function isAdmin(): bool
     {
-        return in_array($this->role, ['SUPERADMIN', 'KABID', 'KASI']);
+        return in_array($this->role, ['ADMINISTRATOR', 'SUPERADMIN', 'KABID', 'KASI']);
     }
 
     public function hasPageAccess(string $page): bool

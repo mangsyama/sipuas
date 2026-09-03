@@ -14,9 +14,6 @@ class Unit extends Model
         'code',
         'name',
         'category',
-        'risk_status',
-        'pic_name',
-        'phone_contact',
         'is_active',
     ];
 

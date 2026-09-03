@@ -25,7 +25,7 @@ const showPromptDropdown = ref(false);
 
 const tempPresets = [
     { val: 0.0, label: '0.0 Presisi' },
-    { val: 0.2, label: '0.2 Standar RS ⭐' },
+    { val: 0.2, label: '0.2 Standar RS' },
     { val: 0.5, label: '0.5 Seimbang' },
     { val: 0.8, label: '0.8 Variatif' },
     { val: 1.0, label: '1.0 Kreatif' }

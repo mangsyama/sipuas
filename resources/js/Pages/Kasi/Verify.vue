@@ -407,9 +407,9 @@ const finishVerification = () => {
                                 <div class="space-y-1.5">
                                     <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Jenis Tindakan KPI:</label>
                                     <div class="grid grid-cols-3 gap-2">
-                                        <button
+                                         <button
                                             type="button"
-                                            @click="actionType = 'PEMOTONGAN'"
+                                            @click="actionType = 'PEMOTONGAN'; if (pointValue === 0) pointValue = 5"
                                             :class="[
                                                 'py-2.5 px-2 rounded-xl border text-[11px] font-extrabold flex items-center justify-center gap-1.5 transition cursor-pointer',
                                                 actionType === 'PEMOTONGAN' ? 'bg-rose-50 border-rose-500 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300' : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-500'
@@ -421,7 +421,7 @@ const finishVerification = () => {
 
                                         <button
                                             type="button"
-                                            @click="actionType = 'PENAMBAHAN'"
+                                            @click="actionType = 'PENAMBAHAN'; if (pointValue === 0) pointValue = 5"
                                             :class="[
                                                 'py-2.5 px-2 rounded-xl border text-[11px] font-extrabold flex items-center justify-center gap-1.5 transition cursor-pointer',
                                                 actionType === 'PENAMBAHAN' ? 'bg-emerald-50 border-emerald-500 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300' : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-500'
@@ -433,7 +433,7 @@ const finishVerification = () => {
 
                                         <button
                                             type="button"
-                                            @click="actionType = 'NETRAL'"
+                                            @click="actionType = 'NETRAL'; pointValue = 0"
                                             :class="[
                                                 'py-2.5 px-2 rounded-xl border text-[11px] font-extrabold flex items-center justify-center gap-1.5 transition cursor-pointer',
                                                 actionType === 'NETRAL' ? 'bg-blue-50 border-blue-500 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300' : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-500'
@@ -484,6 +484,17 @@ const finishVerification = () => {
                                             <Plus class="h-4 w-4" />
                                         </button>
                                     </div>
+                                </div>
+
+                                <!-- Info Callout for Netral Action (0 Poin) -->
+                                <div v-else class="p-3.5 rounded-xl bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-900/50 text-blue-800 dark:text-blue-300 text-xs leading-relaxed space-y-1">
+                                    <div class="font-extrabold flex items-center gap-1.5">
+                                        <CheckCircle2 class="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                                        <span>Status Tindakan Netral (0 Poin KPI)</span>
+                                    </div>
+                                    <p class="text-[11px] text-blue-700/90 dark:text-blue-300/90">
+                                        Laporan ini dikategorikan sebagai masukan fasilitas/operasional umum. <strong>Tidak ada saldo poin KPI staf yang dipotong maupun ditambah</strong>.
+                                    </p>
                                 </div>
 
                                 <!-- Supervisor Notes -->

@@ -317,25 +317,33 @@ const submitReport = async () => {
             method: 'POST',
             body: formData,
             headers: {
+                'Accept': 'application/json',
                 'X-Requested-With': 'XMLHttpRequest',
                 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
             }
         });
 
-        const data = await response.json();
-        if (data.success && data.ticket_number) {
+        const contentType = response.headers.get('content-type') || '';
+        let data = null;
+        if (contentType.includes('application/json')) {
+            data = await response.json();
+        }
+
+        if (!response.ok) {
+            alert('Gagal mengirim formulir: ' + (data?.message || response.statusText || 'Terjadi kesalahan pada server.'));
+            return;
+        }
+
+        if (data && data.success && data.ticket_number) {
             generatedReportId.value = data.ticket_number;
             currentStep.value = 4;
             scrollToTop();
         } else {
-            alert('Gagal mengirim formulir. Silakan periksa kembali data Anda.');
+            alert('Gagal mengirim formulir: ' + (data?.message || 'Silakan periksa kembali kelengkapan data Anda.'));
         }
     } catch (e) {
         console.error('Gagal mengirim laporan:', e);
-        // Fallback
-        generatedReportId.value = 'LP-' + new Date().getFullYear() + '-' + Math.floor(1000 + Math.random() * 9000);
-        currentStep.value = 4;
-        scrollToTop();
+        alert('Gagal mengirim formulir: Terjadi gangguan (' + (e?.message || 'Silakan coba lagi') + ').');
     } finally {
         isSubmitting.value = false;
     }

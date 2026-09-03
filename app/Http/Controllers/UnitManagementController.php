@@ -21,19 +21,13 @@ class UnitManagementController extends Controller
         if ($search = $request->query('search')) {
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('code', 'like', "%{$search}%")
-                  ->orWhere('pic_name', 'like', "%{$search}%");
+                  ->orWhere('code', 'like', "%{$search}%");
             });
         }
 
         // Category Filter
         if ($category = $request->query('category')) {
             $query->where('category', $category);
-        }
-
-        // Risk Status Filter
-        if ($risk = $request->query('risk_status')) {
-            $query->where('risk_status', $risk);
         }
 
         // Active Status Filter
@@ -46,10 +40,9 @@ class UnitManagementController extends Controller
         // Calculate Stats
         $stats = [
             'total' => Unit::count(),
+            'active' => Unit::where('is_active', true)->count(),
             'medik' => Unit::where('category', 'MEDIK')->count(),
             'non_medik' => Unit::where('category', 'NON_MEDIK')->count(),
-            'high_risk' => Unit::where('risk_status', 'HIGH_RISK')->count(),
-            'active' => Unit::where('is_active', true)->count(),
         ];
 
         return Inertia::render('UnitManagement/Index', [
@@ -58,7 +51,6 @@ class UnitManagementController extends Controller
             'filters' => [
                 'search' => $request->query('search', ''),
                 'category' => $request->query('category', ''),
-                'risk_status' => $request->query('risk_status', ''),
                 'status' => $request->query('status', ''),
             ],
         ]);
@@ -73,9 +65,6 @@ class UnitManagementController extends Controller
             'code' => ['required', 'string', 'max:50', 'unique:units,code'],
             'name' => ['required', 'string', 'max:255'],
             'category' => ['required', 'in:MEDIK,NON_MEDIK'],
-            'risk_status' => ['required', 'in:HIGH_RISK,MEDIUM_RISK,LOW_RISK'],
-            'pic_name' => ['nullable', 'string', 'max:255'],
-            'phone_contact' => ['nullable', 'string', 'max:50'],
             'is_active' => ['boolean'],
         ]);
 
@@ -96,9 +85,6 @@ class UnitManagementController extends Controller
             'code' => ['required', 'string', 'max:50', Rule::unique('units', 'code')->ignore($unit->id)],
             'name' => ['required', 'string', 'max:255'],
             'category' => ['required', 'in:MEDIK,NON_MEDIK'],
-            'risk_status' => ['required', 'in:HIGH_RISK,MEDIUM_RISK,LOW_RISK'],
-            'pic_name' => ['nullable', 'string', 'max:255'],
-            'phone_contact' => ['nullable', 'string', 'max:50'],
             'is_active' => ['boolean'],
         ]);
 

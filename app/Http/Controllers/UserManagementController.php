@@ -56,6 +56,7 @@ class UserManagementController extends Controller
                 'nip' => $u->nip ?? '-',
                 'email' => $u->email,
                 'phone_number' => $u->phone_number ?? '-',
+                'profile_photo_path' => $u->profile_photo_path,
                 'role' => $u->role,
                 'unit_id' => $u->unit_id,
                 'unit_name' => $u->unit ? $u->unit->name : 'Semua Unit (Global)',
@@ -68,7 +69,8 @@ class UserManagementController extends Controller
 
         $stats = [
             'total' => User::count(),
-            'superadmin' => User::where('role', 'SUPERADMIN')->count(),
+            'administrator' => User::whereIn('role', ['ADMINISTRATOR', 'SUPERADMIN'])->count(),
+            'superadmin' => User::whereIn('role', ['ADMINISTRATOR', 'SUPERADMIN'])->count(),
             'kabid' => User::where('role', 'KABID')->count(),
             'kasi' => User::where('role', 'KASI')->count(),
             'staff' => User::where('role', 'STAFF')->count(),
@@ -100,7 +102,7 @@ class UserManagementController extends Controller
             'email' => ['required', 'string', 'email', 'max:150', Rule::unique('users')->whereNull('deleted_at')],
             'phone_number' => 'nullable|string|max:30',
             'password' => 'required|string|min:6',
-            'role' => 'required|string|in:SUPERADMIN,KABID,KASI,STAFF',
+            'role' => 'required|string|in:ADMINISTRATOR,SUPERADMIN,KABID,KASI,STAFF',
             'unit_id' => 'nullable|exists:units,id',
         ]);
 
@@ -127,6 +129,7 @@ class UserManagementController extends Controller
                 'nip' => $user->nip ?? '-',
                 'email' => $user->email,
                 'phone_number' => $user->phone_number ?? '-',
+                'profile_photo_path' => $user->profile_photo_path,
                 'role' => $user->role,
                 'unit_id' => $user->unit_id,
                 'unit_name' => $user->unit ? $user->unit->name : 'Semua Unit (Global)',
@@ -152,6 +155,7 @@ class UserManagementController extends Controller
                 'nip' => $user->nip ?? '',
                 'email' => $user->email,
                 'phone_number' => $user->phone_number ?? '',
+                'profile_photo_path' => $user->profile_photo_path,
                 'role' => $user->role,
                 'unit_id' => $user->unit_id,
                 'is_active' => (bool) $user->is_active,
@@ -165,15 +169,28 @@ class UserManagementController extends Controller
      */
     public function update(Request $request, User $user)
     {
-        $validated = $request->validate([
+        $rules = [
             'name' => 'required|string|max:150',
             'username' => ['nullable', 'string', 'max:50', Rule::unique('users')->ignore($user->id)->whereNull('deleted_at')],
             'nip' => ['nullable', 'string', 'max:50', Rule::unique('users')->ignore($user->id)->whereNull('deleted_at')],
             'email' => ['required', 'string', 'email', 'max:150', Rule::unique('users')->ignore($user->id)->whereNull('deleted_at')],
             'phone_number' => 'nullable|string|max:30',
-            'role' => 'required|string|in:SUPERADMIN,KABID,KASI,STAFF',
+            'role' => 'required|string|in:ADMINISTRATOR,SUPERADMIN,KABID,KASI,STAFF',
             'unit_id' => 'nullable|exists:units,id',
-            'password' => 'nullable|string|min:6',
+            'is_active' => 'nullable|boolean',
+        ];
+
+        // Jika salah satu kolom kata sandi diisi
+        if (!empty($request->password) || !empty($request->current_password)) {
+            $rules['current_password'] = ['required', 'current_password'];
+            $rules['password'] = ['required', 'string', 'min:6'];
+        }
+
+        $validated = $request->validate($rules, [
+            'current_password.required' => 'Masukkan kata sandi Anda sendiri sebagai verifikasi pengaman.',
+            'current_password.current_password' => 'Kata sandi login Anda saat ini tidak sesuai.',
+            'password.required' => 'Masukkan kata sandi baru untuk pengguna ini.',
+            'password.min' => 'Kata sandi baru minimal 6 karakter.',
         ]);
 
         if (!empty($validated['password'])) {
@@ -181,6 +198,8 @@ class UserManagementController extends Controller
         } else {
             unset($validated['password']);
         }
+
+        unset($validated['current_password']);
 
         $user->update($validated);
 

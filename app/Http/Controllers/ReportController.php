@@ -58,12 +58,21 @@ class ReportController extends Controller
             $unit = Unit::first();
         }
 
-        // Run AI Analysis (Gemini / Groq / OpenAI or smart heuristic fallback)
-        $aiAnalysis = $this->aiService->analyzeReport(
-            $validated['isi_laporan'],
-            $unit ? $unit->name : 'Umum',
-            $validated['target_object'] ?? null
-        );
+        // Run AI Analysis with safety fallback
+        try {
+            $aiAnalysis = $this->aiService->analyzeReport(
+                $validated['isi_laporan'],
+                $unit ? $unit->name : 'Umum',
+                $validated['target_object'] ?? null
+            );
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('AI Analysis Warning: ' . $e->getMessage());
+            $aiAnalysis = $this->aiService->fallbackHeuristicAnalysis(
+                $validated['isi_laporan'],
+                $unit ? $unit->name : 'Umum',
+                $validated['target_object'] ?? null
+            );
+        }
 
         $sentiment = $aiAnalysis['sentiment'] ?? 'NETRAL';
         $score = $aiAnalysis['score'] ?? 0;
@@ -113,7 +122,43 @@ class ReportController extends Controller
             ]);
         }
 
-        if ($request->wantsJson()) {
+        // Kirim Notifikasi WhatsApp Siaga ke Kasi Unit Terkait (Non-blocking)
+        try {
+            $kasiUsers = \App\Models\User::where('unit_id', $unit->id)
+                ->where('role', 'KASI')
+                ->where('is_active', true)
+                ->whereNotNull('phone_number')
+                ->get();
+
+            if ($kasiUsers->isNotEmpty()) {
+                $waUrl = config('services.wa_gateway.local_url', 'http://127.0.0.1:3000/send');
+                $secretKey = config('services.wa_gateway.secret_key');
+
+                $waMessage = "🔔 *NOTIFIKASI SIAGA SIPUAS*\n"
+                    . "Ada laporan pelayanan baru di unit kerja Anda:\n\n"
+                    . "📋 *No. Tiket:* {$ticketNumber}\n"
+                    . "🏥 *Unit:* " . ($unit->name ?? 'Umum') . "\n"
+                    . "👤 *Sasaran/Staf:* " . ($validated['target_object'] ?? '-') . "\n"
+                    . "🕒 *Shift:* {$shiftInfo}\n"
+                    . "📊 *Sentimen AI:* {$sentiment}\n"
+                    . "📝 *Uraian Singkat:* " . mb_substr($validated['isi_laporan'], 0, 100) . "...\n\n"
+                    . "Mohon segera buka menu *Feed Aduan Masuk Unit* untuk melakukan verifikasi staf dinas.\n"
+                    . "🔗 " . url('/kasi/dashboard');
+
+                foreach ($kasiUsers as $kasi) {
+                    \Illuminate\Support\Facades\Http::timeout(3)->withoutVerifying()
+                        ->withHeaders(!empty($secretKey) ? ['X-Api-Key' => $secretKey] : [])
+                        ->post($waUrl, [
+                            'target' => $kasi->phone_number,
+                            'message' => $waMessage,
+                        ]);
+                }
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::info('WA Gateway notification notice: ' . $e->getMessage());
+        }
+
+        if ($request->wantsJson() || $request->ajax() || $request->expectsJson() || $request->header('X-Requested-With') === 'XMLHttpRequest') {
             return response()->json([
                 'success' => true,
                 'ticket_number' => $ticketNumber,

@@ -257,9 +257,10 @@ const menuGroups = computed(() => {
         {
             title: 'Master Data',
             items: [
+                { label: 'Persetujuan Pendaftar', routeName: 'users.approvals', icon: UserCheck },
                 { label: 'Master Pengguna', routeName: 'users.index', icon: Users },
                 { label: 'Master Unit & Ruangan', routeName: 'units.index', icon: Building2 },
-                { label: 'Master Staf & Pegawai', routeName: 'staff.index', icon: UserCheck }
+                { label: 'Master Staf & Pegawai', routeName: 'staff.index', icon: Shield }
             ]
         },
         {
@@ -284,11 +285,8 @@ const triggerSupportBack = () => {
 
 const page = usePage();
 const backRoute = computed(() => {
-    if (route().current('kasi.verify') || route().current('kasi.logbook')) {
+    if (route().current('kasi.verify')) {
         return route('kasi.dashboard');
-    }
-    if (route().current('executive.kasi-responsiveness') || route().current('executive.leaderboard')) {
-        return route('executive.dashboard');
     }
     if (route().current('users.edit') || route().current('users.show')) {
         return route('users.index');
@@ -315,9 +313,6 @@ const backRoute = computed(() => {
 
 const showBackButton = computed(() => {
     return route().current('kasi.verify') ||
-           route().current('kasi.logbook') ||
-           route().current('executive.kasi-responsiveness') ||
-           route().current('executive.leaderboard') ||
            route().current('services.medik') || 
            route().current('services.non-medik') || 
            route().current('profile.edit') || 
@@ -582,12 +577,21 @@ const searchableItems = [
     { label: 'Sistem Desain - Formulir & Input', routeName: 'design-system.forms', description: 'Koleksi komponen input form, select, checkbox, & upload file' },
     { label: 'Sistem Desain - Modal & Alert', routeName: 'design-system.modals-alerts', description: 'Koleksi modal popup transisi & notifikasi SweetAlert2' },
     { label: 'Sistem Desain - Tabel & Pagination', routeName: 'design-system.tables', description: 'Desain layout tabel data, pagination, & state data kosong' },
-    { label: 'Sistem Desain - Kartu Statistik', routeName: 'design-system.cards', description: 'Koleksi layout kartu data statistik & visualisasi grid' },
+    { label: 'Feed Aduan Unit', routeName: 'kasi.dashboard', description: 'Monitoring feed aduan masuk dan verifikasi shift staf' },
+    { label: 'Digital Logbook Staf', routeName: 'kasi.logbook', description: 'Rekap kinerja dan poin KPI staf unit' },
+    { label: 'Command Center RS', routeName: 'executive.dashboard', description: 'Dashboard eksekutif, analisis sentimen AI, & pantauan zona merah' },
+    { label: 'Responsivitas Kasi', routeName: 'executive.kasi-responsiveness', description: 'Laporan kecepatan respon & akuntabilitas supervisor unit' },
+    { label: 'Leaderboard Kinerja Staf', routeName: 'executive.leaderboard', description: 'Peringkat apresiasi pujian & evaluasi staf RS' },
     { label: 'Notifikasi Saya', routeName: 'notifications.index', description: 'Semua riwayat notifikasi sistem dan tugas' },
 ];
 
 const mobilePageTitles = [
     { routeName: 'dashboard', label: 'Dashboard' },
+    { routeName: 'kasi.dashboard', label: 'Feed Aduan Unit' },
+    { routeName: 'kasi.logbook', label: 'Digital Logbook Staf' },
+    { routeName: 'executive.dashboard', label: 'Command Center RS' },
+    { routeName: 'executive.kasi-responsiveness', label: 'Responsivitas Kasi' },
+    { routeName: 'executive.leaderboard', label: 'Leaderboard Staf' },
     { routeName: 'services.index', label: 'Layanan Penunjang' },
     { routeName: 'services.medik', label: 'Penunjang Medik' },
     { routeName: 'services.non-medik', label: 'Penunjang Non-Medik' },
@@ -874,9 +878,10 @@ const getGroupInitials = (title) => {
                                     >
                                         <!-- Nama — hanya tampil di desktop -->
                                         <span class="hidden lg:block whitespace-nowrap text-sm font-medium text-slate-700 dark:text-slate-300">{{ $page.props.auth.user.name }}</span>
-                                        <!-- Avatar icon User (Sekarang kembali di kanan nama pada desktop) -->
-                                        <span class="relative h-8 w-8 lg:h-7 lg:w-7 rounded-full bg-transparent lg:bg-slate-100 lg:dark:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center flex-shrink-0 transition-all duration-150">
-                                            <User class="h-4.5 w-4.5 lg:h-4 lg:w-4" />
+                                        <!-- Avatar icon User / Photo -->
+                                        <span class="relative h-8 w-8 lg:h-7 lg:w-7 rounded-full bg-transparent lg:bg-slate-100 lg:dark:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center flex-shrink-0 transition-all duration-150 overflow-hidden">
+                                            <img v-if="$page.props.auth.user.profile_photo_path" :src="$page.props.auth.user.profile_photo_path" :alt="$page.props.auth.user.name" class="h-full w-full object-cover" />
+                                            <User v-else class="h-4.5 w-4.5 lg:h-4 lg:w-4" />
                                         </span>
                                         <span
                                             v-if="unreadCount > 0 && !showMobileNotifications && !showMobileProfileDropdown"

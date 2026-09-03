@@ -108,8 +108,8 @@ class KabidController extends Controller
 
             return [
                 'id' => $u->id,
-                'name' => $kasiUser ? $kasiUser->name : ($u->pic_name ?: 'Belum Ditugaskan'),
-                'role' => $kasiUser ? 'Kasi ' . $u->name : 'PIC Unit',
+                'name' => $kasiUser ? $kasiUser->name : 'Belum Ditugaskan',
+                'role' => $kasiUser ? 'Kasi ' . $u->name : 'Kepala Seksi',
                 'unit' => $u->name,
                 'total_incoming' => $total,
                 'verified_count' => $verified,

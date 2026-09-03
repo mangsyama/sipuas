@@ -93,8 +93,12 @@ Route::middleware('auth')->group(function () {
     Route::delete('/users/{user}', [\App\Http\Controllers\UserManagementController::class, 'destroy'])->name('users.destroy');
     Route::patch('/users/{user}/toggle-status', [\App\Http\Controllers\UserManagementController::class, 'toggleStatus'])->name('users.toggle-status');
     Route::post('/users/{user}/reset-password', [\App\Http\Controllers\UserManagementController::class, 'resetPassword'])->name('users.reset-password');
-    Route::get('/users-approvals', fn () => redirect()->route('users.index'))->name('users.approvals');
-    Route::get('/users-approvals/{id}', fn () => redirect()->route('users.index'))->name('users.approvals.show');
+    
+    // User Approvals (Persetujuan Pendaftaran Akun)
+    Route::get('/users-approvals', [\App\Http\Controllers\UserApprovalController::class, 'index'])->name('users.approvals');
+    Route::get('/users-approvals/{user}', [\App\Http\Controllers\UserApprovalController::class, 'show'])->name('users.approvals.show');
+    Route::post('/users-approvals/{user}/approve', [\App\Http\Controllers\UserApprovalController::class, 'approve'])->name('users.approvals.approve');
+    Route::delete('/users-approvals/{user}/reject', [\App\Http\Controllers\UserApprovalController::class, 'reject'])->name('users.approvals.reject');
 
     // Master Data 2: Hospital Units / Ruangan Pelayanan
     Route::get('/units', [\App\Http\Controllers\UnitManagementController::class, 'index'])->name('units.index');
