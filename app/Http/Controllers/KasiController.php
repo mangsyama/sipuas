@@ -115,7 +115,9 @@ class KasiController extends Controller
                 : ($report->ai_sentiment === 'NEGATIF' 
                     ? 'Tindak Lanjut Keluhan: Laporan menunjukkan adanya ketidakpuasan pelayanan. Disarankan Kepala Ruangan/Kasi segera mengklarifikasi kronologi kejadian bersama staf shift dinas, meninjau kesesuaian SOP, dan menerapkan penyesuaian poin pembinaan (- Poin KPI) jika terbukti ada kelalaian petugas.' 
                     : 'Laporan Masukan Umum: Informasi ini bersifat saran atau terkait sarana/kondisi fisik lingkungan rumah sakit tanpa keterlibatan langsung pelanggaran individu staf. Sesuai regulasi, status ini adalah TINDAKAN NETRAL (0 Poin KPI) dan TIDAK mengubah saldo kinerja staf unit.'))),
-            'ai_provider' => $aiMeta['engine'] ?? ($aiMeta['provider'] ?? 'Sistem AI SIPUAS'),
+            'ai_provider' => ($aiMeta['engine'] ?? ($aiMeta['provider'] ?? '')) === 'HEURISTIC_RULE_BASED' 
+                ? 'AI Heuristik Internal' 
+                : (($aiMeta['engine'] ?? ($aiMeta['provider'] ?? '')) === 'GROQ_AI' ? 'Groq AI (Llama-3)' : 'Sistem AI SIPUAS'),
             'shift_info' => $report->shift_info ?? 'Shift Pagi / Siang',
             'status' => $report->status,
             'priority' => $report->priority,
