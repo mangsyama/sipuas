@@ -20,6 +20,7 @@ class ReportController extends Controller
         $this->aiService = $aiService;
     }
 
+
     /**
      * Show public report creation form.
      */
@@ -29,8 +30,11 @@ class ReportController extends Controller
             ->orderBy('name')
             ->get(['id', 'code', 'name', 'category']);
 
+        $step = $request->query('step');
+
         return Inertia::render('Report/Create', [
             'unitId' => $request->query('unit', ''),
+            'initialStep' => $step !== null ? (int) $step : null,
             'units' => $units,
         ]);
     }
@@ -180,4 +184,45 @@ class ReportController extends Controller
             'id' => $id,
         ]);
     }
+
+    /**
+     * Show public report progress tracking page.
+     */
+    public function track(Request $request): Response
+    {
+        $ticket = strtoupper(trim($request->query('ticket', '')));
+        $reportData = null;
+        $searched = false;
+
+        if (!empty($ticket)) {
+            $searched = true;
+            $report = Report::with(['unit', 'attachments'])
+                ->where('ticket_number', $ticket)
+                ->first();
+
+            if ($report) {
+                $reportData = [
+                    'ticket_number' => $report->ticket_number,
+                    'unit_name' => $report->unit ? $report->unit->name : 'Unit Umum',
+                    'target_object' => $report->target_object,
+                    'isi_laporan' => $report->isi_laporan,
+                    'status' => $report->status ?? 'PENDING',
+                    'created_at' => $report->created_at ? $report->created_at->format('d M Y, H:i') : null,
+                    'verified_at' => $report->verified_at ? $report->verified_at->format('d M Y, H:i') : null,
+                    'resolved_at' => $report->resolved_at ? $report->resolved_at->format('d M Y, H:i') : null,
+                    'supervisor_notes' => $report->supervisor_notes,
+                    'resolution_notes' => $report->resolution_notes,
+                    'has_attachment' => $report->attachments->isNotEmpty(),
+                    'attachments_count' => $report->attachments->count(),
+                ];
+            }
+        }
+
+        return Inertia::render('Report/Track', [
+            'initialTicket' => $ticket,
+            'report' => $reportData,
+            'searched' => $searched,
+        ]);
+    }
 }
+

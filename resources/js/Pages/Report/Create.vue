@@ -29,13 +29,19 @@ import {
     Image as ImageIcon,
     Video as VideoIcon,
     Trash2,
-    AlertCircle
+    AlertCircle,
+    Search,
+    Megaphone
 } from '@lucide/vue';
 
 const props = defineProps({
     unitId: {
         type: String,
         default: ''
+    },
+    initialStep: {
+        type: [Number, String],
+        default: null
     },
     units: {
         type: Array,
@@ -52,52 +58,42 @@ const props = defineProps({
     }
 });
 
-const currentStep = ref(1);
+const determineInitialStep = () => {
+    if (props.initialStep !== null && props.initialStep !== undefined && props.initialStep !== '') {
+        return Number(props.initialStep);
+    }
+    if (typeof window !== 'undefined') {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.has('step')) {
+            return Number(urlParams.get('step'));
+        }
+    }
+    return props.unitId ? 1 : 0;
+};
+
+const currentStep = ref(determineInitialStep());
 const isSubmitting = ref(false);
 const copied = ref(false);
 const generatedReportId = ref('');
 const fileName = ref('');
 const isKeyboardOpen = ref(false);
 const uploadError = ref('');
-let focusTimeout = null;
 
-const handleFocusIn = (e) => {
-    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e?.target?.tagName)) {
-        if (focusTimeout) clearTimeout(focusTimeout);
-        isKeyboardOpen.value = true;
+const checkKeyboard = () => {
+    if (window.visualViewport) {
+        isKeyboardOpen.value = window.visualViewport.height < window.innerHeight - 150;
     }
 };
-
-const handleFocusOut = (e) => {
-    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e?.target?.tagName)) {
-        if (focusTimeout) clearTimeout(focusTimeout);
-        focusTimeout = setTimeout(() => {
-            const activeTag = document.activeElement?.tagName;
-            if (!['INPUT', 'TEXTAREA', 'SELECT'].includes(activeTag)) {
-                isKeyboardOpen.value = false;
-            }
-        }, 150);
-    }
-};
-
-let resizeHandler = null;
 
 onMounted(() => {
     if (window.visualViewport) {
-        const initialHeight = window.visualViewport.height;
-        resizeHandler = () => {
-            if (window.visualViewport) {
-                isKeyboardOpen.value = (initialHeight - window.visualViewport.height) > 140;
-            }
-        };
-        window.visualViewport.addEventListener('resize', resizeHandler);
+        window.visualViewport.addEventListener('resize', checkKeyboard);
     }
 });
 
 onUnmounted(() => {
-    if (focusTimeout) clearTimeout(focusTimeout);
-    if (window.visualViewport && resizeHandler) {
-        window.visualViewport.removeEventListener('resize', resizeHandler);
+    if (window.visualViewport) {
+        window.visualViewport.removeEventListener('resize', checkKeyboard);
     }
 });
 
@@ -105,8 +101,7 @@ const selectedUnitObj = computed(() => {
     return props.units.find(u => u.id === form.value.unit_id);
 });
 
-const cameraInput = ref(null);
-const galleryInput = ref(null);
+const fileInput = ref(null);
 const uploadedAttachment = ref(null);
 const isTransitioning = ref(false);
 const isCompressing = ref(false);
@@ -126,16 +121,25 @@ const form = ref({
     reporter_phone: ''
 });
 
-const openCamera = () => {
+const openFileInput = () => {
     if (isTransitioning.value || isCompressing.value) return;
     uploadError.value = '';
-    cameraInput.value?.click();
+    fileInput.value?.click();
 };
 
-const openGallery = () => {
-    if (isTransitioning.value || isCompressing.value) return;
-    uploadError.value = '';
-    galleryInput.value?.click();
+const onPhoneInput = (e) => {
+    const raw = e.target.value || '';
+    const digitsOnly = raw.replace(/\D/g, '').slice(0, 15);
+    form.value.reporter_phone = digitsOnly;
+    if (e.target.value !== digitsOnly) {
+        e.target.value = digitsOnly;
+    }
+};
+
+const onPhoneKeyPress = (e) => {
+    if (e.key && e.key.length === 1 && !/[0-9]/.test(e.key) && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+    }
 };
 
 const compressImage = (file, maxWidth = 1920, maxHeight = 1920, quality = 0.82) => {
@@ -254,6 +258,7 @@ const removeAttachment = () => {
     }
     uploadedAttachment.value = null;
     form.value.uploaded_files = [];
+    if (fileInput.value) fileInput.value.value = '';
 };
 
 const goToStep2 = () => {
@@ -267,9 +272,19 @@ const goToStep2 = () => {
 };
 
 const goToStep3 = () => {
-    if (!form.value.isi_laporan.trim() || isTransitioning.value) return;
+    if (!form.value.isi_laporan.trim() || form.value.isi_laporan.trim().length < 5 || isTransitioning.value) return;
     isTransitioning.value = true;
     currentStep.value = 3;
+    scrollToTop();
+    setTimeout(() => {
+        isTransitioning.value = false;
+    }, 350);
+};
+
+const goToStep0 = () => {
+    if (isTransitioning.value) return;
+    isTransitioning.value = true;
+    currentStep.value = 0;
     scrollToTop();
     setTimeout(() => {
         isTransitioning.value = false;
@@ -297,7 +312,7 @@ const goToStep2From3 = () => {
 };
 
 const submitReport = async () => {
-    if (!form.value.isi_laporan.trim() || isSubmitting.value) return;
+    if (!form.value.isi_laporan.trim() || form.value.isi_laporan.trim().length < 5 || isSubmitting.value) return;
     
     isSubmitting.value = true;
     
@@ -354,6 +369,7 @@ const resetForm = () => {
         URL.revokeObjectURL(uploadedAttachment.value.previewUrl);
     }
     uploadedAttachment.value = null;
+    if (fileInput.value) fileInput.value.value = '';
     form.value = {
         unit_id: '',
         target_object: '',
@@ -364,7 +380,7 @@ const resetForm = () => {
     };
     fileName.value = '';
     generatedReportId.value = '';
-    currentStep.value = 1;
+    currentStep.value = 0;
 };
 
 const copyReceipt = () => {
@@ -380,8 +396,6 @@ const copyReceipt = () => {
     <Head title="Formulir Suara Pasien" />
 
     <div 
-        @focusin="handleFocusIn" 
-        @focusout="handleFocusOut"
         class="min-h-screen flex flex-col justify-between sm:justify-center items-center relative overflow-x-hidden font-sans bg-white dark:bg-slate-900 sm:bg-transparent p-0 sm:p-6 text-slate-900 dark:text-slate-100"
     >
         <!-- Background Image with Blur & Dark Overlay (Desktop/Tablet Fixed) -->
@@ -400,8 +414,8 @@ const copyReceipt = () => {
                 <div
                     class="border-b border-slate-200 bg-slate-50 p-5 sm:p-7 text-center dark:border-slate-800 dark:bg-slate-950 sm:rounded-t-2xl"
                 >
-                    <Link
-                        href="/"
+                    <div
+                        @click="goToStep0"
                         class="inline-flex items-center justify-center transition-transform hover:scale-105 cursor-pointer"
                         title="SIPUAS"
                     >
@@ -410,7 +424,7 @@ const copyReceipt = () => {
                             alt="SIPUAS Logo"
                             class="h-8 sm:h-10 w-auto object-contain mx-auto dark:brightness-0 dark:invert"
                         />
-                    </Link>
+                    </div>
 
                     <p class="mt-1.5 text-xs text-slate-500 dark:text-slate-400 font-medium">
                         Sampaikan kritik, saran, aduan, atau apresiasi Anda untuk perbaikan layanan kami
@@ -419,8 +433,8 @@ const copyReceipt = () => {
 
                 <!-- Card Body -->
                 <div class="flex-1 p-5 sm:p-8 bg-white dark:bg-slate-900 pb-44 sm:pb-8 sm:rounded-b-2xl" :class="{ 'pointer-events-none': isTransitioning }">
-                    <!-- 4 Step Progress Bar Indicator -->
-                    <div class="mb-6 sm:mb-8 px-1 sm:px-2">
+                    <!-- 4 Step Progress Bar Indicator (Only visible in Form Steps 1-4) -->
+                    <div v-if="currentStep > 0" class="mb-6 sm:mb-8 px-1 sm:px-2">
                         <div class="grid grid-cols-4 relative">
                             <!-- Connecting Progress Line -->
                             <div class="absolute top-[18px] left-[12.5%] right-[12.5%] -translate-y-1/2 h-1 bg-slate-100 dark:bg-slate-800 z-0">
@@ -488,6 +502,91 @@ const copyReceipt = () => {
                         </div>
                     </div>
 
+                    <!-- STEP 0: Portal Mini (Halaman Pertama: Pilihan Buat Laporan atau Cek Progres) -->
+                    <div v-if="currentStep === 0" class="space-y-6 animate-spa-fade-in py-1">
+                        <!-- Welcome Header Banner -->
+                        <div class="bg-gradient-to-b from-slate-50 to-slate-100/50 dark:from-slate-950 dark:to-slate-900 p-5 sm:p-6 rounded-2xl border border-slate-200 dark:border-slate-800 text-center space-y-2">
+                            <span class="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                                <Megaphone class="h-3 w-3" />
+                                Layanan Suara Masyarakat
+                            </span>
+                            <h2 class="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+                                Selamat Datang di <span class="text-emerald-600 dark:text-emerald-400">SIPUAS</span>
+                            </h2>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto leading-relaxed">
+                                Silakan pilih layanan di bawah ini untuk menyampaikan masukan atau memantau laporan Anda:
+                            </p>
+                        </div>
+
+                        <!-- 2 Main Portal Cards (Pilihan Utama) -->
+                        <div class="grid grid-cols-1 gap-3.5">
+                            <!-- Card 1: Buat Laporan Baru -->
+                            <div 
+                                @click="goToStep1"
+                                class="group p-5 rounded-2xl border-2 border-emerald-500/30 hover:border-emerald-500 bg-gradient-to-r from-emerald-50/50 to-white dark:from-emerald-950/30 dark:to-slate-900 transition-colors duration-200 cursor-pointer flex items-center justify-between gap-4"
+                            >
+                                <div class="flex items-center gap-3.5 min-w-0">
+                                    <div class="h-12 w-12 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shrink-0">
+                                        <FileText class="h-6 w-6" />
+                                    </div>
+                                    <div class="min-w-0">
+                                        <h3 class="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
+                                            Buat Laporan Baru
+                                        </h3>
+                                        <p class="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2">
+                                            Sampaikan kritik, saran, aduan, atau apresiasi pelayanan rumah sakit.
+                                        </p>
+                                    </div>
+                                </div>
+                                <div class="h-9 w-9 rounded-xl bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 flex items-center justify-center shrink-0 group-hover:translate-x-1 transition-transform">
+                                    <ArrowRight class="h-4 w-4" />
+                                </div>
+                            </div>
+
+                            <!-- Card 2: Cek Progres Laporan -->
+                            <Link 
+                                :href="route('report.track')"
+                                class="group p-5 rounded-2xl border-2 border-slate-200 dark:border-slate-800 hover:border-teal-500 bg-gradient-to-r from-slate-50/70 to-white dark:from-slate-800/40 dark:to-slate-900 transition-colors duration-200 cursor-pointer flex items-center justify-between gap-4"
+                            >
+                                <div class="flex items-center gap-3.5 min-w-0">
+                                    <div class="h-12 w-12 rounded-2xl bg-teal-600 text-white flex items-center justify-center shrink-0">
+                                        <Search class="h-6 w-6" />
+                                    </div>
+                                    <div class="min-w-0">
+                                        <h3 class="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors">
+                                            Cek Progres Laporan
+                                        </h3>
+                                        <p class="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2">
+                                            Lacak status tindak lanjut aduan Anda menggunakan Nomor Registrasi.
+                                        </p>
+                                    </div>
+                                </div>
+                                <div class="h-9 w-9 rounded-xl bg-teal-100 dark:bg-teal-950/80 text-teal-700 dark:text-teal-300 flex items-center justify-center shrink-0 group-hover:translate-x-1 transition-transform">
+                                    <ArrowRight class="h-4 w-4" />
+                                </div>
+                            </Link>
+                        </div>
+
+                        <!-- Highlights Strip -->
+                        <div class="grid grid-cols-3 gap-2 pt-1 text-center">
+                            <div class="py-2.5 px-1.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200/60 dark:border-slate-800/60">
+                                <Shield class="h-4 w-4 text-emerald-500 mx-auto mb-1" />
+                                <span class="text-[10px] font-bold text-slate-700 dark:text-slate-300 block leading-tight">Privasi Aman</span>
+                                <span class="text-[9px] text-slate-400 dark:text-slate-500 block leading-tight mt-0.5">Bisa Anonim</span>
+                            </div>
+                            <div class="py-2.5 px-1.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200/60 dark:border-slate-800/60">
+                                <CheckCircle2 class="h-4 w-4 text-emerald-500 mx-auto mb-1" />
+                                <span class="text-[10px] font-bold text-slate-700 dark:text-slate-300 block leading-tight">Tercatat Resmi</span>
+                                <span class="text-[9px] text-slate-400 dark:text-slate-500 block leading-tight mt-0.5">Tiket Terverifikasi</span>
+                            </div>
+                            <div class="py-2.5 px-1.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200/60 dark:border-slate-800/60">
+                                <Sparkles class="h-4 w-4 text-emerald-500 mx-auto mb-1" />
+                                <span class="text-[10px] font-bold text-slate-700 dark:text-slate-300 block leading-tight">Siaga Cepat</span>
+                                <span class="text-[9px] text-slate-400 dark:text-slate-500 block leading-tight mt-0.5">Langsung Diproses</span>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- STEP 1: Pilih Lokasi Unit & Target Subjek/Fasilitas -->
                     <div v-if="currentStep === 1" class="space-y-4 animate-spa-fade-in">
                         <div class="bg-slate-50 dark:bg-slate-950 p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-800 mb-5 text-center">
@@ -530,12 +629,20 @@ const copyReceipt = () => {
                         </div>
 
                         <!-- Desktop Step 1 Action (Inside Card) -->
-                        <div class="hidden sm:block pt-5">
+                        <div class="hidden sm:flex items-center gap-3 pt-5">
+                            <button
+                                type="button"
+                                @click.stop.prevent="goToStep0"
+                                class="flex h-11 px-5 cursor-pointer items-center justify-center gap-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold text-sm text-slate-700 dark:text-slate-200 transition hover:bg-slate-100 dark:hover:bg-slate-700 active:scale-[0.99] shrink-0"
+                            >
+                                <ArrowLeft class="h-4 w-4" />
+                                <span>Menu Utama</span>
+                            </button>
                             <button
                                 type="button"
                                 @click.stop.prevent="goToStep2"
                                 :disabled="!form.unit_id || isTransitioning"
-                                class="flex h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-emerald-600 font-semibold text-sm text-white transition-all duration-200 hover:bg-emerald-500 active:scale-[0.99] focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                                class="flex-1 flex h-11 cursor-pointer items-center justify-center gap-2 rounded-xl bg-emerald-600 font-semibold text-sm text-white transition-all duration-200 hover:bg-emerald-500 active:scale-[0.99] focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
                             >
                                 <span>Lanjut ke Detail Laporan</span>
                                 <ArrowRight class="h-4 w-4" />
@@ -566,10 +673,17 @@ const copyReceipt = () => {
                                 id="isi_laporan"
                                 v-model="form.isi_laporan"
                                 rows="4"
+                                maxlength="3000"
                                 required
                                 placeholder="Tuliskan pengalaman pelayanan, apresiasi pujian, atau kendala keluhan Anda di sini secara rinci..."
                                 class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 p-4 text-xs sm:text-sm focus:border-emerald-500 dark:focus:border-emerald-400 focus:bg-white dark:focus:bg-slate-950 focus:outline-none focus:ring-0 focus:shadow-none transition duration-150 leading-relaxed"
                             ></textarea>
+                            <div 
+                                v-if="form.isi_laporan.length > 0 && form.isi_laporan.trim().length < 5" 
+                                class="text-[11px] text-amber-600 dark:text-amber-400 font-medium px-1 animate-spa-fade-in"
+                            >
+                                Minimal 5 karakter (kurang {{ 5 - form.isi_laporan.trim().length }} karakter lagi)
+                            </div>
                         </div>
 
                         <!-- Upload Bukti Foto / Video (Space Upload Area + Tombol Buka Kamera) -->
@@ -597,17 +711,9 @@ const copyReceipt = () => {
                                 </button>
                             </div>
 
-                            <!-- Hidden Inputs for Camera and Gallery (Accept ONLY Photo & Video) -->
+                            <!-- Single Hidden Input for Photo & Video (Triggers native Camera / Gallery picker on smartphones) -->
                             <input 
-                                ref="cameraInput" 
-                                type="file" 
-                                accept="image/*,video/*" 
-                                capture="environment" 
-                                class="hidden" 
-                                @change="onFileSelected" 
-                            />
-                            <input 
-                                ref="galleryInput" 
+                                ref="fileInput" 
                                 type="file" 
                                 accept="image/*,video/*" 
                                 class="hidden" 
@@ -617,8 +723,8 @@ const copyReceipt = () => {
                             <!-- Space Upload Area (Frame Dropzone / Preview) -->
                             <div 
                                 class="relative w-full rounded-2xl overflow-hidden border transition-all duration-200"
-                                :class="uploadedAttachment ? 'border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 shadow-none' : 'border-dashed border-slate-300 dark:border-slate-700 hover:border-emerald-500 bg-slate-50 dark:bg-slate-950 cursor-pointer'"
-                                @click.stop="!uploadedAttachment && !isTransitioning && openGallery()"
+                                :class="uploadedAttachment ? 'border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 shadow-none' : 'border-2 border-dashed border-slate-300 hover:border-emerald-500 dark:border-slate-700 dark:hover:border-emerald-500 bg-slate-50 hover:bg-emerald-50/30 dark:bg-slate-950 dark:hover:bg-emerald-950/20 cursor-pointer'"
+                                @click.stop="!uploadedAttachment && !isTransitioning && openFileInput()"
                             >
                                 <!-- State 1: Sedang Mengoptimalkan Media -->
                                 <div v-if="isCompressing" class="flex flex-col items-center justify-center p-8 text-center select-none">
@@ -630,14 +736,15 @@ const copyReceipt = () => {
 
                                 <!-- State 2: Kosong (Space Upload Area Siap Klik/Pilih) -->
                                 <div v-else-if="!uploadedAttachment" class="flex flex-col items-center justify-center p-6 sm:p-7 text-center select-none">
-                                    <div class="h-12 w-12 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mb-2.5">
-                                        <UploadCloud class="h-6 w-6" />
+                                    <div class="h-12 w-12 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mb-3">
+                                        <Camera class="h-6 w-6" />
                                     </div>
-                                    <p class="text-xs font-bold text-slate-800 dark:text-slate-200">
-                                        Klik untuk Pilih Foto / Video dari Galeri
+                                    <p class="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100">
+                                        Ambil Foto / Video atau Pilih dari Galeri
                                     </p>
-                                    <span class="text-[11px] text-slate-400 font-medium mt-0.5">
-                                        (Opsional)
+
+                                    <span class="inline-block text-[10px] text-slate-400 dark:text-slate-500 font-medium mt-1.5 px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800/80">
+                                        Opsional
                                     </span>
                                 </div>
 
@@ -658,37 +765,52 @@ const copyReceipt = () => {
                                         controls 
                                         class="w-full h-full object-cover"
                                     ></video>
-
-                                    <!-- Floating Info Pill (Bottom Left) -->
-                                    <div class="absolute bottom-3 left-3 flex items-center gap-1.5 bg-slate-900/80 backdrop-blur-md px-3 py-1.5 rounded-xl text-white shadow-md">
-                                        <CheckCircle2 class="h-3.5 w-3.5 text-emerald-400 shrink-0" />
-                                        <span class="text-xs font-bold">{{ uploadedAttachment.isImage ? 'Foto Terlampir' : 'Video Terlampir' }}</span>
-                                        <span class="text-[10px] text-slate-300 font-semibold ml-0.5">{{ uploadedAttachment.sizeFormatted }}</span>
-                                    </div>
-
-                                    <!-- Floating Delete Button (Bottom Right) -->
-                                    <button
-                                        type="button"
-                                        @click.stop="removeAttachment"
-                                        class="absolute bottom-3 right-3 p-2.5 rounded-xl bg-rose-600/90 hover:bg-rose-600 text-white transition cursor-pointer shadow-lg hover:scale-105 active:scale-95"
-                                        title="Hapus Lampiran"
-                                    >
-                                        <Trash2 class="h-4 w-4" />
-                                    </button>
                                 </div>
                             </div>
 
-                            <!-- Tombol Buka Kamera HP (Di Bawah Space Upload Area) -->
-                            <div>
-                                <button
-                                    type="button"
-                                    @click.stop.prevent="openCamera"
-                                    :disabled="isTransitioning"
-                                    class="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl border border-emerald-500/30 hover:border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 font-semibold text-xs transition cursor-pointer focus:outline-none disabled:opacity-50"
-                                >
-                                    <Camera class="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                                    <span>{{ uploadedAttachment ? 'Ambil Ulang dari Kamera HP' : 'Buka Kamera HP (Foto / Video Langsung)' }}</span>
-                                </button>
+                            <!-- Keterangan & Aksi File Terlampir (Di Luar Space Preview) -->
+                            <div 
+                                v-if="uploadedAttachment && !isCompressing" 
+                                class="flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 animate-spa-fade-in"
+                            >
+                                <!-- Info Keterangan Media -->
+                                <div class="flex items-center gap-2.5 min-w-0">
+                                    <div class="h-8 w-8 rounded-lg bg-emerald-100 dark:bg-emerald-950/70 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                                        <CheckCircle2 class="h-4 w-4" />
+                                    </div>
+                                    <div class="min-w-0">
+                                        <p class="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">
+                                            {{ uploadedAttachment.isImage ? 'Foto Terlampir' : 'Video Terlampir' }}
+                                        </p>
+                                        <p class="text-[11px] text-slate-500 dark:text-slate-400">
+                                            Ukuran: <span class="font-semibold text-slate-700 dark:text-slate-200">{{ uploadedAttachment.sizeFormatted }}</span>
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <!-- Tombol Ganti dan Hapus -->
+                                <div class="flex items-center gap-2 shrink-0">
+                                    <button
+                                        type="button"
+                                        @click.stop="openFileInput"
+                                        :disabled="isTransitioning"
+                                        class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs font-semibold transition cursor-pointer active:scale-95 disabled:opacity-50"
+                                        title="Ganti Foto atau Video"
+                                    >
+                                        <RefreshCw class="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
+                                        <span>Ganti</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        @click.stop="removeAttachment"
+                                        :disabled="isTransitioning"
+                                        class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-rose-200 dark:border-rose-900/50 bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/60 text-xs font-semibold transition cursor-pointer active:scale-95 disabled:opacity-50"
+                                        title="Hapus Lampiran"
+                                    >
+                                        <Trash2 class="h-3.5 w-3.5" />
+                                        <span>Hapus</span>
+                                    </button>
+                                </div>
                             </div>
                         </div>
 
@@ -698,7 +820,7 @@ const copyReceipt = () => {
                                 type="button"
                                 @click.stop.prevent="goToStep1"
                                 :disabled="isTransitioning"
-                                class="flex h-11 px-5 cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold text-xs text-slate-700 dark:text-slate-200 transition hover:bg-slate-100 dark:hover:bg-slate-700 active:scale-[0.99] focus:outline-none disabled:opacity-50 shrink-0"
+                                class="flex h-11 px-6 cursor-pointer items-center justify-center gap-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold text-sm text-slate-700 dark:text-slate-200 transition hover:bg-slate-100 dark:hover:bg-slate-700 active:scale-[0.99] focus:outline-none disabled:opacity-50 shrink-0"
                             >
                                 <ArrowLeft class="h-4 w-4" />
                                 <span>Kembali</span>
@@ -706,7 +828,7 @@ const copyReceipt = () => {
                             <button
                                 type="button"
                                 @click.stop.prevent="goToStep3"
-                                :disabled="!form.isi_laporan.trim() || isTransitioning"
+                                :disabled="!form.isi_laporan.trim() || form.isi_laporan.trim().length < 5 || isTransitioning"
                                 class="flex-1 flex h-11 cursor-pointer items-center justify-center gap-2 rounded-xl bg-emerald-600 font-semibold text-sm text-white transition-all duration-200 hover:bg-emerald-500 active:scale-[0.99] focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
                             >
                                 <span>Lanjut ke Data Pelapor</span>
@@ -755,8 +877,13 @@ const copyReceipt = () => {
                             <TextInput
                                 id="reporter_phone"
                                 type="tel"
+                                inputmode="numeric"
+                                pattern="[0-9]*"
+                                maxlength="15"
                                 class="block w-full"
                                 v-model="form.reporter_phone"
+                                @input="onPhoneInput"
+                                @keypress="onPhoneKeyPress"
                                 placeholder="Contoh: 081234567890..."
                             />
                         </div>
@@ -767,7 +894,7 @@ const copyReceipt = () => {
                                 type="button"
                                 @click.stop.prevent="goToStep2From3"
                                 :disabled="isSubmitting || isTransitioning"
-                                class="flex h-11 px-5 cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold text-xs text-slate-700 dark:text-slate-200 transition hover:bg-slate-100 dark:hover:bg-slate-700 active:scale-[0.99] focus:outline-none disabled:opacity-50 shrink-0"
+                                class="flex h-11 px-6 cursor-pointer items-center justify-center gap-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold text-sm text-slate-700 dark:text-slate-200 transition hover:bg-slate-100 dark:hover:bg-slate-700 active:scale-[0.99] focus:outline-none disabled:opacity-50 shrink-0"
                             >
                                 <ArrowLeft class="h-4 w-4" />
                                 <span>Kembali</span>
@@ -804,13 +931,6 @@ const copyReceipt = () => {
                             </p>
                         </div>
 
-                        <!-- Reporter Status Badge -->
-                        <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-extrabold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200">
-                            <Shield v-if="!form.reporter_name" class="h-4 w-4 text-emerald-500" />
-                            <User v-else class="h-4 w-4 text-emerald-500" />
-                            <span>Status Pelapor: {{ form.reporter_name ? form.reporter_name + ' (Terdaftar)' : 'ANONIM' }}</span>
-                        </div>
-
                         <!-- Receipt Code Box -->
                         <div class="bg-slate-50 dark:bg-slate-950 rounded-2xl p-4 border border-slate-200 dark:border-slate-800">
                             <span class="text-[10px] font-bold uppercase tracking-widest text-slate-400 block mb-1">Nomor Registrasi Laporan</span>
@@ -827,27 +947,37 @@ const copyReceipt = () => {
                             <span v-if="copied" class="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold block mt-1">Kode berhasil disalin!</span>
                         </div>
 
-                        <div class="pt-3">
-                            <PrimaryButton
-                                class="w-full justify-center py-3"
+                        <!-- Warning Catat / Simpan Nomor Registrasi -->
+                        <div class="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/80 flex items-start gap-3 text-left">
+                            <AlertCircle class="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                            <div class="text-xs leading-relaxed text-slate-700 dark:text-slate-300">
+                                <strong class="text-amber-900 dark:text-amber-200 font-bold block mb-0.5">Catatan Penting:</strong>
+                                Jika Anda ingin melacak progres laporan ini ke depannya, pastikan untuk <strong>menyimpan atau mencatat Nomor Registrasi</strong> di atas sebelum meninggalkan halaman ini.
+                            </div>
+                        </div>
+
+                        <div class="pt-2">
+                            <button
+                                type="button"
                                 @click="resetForm"
+                                class="w-full flex items-center justify-center gap-2 py-3.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm transition cursor-pointer active:scale-[0.99] shadow-sm"
                             >
-                                <RefreshCw class="h-4 w-4 me-2" />
-                                <span>Buat Laporan Baru</span>
-                            </PrimaryButton>
+                                <ArrowLeft class="h-4 w-4" />
+                                <span>Kembali ke Halaman Pertama</span>
+                            </button>
                         </div>
                     </div>
                 </div>
 
                 <!-- Floating Bottom Navigation Bar for Steps 1, 2, 3 (ONLY MOBILE, Auto-hides when keyboard opens) -->
                 <div
-                    v-if="currentStep < 4"
+                    v-if="currentStep > 0 && currentStep < 4"
                     v-show="!isKeyboardOpen"
                     class="sm:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 p-4 pt-3.5 pb-8 shadow-2xl transition-all duration-200"
                     :class="{ 'pointer-events-none': isTransitioning }"
                 >
                     <!-- STEP 1 Action -->
-                    <div v-if="currentStep === 1" class="w-full">
+                    <div v-if="currentStep === 1" class="flex flex-col gap-2.5 w-full">
                         <button
                             type="button"
                             @click.stop.prevent="goToStep2"
@@ -857,6 +987,15 @@ const copyReceipt = () => {
                             <span>Lanjut ke Detail Laporan</span>
                             <ArrowRight class="h-4 w-4" />
                         </button>
+                        <button
+                            type="button"
+                            @click.stop.prevent="goToStep0"
+                            :disabled="isTransitioning"
+                            class="flex h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 font-semibold text-sm text-slate-700 dark:text-slate-200 transition hover:bg-slate-100 dark:hover:bg-slate-700 active:scale-[0.99] focus:outline-none disabled:opacity-50"
+                        >
+                            <ArrowLeft class="h-4 w-4" />
+                            <span>Kembali ke Menu Utama</span>
+                        </button>
                     </div>
 
                     <!-- STEP 2 Action (Stacked) -->
@@ -864,7 +1003,7 @@ const copyReceipt = () => {
                         <button
                             type="button"
                             @click.stop.prevent="goToStep3"
-                            :disabled="!form.isi_laporan.trim() || isTransitioning"
+                            :disabled="!form.isi_laporan.trim() || form.isi_laporan.trim().length < 5 || isTransitioning"
                             class="flex h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-emerald-600 font-semibold text-sm text-white transition-all duration-200 hover:bg-emerald-500 active:scale-[0.99] focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
                         >
                             <span>Lanjut ke Data Pelapor</span>
@@ -874,7 +1013,7 @@ const copyReceipt = () => {
                             type="button"
                             @click.stop.prevent="goToStep1"
                             :disabled="isTransitioning"
-                            class="flex h-10 w-full cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 font-semibold text-xs text-slate-700 dark:text-slate-200 transition hover:bg-slate-100 dark:hover:bg-slate-700 active:scale-[0.99] focus:outline-none disabled:opacity-50"
+                            class="flex h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 font-semibold text-sm text-slate-700 dark:text-slate-200 transition hover:bg-slate-100 dark:hover:bg-slate-700 active:scale-[0.99] focus:outline-none disabled:opacity-50"
                         >
                             <ArrowLeft class="h-4 w-4" />
                             <span>Kembali ke Pilih Lokasi</span>
@@ -902,7 +1041,7 @@ const copyReceipt = () => {
                             type="button"
                             @click.stop.prevent="goToStep2From3"
                             :disabled="isSubmitting || isTransitioning"
-                            class="flex h-10 w-full cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 font-semibold text-xs text-slate-700 dark:text-slate-200 transition hover:bg-slate-100 dark:hover:bg-slate-700 active:scale-[0.99] focus:outline-none disabled:opacity-50"
+                            class="flex h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 font-semibold text-sm text-slate-700 dark:text-slate-200 transition hover:bg-slate-100 dark:hover:bg-slate-700 active:scale-[0.99] focus:outline-none disabled:opacity-50"
                         >
                             <ArrowLeft class="h-4 w-4" />
                             <span>Kembali ke Detail & Bukti</span>

@@ -1,6 +1,6 @@
 <script setup>
 import { Head, Link } from '@inertiajs/vue3';
-import { CheckCircle2, Copy, FileText } from '@lucide/vue';
+import { CheckCircle2, Copy, FileText, Search, AlertCircle, ArrowLeft } from '@lucide/vue';
 import { ref } from 'vue';
 
 const props = defineProps({
@@ -85,13 +85,22 @@ const copyReceipt = () => {
                         <span v-if="copied" class="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold block mt-1">Kode berhasil disalin!</span>
                     </div>
 
-                    <div class="mt-8">
+                    <!-- Warning Catat / Simpan Nomor Registrasi -->
+                    <div class="mt-4 p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/80 flex items-start gap-3 text-left">
+                        <AlertCircle class="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                        <div class="text-xs leading-relaxed text-slate-700 dark:text-slate-300">
+                            <strong class="text-amber-900 dark:text-amber-200 font-bold block mb-0.5">Catatan Penting:</strong>
+                            Jika Anda ingin melacak progres laporan ini ke depannya, pastikan untuk <strong>menyimpan atau mencatat Nomor Registrasi</strong> di atas sebelum meninggalkan halaman ini.
+                        </div>
+                    </div>
+
+                    <div class="mt-6">
                         <Link
                             :href="route('report.create')"
-                            class="w-full bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl py-3.5 px-4 font-semibold text-xs flex items-center justify-center gap-2 shadow-none transition focus:outline-none"
+                            class="w-full flex items-center justify-center gap-2 py-3.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm transition cursor-pointer active:scale-[0.99] shadow-sm"
                         >
-                            <FileText class="h-4 w-4" />
-                            <span>Kirim Laporan Lainnya</span>
+                            <ArrowLeft class="h-4 w-4" />
+                            <span>Kembali ke Halaman Pertama</span>
                         </Link>
                     </div>
                 </div>

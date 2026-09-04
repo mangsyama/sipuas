@@ -17,6 +17,7 @@ Route::get('/', function () {
 Route::get('/report', [ReportController::class, 'create'])->name('report.create');
 Route::post('/report', [ReportController::class, 'store'])->name('report.store');
 Route::get('/report/success', [ReportController::class, 'success'])->name('report.success');
+Route::get('/report/track', [ReportController::class, 'track'])->name('report.track');
 
 Route::get('/dashboard', [DashboardController::class, 'index'])
     ->middleware(['auth', 'verified'])
