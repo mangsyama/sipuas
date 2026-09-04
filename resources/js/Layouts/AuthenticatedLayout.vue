@@ -192,6 +192,7 @@ const isChildActive = (children) => {
 
 const isItemActive = (child) => {
     if (route().current(child.routeName)) return true;
+    if (child.routeName === 'kasi.dashboard' && (route().current('kasi.dashboard') || route().current('kasi.verify'))) return true;
     if (child.routeName === 'users.approvals' && route().current('users.approvals.show')) return true;
     if (child.routeName === 'users.index' && (route().current('users.edit') || route().current('users.show'))) return true;
     if (child.routeName === 'reports-management.index' && route().current('reports-management.show')) return true;
@@ -203,6 +204,9 @@ const isItemActive = (child) => {
 
 const isRouteActive = (item) => {
     if (item.routeName && route().current(item.routeName)) {
+        return true;
+    }
+    if (item.routeName === 'kasi.dashboard' && route().current('kasi.verify')) {
         return true;
     }
     if (item.routeName === 'users.approvals' && route().current('users.approvals.show')) {
@@ -588,6 +592,7 @@ const searchableItems = [
 const mobilePageTitles = [
     { routeName: 'dashboard', label: 'Dashboard' },
     { routeName: 'kasi.dashboard', label: 'Feed Aduan Unit' },
+    { routeName: 'kasi.verify', label: 'Verifikasi Aduan Unit' },
     { routeName: 'kasi.logbook', label: 'Digital Logbook Staf' },
     { routeName: 'executive.dashboard', label: 'Command Center RS' },
     { routeName: 'executive.kasi-responsiveness', label: 'Responsivitas Kasi' },
