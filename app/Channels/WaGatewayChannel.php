@@ -38,7 +38,12 @@ class WaGatewayChannel
             return;
         }
 
-        $url = config('services.wa_gateway.local_url', 'http://127.0.0.1:3000/send');
+        // Dynamic URL resolution:
+        // 1. Explicitly configured URL from .env (WA_LOCAL_URL or WA_GATEWAY_URL)
+        // 2. If running inside Docker container -> http://wa-gateway:3000/send
+        // 3. Otherwise (standalone local dev) -> http://127.0.0.1:3000/send
+        $url = config('services.wa_gateway.local_url') 
+            ?: (file_exists('/.dockerenv') ? 'http://wa-gateway:3000/send' : 'http://127.0.0.1:3000/send');
         $secretKey = config('services.wa_gateway.secret_key');
 
         try {

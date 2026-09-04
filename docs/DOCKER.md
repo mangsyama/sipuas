@@ -4,25 +4,18 @@ Dokumen ini berisi daftar perintah terminal Docker (*Cheat Sheet*) untuk server 
 
 ---
 
-## 🌐 1. Akses Sistem (Mode Fleksibel: IP & SSL Ready)
+## 🌐 1. Akses Sistem (Production HTTP Port 8081)
 
-Sistem SIPUAS saat ini sudah dikonfigurasi dalam mode **Dual Access**:
-* **Akses via IP Server**: `http://IP_SERVER` (contoh: `http://103.19.230.110`) — Langsung terbuka lancar tanpa peringatan/layar merah di browser.
-* **Akses via HTTPS**: `https://sipuas.badungkab.go.id` — Otomatis aktif dan aman jika dibuka via HTTPS.
+Sistem SIPUAS di server production berjalan via **HTTP Port 8081** (tanpa SSL):
+* **Akses via IP Publik**: `http://103.19.230.110:8081`
+* **Akses via IP Internal**: `http://10.10.30.3:8081`
+* **Akses via Domain**: `http://sipuas.badungkab.go.id:8081`
 
-### 🔒 Cara Mengaktifkan Paksa Redirect HTTPS (Jika Domain Sudah Dibuat):
-Jika nanti domain `sipuas.badungkab.go.id` sudah aktif dari Kominfo dan Anda ingin semua akses HTTP otomatis dialihkan ke HTTPS, cukup:
-1. Buka file `nginx/sipuas.conf`.
-2. Hapus tanda pagar (`#`) pada blok redirect di bagian Port 80:
-   ```nginx
-   location / {
-       return 301 https://$host$request_uri;
-   }
-   ```
-3. Jalankan:
-   ```bash
-   docker compose exec nginx nginx -s reload
-   ```
+### 🔒 Persiapan Jika Kelak Mengaktifkan SSL (HTTPS Port 443):
+Jika sertifikat resmi Kominfo untuk domain `sipuas.badungkab.go.id` sudah siap:
+1. Masukkan sertifikat (`all_in_one.crt` & `badungkab_go_id.key`) ke folder `ssl/`.
+2. Buka `docker-compose.yml`, aktifkan kembali `- "443:443"` dan volume mount `- ./ssl:/etc/nginx/ssl:ro`.
+3. Tambahkan server block `listen 443 ssl;` pada `nginx/sipuas.conf`.
 
 ---
 
