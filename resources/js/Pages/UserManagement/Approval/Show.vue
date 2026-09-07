@@ -1,10 +1,12 @@
 <script setup>
-import { ref, onMounted, onUnmounted, watch } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch, getCurrentInstance } from 'vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import SearchableSelect from '@/Components/SearchableSelect.vue';
 import { Head, Link, useForm, router } from '@inertiajs/vue3';
 import { 
     User, 
     UserCheck, 
+    UserX, 
     Building2, 
     Mail, 
     Phone, 
@@ -13,7 +15,11 @@ import {
     Check, 
     Trash2, 
     AlertTriangle,
-    X
+    KeyRound,
+    RotateCcw,
+    X,
+    ChevronDown,
+    ChevronUp
 } from '@lucide/vue';
 
 const props = defineProps({
@@ -24,18 +30,86 @@ const props = defineProps({
     units: {
         type: Array,
         default: () => []
+    },
+    roles: {
+        type: Array,
+        default: () => []
+    },
+    allPermissionKeys: {
+        type: Array,
+        default: () => []
     }
 });
 
+const { proxy } = getCurrentInstance() || {};
+
 const showRejectModal = ref(false);
 const showPhotoModal = ref(false);
+const showCustomPermissions = ref(false);
 
 const approveForm = useForm({
-    role: props.targetUser.role || 'STAFF',
-    unit_id: props.targetUser.unit_id || ''
+    role_id: props.targetUser.role_id || 5,
+    unit_id: props.targetUser.unit_id || '',
+    page_permissions: null,
+    use_role_default: true,
 });
 
+const selectedPermissions = ref([]);
+
+const roleOptions = computed(() => {
+    return (props.roles || []).map(r => ({
+        id: r.id,
+        name: r.name + (r.code ? ` (${r.code})` : '')
+    }));
+});
+
+const unitOptions = computed(() => [
+    { id: '', name: 'Semua Ruangan (Global / Tanpa Ruangan Spesifik)' },
+    ...(props.rooms || props.units || [])
+]);
+
+const getRoleDefaultPermissions = (roleId) => {
+    const role = (props.roles || []).find(r => Number(r.id) === Number(roleId));
+    let perms = [];
+    if (role && role.page_permissions) {
+        perms = Array.isArray(role.page_permissions)
+            ? [...role.page_permissions]
+            : (typeof role.page_permissions === 'string' ? JSON.parse(role.page_permissions) : []);
+    }
+    return perms;
+};
+
+const activeRoleDefaultPermissions = computed(() => {
+    return getRoleDefaultPermissions(approveForm.role_id);
+});
+
+const isPermissionChecked = (key) => {
+    if (approveForm.use_role_default) {
+        return activeRoleDefaultPermissions.value.includes(key);
+    }
+    return selectedPermissions.value.includes(key);
+};
+
+const togglePermission = (key) => {
+    if (approveForm.use_role_default) {
+        selectedPermissions.value = [...activeRoleDefaultPermissions.value];
+        approveForm.use_role_default = false;
+    }
+    const index = selectedPermissions.value.indexOf(key);
+    if (index > -1) {
+        selectedPermissions.value.splice(index, 1);
+    } else {
+        selectedPermissions.value.push(key);
+    }
+};
+
+const resetToRoleDefault = () => {
+    approveForm.use_role_default = true;
+    selectedPermissions.value = [];
+};
+
 const submitApprove = () => {
+    approveForm.page_permissions = approveForm.use_role_default ? null : selectedPermissions.value;
     approveForm.post(route('users.approvals.approve', { user: props.targetUser.id }));
 };
 
@@ -79,24 +153,29 @@ onUnmounted(() => {
     <AuthenticatedLayout>
         <div class="py-4 px-4 sm:px-4 lg:px-4 animate-spa-fade-in space-y-4">
             <div class="w-full">
-                <!-- Header Panel (SAME AS MASTER PENGGUNA SHOW) -->
+                <!-- Header Panel -->
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 p-6 rounded-2xl shadow-sm mb-4">
                     <div class="flex items-center gap-3">
                         <div class="hidden sm:flex h-12 w-12 rounded-xl flex-shrink-0 items-center justify-center bg-amber-50 dark:bg-white/10 text-amber-600 dark:text-white">
                             <UserCheck class="h-6 w-6" />
                         </div>
-                        <div class="space-y-0.5">
-                            <h2 class="text-xl font-extrabold text-slate-900 dark:text-white leading-tight">
-                                Verifikasi Pendaftar Baru
-                            </h2>
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <h2 class="text-xl font-extrabold text-slate-900 dark:text-white leading-tight">
+                                    Verifikasi Pendaftar Baru
+                                </h2>
+                                <span class="inline-flex items-center justify-center px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wide uppercase text-center leading-none bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300 border border-amber-200/50 dark:border-amber-500/20">
+                                    Menunggu Verifikasi
+                                </span>
+                            </div>
                             <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 max-w-2xl leading-relaxed">
-                                Tinjau berkas pendaftaran, pasfoto formal, dan tetapkan hak akses akun staf baru di SIPUAS.
+                                Tinjau data pendaftar, pasfoto formal, dan tetapkan peran serta penempatan unit staf sebelum disetujui.
                             </p>
                         </div>
                     </div>
                 </div>
 
-                <!-- Form Card / Container (SAME STRUCTURE AS SHOW.VUE & EDIT.VUE) -->
+                <!-- Form Card / Container -->
                 <form @submit.prevent="submitApprove" class="bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden mb-4">
                     <div class="p-6 space-y-8">
 
@@ -106,12 +185,12 @@ onUnmounted(() => {
                                 <h3 class="text-sm font-extrabold text-slate-800 dark:text-white uppercase tracking-wider">
                                     Data Profil & Identitas Pendaftar
                                 </h3>
-                                <p class="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Informasi identitas pribadi dan pasfoto formal calon pengguna.</p>
+                                <p class="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Informasi identitas pribadi calon staf yang diajukan.</p>
                             </div>
 
                             <div class="bg-slate-50/80 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800 rounded-xl p-4 sm:p-5">
                                 <div class="flex flex-col sm:flex-row items-stretch gap-6">
-                                    <!-- Avatar Card Box (No Shadow, Clean Flat Style) -->
+                                    <!-- Avatar Card Box -->
                                     <div class="flex flex-col items-center justify-center shrink-0 w-full sm:w-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 text-center space-y-3">
                                         <div 
                                             v-if="targetUser.profile_photo_path" 
@@ -121,7 +200,7 @@ onUnmounted(() => {
                                         >
                                             <img :src="targetUser.profile_photo_path" :alt="targetUser.name" class="h-full w-full object-cover" />
                                         </div>
-                                        <div v-else class="h-20 w-20 rounded-full bg-amber-600 text-white flex items-center justify-center font-black text-2xl">
+                                        <div v-else class="h-20 w-20 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30 flex items-center justify-center font-black text-2xl">
                                             {{ targetUser.name ? targetUser.name.charAt(0).toUpperCase() : 'U' }}
                                         </div>
                                         <div>
@@ -134,7 +213,7 @@ onUnmounted(() => {
                                         </div>
                                     </div>
 
-                                    <!-- Grid Data Detail (SAME AS MASTER PENGGUNA SHOW.VUE) -->
+                                    <!-- Grid Data Detail -->
                                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 flex-1">
                                         <!-- Nama Lengkap -->
                                         <div class="space-y-1.5 sm:col-span-2">
@@ -176,7 +255,7 @@ onUnmounted(() => {
                                             </div>
                                         </div>
 
-                                        <!-- Nomor Telepon (Clean, no WA button) -->
+                                        <!-- Nomor Telepon / WA -->
                                         <div class="space-y-1.5">
                                             <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                                                 Nomor Telepon / WhatsApp
@@ -186,10 +265,10 @@ onUnmounted(() => {
                                             </div>
                                         </div>
 
-                                        <!-- Pilihan Unit Saat Registrasi -->
+                                        <!-- Unit Saat Registrasi -->
                                         <div class="space-y-1.5">
                                             <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                                                Pilihan Unit Saat Registrasi
+                                                Unit Diajukan Saat Registrasi
                                             </label>
                                             <div class="w-full h-10 px-3.5 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 text-xs font-medium flex items-center">
                                                 {{ targetUser.unit_name }}
@@ -202,7 +281,7 @@ onUnmounted(() => {
                                                 Waktu Mendaftar
                                             </label>
                                             <div class="w-full h-10 px-3.5 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 text-xs font-medium flex items-center">
-                                                {{ targetUser.created_at }}
+                                                {{ targetUser.created_at }} ({{ targetUser.created_at_human }})
                                             </div>
                                         </div>
                                     </div>
@@ -216,49 +295,108 @@ onUnmounted(() => {
                                 <h3 class="text-sm font-extrabold text-slate-800 dark:text-white uppercase tracking-wider">
                                     Penetapan Hak Akses & Penempatan Unit
                                 </h3>
-                                <p class="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Tentukan peran resmi dan unit penugasan pengguna sebelum disetujui.</p>
+                                <p class="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Tentukan peran resmi dan unit penugasan staf sebelum disetujui.</p>
                             </div>
 
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <!-- Peran Akses -->
+                                <!-- Peran Jabatan -->
                                 <div class="space-y-1.5">
                                     <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                                        Peran / Hak Akses Resmi *
+                                        Peran Jabatan Resmi <span class="text-rose-500">*</span>
                                     </label>
-                                    <select
-                                        v-model="approveForm.role"
-                                        required
-                                        class="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition cursor-pointer font-medium"
-                                    >
-                                        <option value="STAFF">Staf Pelaksana</option>
-                                        <option value="KASI">Kepala Seksi (Kasi)</option>
-                                        <option value="KABID">Kepala Bidang (Kabid)</option>
-                                        <option value="ADMINISTRATOR">Administrator</option>
-                                        <option value="SUPERADMIN">Super Administrator</option>
-                                    </select>
+                                    <SearchableSelect
+                                        v-model="approveForm.role_id"
+                                        :options="roleOptions"
+                                        :searchable="true"
+                                        :absolute="false"
+                                        value-key="id"
+                                        label-key="name"
+                                        placeholder="Pilih Peran Jabatan"
+                                        search-placeholder="Cari peran..."
+                                    />
+                                    <div v-if="approveForm.errors.role_id" class="text-rose-500 text-[11px] font-medium">{{ approveForm.errors.role_id }}</div>
                                 </div>
 
-                                <!-- Penugasan Unit -->
+                                <!-- Penugasan Ruangan Pelayanan -->
                                 <div class="space-y-1.5">
                                     <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                                        Penugasan Unit Kerja Resmi
+                                        Penugasan Ruangan Pelayanan Resmi
                                     </label>
-                                    <select
+                                    <SearchableSelect
                                         v-model="approveForm.unit_id"
-                                        class="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition cursor-pointer font-medium"
+                                        :options="unitOptions"
+                                        :searchable="true"
+                                        :absolute="false"
+                                        value-key="id"
+                                        label-key="name"
+                                        subtitle-key="code"
+                                        placeholder="Semua Ruangan (Global)"
+                                        search-placeholder="Cari ruangan atau lokasi gedung..."
+                                    />
+                                    <div v-if="approveForm.errors.unit_id" class="text-rose-500 text-[11px] font-medium">{{ approveForm.errors.unit_id }}</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- SEKSI 3: KUSTOMISASI HAK AKSES HALAMAN (OPSIONAL) -->
+                        <div class="space-y-3 pt-2">
+                            <button
+                                type="button"
+                                @click="showCustomPermissions = !showCustomPermissions"
+                                class="inline-flex items-center gap-2 text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer"
+                            >
+                                <KeyRound class="h-4 w-4" />
+                                <span>{{ showCustomPermissions ? 'Sembunyikan Kustomisasi Hak Akses Halaman' : 'Kustomisasi Hak Akses Halaman Khusus (Opsional)' }}</span>
+                                <ChevronUp v-if="showCustomPermissions" class="h-3.5 w-3.5" />
+                                <ChevronDown v-else class="h-3.5 w-3.5" />
+                            </button>
+
+                            <div v-if="showCustomPermissions" class="p-5 rounded-2xl bg-slate-50/70 dark:bg-slate-950/30 border border-slate-200 dark:border-slate-800 space-y-4">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-xs text-slate-500 dark:text-slate-400">
+                                        Secara default pendaftar akan mewarisi seluruh hak akses halaman dari peran yang dipilih di atas.
+                                    </span>
+                                    <button
+                                        type="button"
+                                        @click="resetToRoleDefault"
+                                        :disabled="approveForm.use_role_default"
+                                        class="text-xs font-semibold px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-slate-100 disabled:opacity-40"
                                     >
-                                        <option value="">-- Pilih Unit Kerja (Global jika kosong) --</option>
-                                        <option v-for="unit in units" :key="unit.id" :value="unit.id">
-                                            {{ unit.name }}
-                                        </option>
-                                    </select>
+                                        Gunakan Default Peran
+                                    </button>
+                                </div>
+
+                                <div class="space-y-5 pt-2">
+                                    <div v-for="group in allPermissionKeys" :key="group.group" class="space-y-2">
+                                        <h5 class="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
+                                            {{ group.group }}
+                                        </h5>
+                                        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                                            <div
+                                                v-for="perm in group.permissions"
+                                                :key="perm.key"
+                                                @click="togglePermission(perm.key)"
+                                                :class="[
+                                                    'p-2.5 rounded-xl border text-xs font-medium flex items-center justify-between gap-2 cursor-pointer transition select-none',
+                                                    isPermissionChecked(perm.key)
+                                                        ? 'bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border-emerald-500/40'
+                                                        : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800'
+                                                ]"
+                                            >
+                                                <span class="truncate">{{ perm.label }}</span>
+                                                <div :class="['h-3.5 w-3.5 rounded flex items-center justify-center shrink-0 border transition-all', isPermissionChecked(perm.key) ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-slate-300 dark:border-slate-700']">
+                                                    <Check v-if="isPermissionChecked(perm.key)" class="h-2.5 w-2.5 stroke-[3]" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
 
                     </div>
 
-                    <!-- Footer Actions Card (Stacked on mobile, side-by-side on desktop) -->
+                    <!-- Footer Actions Card -->
                     <div class="px-6 py-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div>
                             <button
@@ -284,7 +422,7 @@ onUnmounted(() => {
                                 class="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition disabled:opacity-50 cursor-pointer flex items-center justify-center gap-1.5 text-center"
                             >
                                 <Check class="h-4 w-4" />
-                                <span>{{ approveForm.processing ? 'Menyimpan...' : 'Setujui & Aktifkan Akun' }}</span>
+                                <span>{{ approveForm.processing ? 'Memproses...' : 'Setujui & Aktifkan Akun' }}</span>
                             </button>
                         </div>
                     </div>
@@ -325,7 +463,7 @@ onUnmounted(() => {
                         Tolak Pendaftaran Pengguna?
                     </h3>
                     <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                        Data calon pengguna <strong class="text-slate-800 dark:text-slate-200">{{ targetUser.name }}</strong> akan dihapus permanen.
+                        Data calon staf <strong class="text-slate-800 dark:text-slate-200">{{ targetUser.name }}</strong> akan dihapus permanen.
                     </p>
                 </div>
 
@@ -350,3 +488,20 @@ onUnmounted(() => {
         </div>
     </AuthenticatedLayout>
 </template>
+
+<style scoped>
+@keyframes spa-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-spa-fade-in {
+  animation: spa-fade-in 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+</style>

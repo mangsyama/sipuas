@@ -2,61 +2,17 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
-
-class Staff extends Model
+/**
+ * Backward-compatibility wrapper pointing to User model for staff entities.
+ */
+class Staff extends User
 {
-    use HasFactory;
+    protected $table = 'users';
 
-    protected $table = 'staff';
-
-    protected $fillable = [
-        'unit_id',
-        'user_id',
-        'nip',
-        'name',
-        'role',
-        'total_points',
-        'praise_count',
-        'complaint_count',
-        'is_active',
-        'last_point_update_at',
-    ];
-
-    protected function casts(): array
+    protected static function booted()
     {
-        return [
-            'total_points' => 'integer',
-            'praise_count' => 'integer',
-            'complaint_count' => 'integer',
-            'is_active' => 'boolean',
-            'last_point_update_at' => 'datetime',
-        ];
-    }
-
-    public function unit(): BelongsTo
-    {
-        return $this->belongsTo(Unit::class);
-    }
-
-    public function user(): BelongsTo
-    {
-        return $this->belongsTo(User::class);
-    }
-
-    public function reports(): BelongsToMany
-    {
-        return $this->belongsToMany(Report::class, 'report_staff')
-                    ->withPivot('action_type', 'points')
-                    ->withTimestamps();
-    }
-
-    public function kpiLogs(): HasMany
-    {
-        return $this->hasMany(StaffKpiLog::class)->orderBy('logged_at', 'desc');
+        static::addGlobalScope('staff_only', function ($builder) {
+            $builder->where('role_id', Role::STAFF);
+        });
     }
 }

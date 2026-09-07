@@ -20,7 +20,10 @@ class AuthenticationTest extends TestCase
     public function test_users_can_authenticate_using_the_login_screen(): void
     {
         $this->seed(\Database\Seeders\DatabaseSeeder::class);
-        $user = User::factory()->create(['is_active' => true]);
+        $user = User::factory()->create([
+            'is_active' => true,
+            'role_id' => \App\Models\Role::ADMINISTRATOR,
+        ]);
 
         $response = $this->post('/login', [
             'username' => $user->username,
@@ -31,7 +34,24 @@ class AuthenticationTest extends TestCase
         $response->assertRedirect(route('dashboard', absolute: false));
     }
 
-    public function test_inactive_users_cannot_authenticate(): void
+    public function test_staff_users_redirect_to_attendance_screen(): void
+    {
+        $this->seed(\Database\Seeders\DatabaseSeeder::class);
+        $user = User::factory()->create([
+            'is_active' => true,
+            'role_id' => \App\Models\Role::STAFF,
+        ]);
+
+        $response = $this->post('/login', [
+            'username' => $user->username,
+            'password' => 'password',
+        ]);
+
+        $this->assertAuthenticated();
+        $response->assertRedirect(route('staff.attendance', absolute: false));
+    }
+
+    public function test_inactive_users_are_redirected_to_activation_notice(): void
     {
         $this->seed(\Database\Seeders\DatabaseSeeder::class);
         $user = User::factory()->create(['is_active' => false]);
@@ -41,8 +61,8 @@ class AuthenticationTest extends TestCase
             'password' => 'password',
         ]);
 
-        $this->assertGuest();
-        $response->assertSessionHasErrors(['username' => 'Akun Anda belum aktif. Hubungi Administrator untuk verifikasi.']);
+        $this->assertAuthenticated();
+        $response->assertRedirect(route('activation.notice'));
     }
 
     public function test_users_can_not_authenticate_with_invalid_password(): void

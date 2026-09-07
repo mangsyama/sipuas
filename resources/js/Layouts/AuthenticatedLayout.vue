@@ -4,7 +4,7 @@ import Dropdown from '@/Components/Dropdown.vue';
 import DropdownLink from '@/Components/DropdownLink.vue';
 import NotificationItem from '@/Components/NotificationItem.vue';
 import { Link, usePage, router } from '@inertiajs/vue3';
-import { Sun, Moon, Languages, LayoutDashboard, FileText, User, X, ChevronRight, ChevronLeft, ChevronDown, Settings, LogOut, Activity, Users, FileBarChart2, History, Shield, ShieldAlert, UserCheck, ArrowLeft, Database, Search, Building2, Layers, MapPin, Hospital, Palette, Play, Type, Bell, Clock, CheckCircle2, AlertTriangle, AlertCircle, HelpCircle, Wrench, Check, CheckCheck, Eye, MessageSquareCode, QrCode, Radio, Award, BarChart3, Sparkles } from '@lucide/vue';
+import { Sun, Moon, Languages, LayoutDashboard, FileText, User, X, ChevronRight, ChevronLeft, ChevronDown, Settings, LogOut, Activity, Users, FileBarChart2, History, Shield, ShieldAlert, UserCheck, ArrowLeft, Database, Search, Building2, Layers, MapPin, Hospital, Palette, Play, Type, Bell, Clock, CheckCircle2, AlertTriangle, AlertCircle, HelpCircle, Wrench, Check, CheckCheck, Eye, MessageSquareCode, QrCode, Radio, Award, BarChart3, Sparkles, Contact } from '@lucide/vue';
 
 
 
@@ -233,54 +233,70 @@ const isRouteActive = (item) => {
 const user = computed(() => page.props.auth?.user);
 const permissions = computed(() => page.props.auth?.page_permissions || []);
 
-const hasAccess = (permKey) => permissions.value.includes(permKey);
+const isAdmin = computed(() => user.value?.role_id === 1 || user.value?.role === 'ADMINISTRATOR');
+const hasAccess = (permKey) => isAdmin.value || permissions.value.includes(permKey);
 
 const menuGroups = computed(() => {
-    return [
+    const isStaff = user.value?.role_id === 5 || user.value?.role === 'STAFF';
+
+    const rawGroups = [
         {
             title: 'Menu Utama',
             items: [
-                { label: 'Dashboard Utama', routeName: 'dashboard', icon: LayoutDashboard }
+                { label: 'Dashboard Utama', routeName: 'dashboard', permKey: 'dashboard', icon: LayoutDashboard }
+            ]
+        },
+        {
+            title: isStaff ? 'Menu Utama' : 'Modul Staf Pelayanan',
+            items: [
+                { label: 'Presensi', routeName: 'staff.attendance', permKey: isStaff ? null : 'staff.attendance', icon: Clock },
+                { label: isStaff ? 'Dashboard & Kinerja' : 'Dashboard Staf', routeName: 'staff.dashboard', permKey: 'staff.dashboard', icon: isStaff ? LayoutDashboard : UserCheck }
             ]
         },
         {
             title: 'Modul Kasi',
             items: [
-                { label: 'Aduan & Verifikasi', routeName: 'kasi.dashboard', icon: FileText },
-                { label: 'Digital Logbook Staf', routeName: 'kasi.logbook', icon: History }
+                { label: 'Aduan & Verifikasi', routeName: 'kasi.dashboard', permKey: 'kasi.dashboard', icon: FileText },
+                { label: 'Digital Logbook Staf', routeName: 'kasi.logbook', permKey: 'kasi.logbook', icon: History }
             ]
         },
         {
             title: 'Modul Kabid',
             items: [
-                { label: 'Command Center', routeName: 'executive.dashboard', icon: Activity },
-                { label: 'Responsivitas Kasi', routeName: 'executive.kasi-responsiveness', icon: BarChart3 },
-                { label: 'Leaderboard Staf', routeName: 'executive.leaderboard', icon: Award }
+                { label: 'Command Center', routeName: 'executive.dashboard', permKey: 'executive.dashboard', icon: Activity },
+                { label: 'Responsivitas Kasi', routeName: 'executive.kasi-responsiveness', permKey: 'executive.kasi-responsiveness', icon: BarChart3 },
+                { label: 'Leaderboard Staf', routeName: 'executive.leaderboard', permKey: 'executive.leaderboard', icon: Award }
             ]
         },
         {
             title: 'Master Data',
             items: [
-                { label: 'Persetujuan Pendaftar', routeName: 'users.approvals', icon: UserCheck },
-                { label: 'Master Pengguna', routeName: 'users.index', icon: Users },
-                { label: 'Master Unit & Ruangan', routeName: 'units.index', icon: Building2 },
-                { label: 'Master Staf & Pegawai', routeName: 'staff.index', icon: Shield }
+                { label: 'Persetujuan Pendaftar', routeName: 'users.approvals', permKey: 'users.approvals', icon: UserCheck },
+                { label: 'Daftar Pengguna', routeName: 'users.index', permKey: 'users.index', icon: Users },
+                { label: 'Daftar Ruangan', routeName: 'units.index', permKey: 'units.index', icon: MapPin }
             ]
         },
         {
             title: 'System / Integrasi',
             items: [
-                { label: 'Integrasi AI', routeName: 'admin.ai-settings.index', icon: Sparkles },
-                { label: 'WhatsApp Gateway', routeName: 'admin.wa-gateway.index', icon: MessageSquareCode }
+                { label: 'Integrasi AI', routeName: 'admin.ai-settings.index', permKey: 'admin.ai-settings.index', icon: Sparkles },
+                { label: 'WhatsApp Gateway', routeName: 'admin.wa-gateway.index', permKey: 'admin.wa-gateway.index', icon: MessageSquareCode }
             ]
         },
-        {
-            title: 'Area Publik Pasien',
-            items: [
-                { label: 'Form Laporan', routeName: 'report.create', icon: QrCode }
-            ]
-        }
+        ...(!isStaff ? [
+            {
+                title: 'Area Publik Pasien',
+                items: [
+                    { label: 'Form Laporan', routeName: 'report.create', icon: QrCode }
+                ]
+            }
+        ] : [])
     ];
+
+    return rawGroups.map(group => ({
+        ...group,
+        items: group.items.filter(item => !item.permKey || hasAccess(item.permKey))
+    })).filter(group => group.items.length > 0);
 });
 
 const triggerSupportBack = () => {
@@ -573,8 +589,7 @@ const searchableItems = [
     { label: 'Layanan Penunjang (Managemen Layanan)', routeName: 'service-management.supporting-units', description: 'Pengelolaan data divisi dan unit penunjang' },
     { label: 'Persetujuan Registrasi', routeName: 'users.approvals', description: 'Persetujuan pendaftar pengguna baru' },
     { label: 'Daftar Pengguna', routeName: 'users.index', description: 'Kelola data pengguna sistem' },
-    { label: 'Master Unit & Ruangan', routeName: 'units.index', description: 'Pengelolaan data master unit kerja & ruangan RS' },
-    { label: 'Master Staf & Pegawai', routeName: 'staff.index', description: 'Pengelolaan direktori profil staf & saldo poin KPI' },
+    { label: 'Daftar Ruangan', routeName: 'units.index', description: 'Pengelolaan data master ruangan dan lokasi RS' },
     { label: 'Pengaturan Profil', routeName: 'settings.index', description: 'Ubah sandi, tema, dan profil' },
     { label: 'Sistem Desain - Ringkasan', routeName: 'design-system.index', description: 'Ringkasan panduan warna, tema dark mode, & tipografi' },
     { label: 'Sistem Desain - Tombol & Badge', routeName: 'design-system.buttons-badges', description: 'Koleksi komponen tombol, animasi loading, & badge status' },
@@ -587,10 +602,14 @@ const searchableItems = [
     { label: 'Responsivitas Kasi', routeName: 'executive.kasi-responsiveness', description: 'Laporan kecepatan respon & akuntabilitas supervisor unit' },
     { label: 'Leaderboard Kinerja Staf', routeName: 'executive.leaderboard', description: 'Peringkat apresiasi pujian & evaluasi staf RS' },
     { label: 'Notifikasi Saya', routeName: 'notifications.index', description: 'Semua riwayat notifikasi sistem dan tugas' },
+    { label: 'Presensi', routeName: 'staff.attendance', description: 'Pencatatan waktu presensi staf pelayanan' },
+    { label: 'Dashboard Staf', routeName: 'staff.dashboard', description: 'Monitoring saldo poin KPI, apresiasi pujian, dan aduan terkait' },
 ];
 
 const mobilePageTitles = [
     { routeName: 'dashboard', label: 'Dashboard' },
+    { routeName: 'staff.attendance', label: 'Presensi' },
+    { routeName: 'staff.dashboard', label: 'Dashboard' },
     { routeName: 'kasi.dashboard', label: 'Feed Aduan Unit' },
     { routeName: 'kasi.verify', label: 'Verifikasi Aduan Unit' },
     { routeName: 'kasi.logbook', label: 'Digital Logbook Staf' },
@@ -613,9 +632,8 @@ const mobilePageTitles = [
     { routeName: 'service-management.categories', label: 'Kategori Permasalahan' },
     { routeName: 'service-management.supporting-units', label: 'Layanan Penunjang' },
     { routeName: 'users.approvals', label: 'Persetujuan Registrasi' },
-    { routeName: 'users.index', label: 'Master Pengguna' },
-    { routeName: 'units.index', label: 'Master Unit & Ruangan' },
-    { routeName: 'staff.index', label: 'Master Staf & Pegawai' },
+    { routeName: 'users.index', label: 'Daftar Pengguna' },
+    { routeName: 'units.index', label: 'Daftar Ruangan' },
     { routeName: 'users.show', label: 'Detail Pengguna' },
     { routeName: 'users.edit', label: 'Edit Pengguna' },
     { routeName: 'profile.edit', label: 'Profil Saya' },
@@ -883,10 +901,9 @@ const getGroupInitials = (title) => {
                                     >
                                         <!-- Nama — hanya tampil di desktop -->
                                         <span class="hidden lg:block whitespace-nowrap text-sm font-medium text-slate-700 dark:text-slate-300">{{ $page.props.auth.user.name }}</span>
-                                        <!-- Avatar icon User / Photo -->
-                                        <span class="relative h-8 w-8 lg:h-7 lg:w-7 rounded-full bg-transparent lg:bg-slate-100 lg:dark:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center flex-shrink-0 transition-all duration-150 overflow-hidden">
-                                            <img v-if="$page.props.auth.user.profile_photo_path" :src="$page.props.auth.user.profile_photo_path" :alt="$page.props.auth.user.name" class="h-full w-full object-cover" />
-                                            <User v-else class="h-4.5 w-4.5 lg:h-4 lg:w-4" />
+                                        <!-- Icon User -->
+                                        <span class="relative h-8 w-8 lg:h-7 lg:w-7 rounded-full bg-transparent lg:bg-slate-100 lg:dark:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center flex-shrink-0 transition-all duration-150">
+                                            <User class="h-4.5 w-4.5 lg:h-4 lg:w-4" />
                                         </span>
                                         <span
                                             v-if="unreadCount > 0 && !showMobileNotifications && !showMobileProfileDropdown"
@@ -917,7 +934,6 @@ const getGroupInitials = (title) => {
 
                                     <!-- Pengaturan -->
                                     <Link
-                                        v-if="hasAccess('settings.index')"
                                         :href="route('settings.index')"
                                         prefetch
                                         class="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50/50 dark:hover:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800/80 transition duration-150"
@@ -1522,19 +1538,30 @@ const getGroupInitials = (title) => {
                                         {{ pendingReportsCount }}
                                     </span>
 
+                                    <!-- Badge for user approvals -->
+                                    <span 
+                                        v-if="item.routeName === 'users.approvals' && pendingApprovalsCount > 0"
+                                        :class="[
+                                            'w-5 h-5 flex items-center justify-center rounded-full text-[10px] font-extrabold bg-amber-500 text-white shadow-sm absolute transition-all duration-200',
+                                            isRouteActive(item) ? 'opacity-100 scale-100 group-hover:opacity-0 group-hover:scale-75' : 'opacity-100 scale-100'
+                                        ]"
+                                    >
+                                        {{ pendingApprovalsCount }}
+                                    </span>
+
                                     <!-- ChevronRight (panah ke kanan) ketika aktif -->
                                     <ChevronRight
                                         v-if="isRouteActive(item)"
                                         :class="[
                                             'h-3.5 w-3.5 text-white dark:text-white absolute transition-all duration-200',
-                                            (item.routeName === 'reports-management.index' && pendingReportsCount > 0) ? 'opacity-0 scale-75 group-hover:opacity-100 group-hover:scale-100' : 'opacity-100'
+                                            ((item.routeName === 'reports-management.index' && pendingReportsCount > 0) || (item.routeName === 'users.approvals' && pendingApprovalsCount > 0)) ? 'opacity-0 scale-75 group-hover:opacity-100 group-hover:scale-100' : 'opacity-100'
                                         ]"
                                     />
                                 </div>
 
                                 <!-- Tiny dot when collapsed -->
                                 <span 
-                                    v-if="item.routeName === 'reports-management.index' && pendingReportsCount > 0 && sidebarCollapsed"
+                                    v-if="((item.routeName === 'reports-management.index' && pendingReportsCount > 0) || (item.routeName === 'users.approvals' && pendingApprovalsCount > 0)) && sidebarCollapsed"
                                     class="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-amber-500 ring-2 ring-white dark:ring-slate-900"
                                 />
                             </Link>

@@ -2,32 +2,32 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Unit;
+use App\Models\Room;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
-use Illuminate\Validation\Rule;
 
 class UnitManagementController extends Controller
 {
     /**
-     * Display a listing of the hospital units.
+     * Display a listing of the hospital rooms.
      */
     public function index(Request $request): Response
     {
-        $query = Unit::withCount(['users', 'staff', 'reports']);
+        $query = Room::withCount(['users', 'staff', 'reports']);
 
         // Search Filter
         if ($search = $request->query('search')) {
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('code', 'like', "%{$search}%");
+                  ->orWhere('building_name', 'like', "%{$search}%")
+                  ->orWhere('location_floor', 'like', "%{$search}%");
             });
         }
 
-        // Category Filter
-        if ($category = $request->query('category')) {
-            $query->where('category', $category);
+        // Building Filter
+        if ($building = $request->query('building')) {
+            $query->where('building_name', $building);
         }
 
         // Active Status Filter
@@ -35,89 +35,100 @@ class UnitManagementController extends Controller
             $query->where('is_active', $request->query('status') === '1');
         }
 
-        $units = $query->orderBy('name')->get();
+        $rooms = $query->orderBy('building_name')->orderBy('name')->get();
 
         // Calculate Stats
         $stats = [
-            'total' => Unit::count(),
-            'active' => Unit::where('is_active', true)->count(),
-            'medik' => Unit::where('category', 'MEDIK')->count(),
-            'non_medik' => Unit::where('category', 'NON_MEDIK')->count(),
+            'total' => Room::count(),
+            'active' => Room::where('is_active', true)->count(),
+            'buildings' => Room::whereNotNull('building_name')->distinct()->count('building_name'),
         ];
 
-        return Inertia::render('UnitManagement/Index', [
-            'units' => $units,
+        // List of available buildings for filter
+        $availableBuildings = Room::whereNotNull('building_name')
+            ->distinct()
+            ->orderBy('building_name')
+            ->pluck('building_name');
+
+        return Inertia::render('RoomManagement/Index', [
+            'rooms' => $rooms,
+            'units' => $rooms, // Backward compatibility
             'stats' => $stats,
+            'buildings' => $availableBuildings,
             'filters' => [
                 'search' => $request->query('search', ''),
-                'category' => $request->query('category', ''),
+                'building' => $request->query('building', ''),
+                'category' => $request->query('building', ''), // Backward compatibility
                 'status' => $request->query('status', ''),
             ],
         ]);
     }
 
     /**
-     * Store a newly created unit.
+     * Store a newly created room.
      */
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'code' => ['required', 'string', 'max:50', 'unique:units,code'],
-            'name' => ['required', 'string', 'max:255'],
-            'category' => ['required', 'in:MEDIK,NON_MEDIK'],
+            'name' => ['required', 'string', 'max:150'],
+            'building_name' => ['nullable', 'string', 'max:150'],
+            'location_floor' => ['nullable', 'string', 'max:100'],
             'is_active' => ['boolean'],
         ]);
 
-        $validated['code'] = strtoupper(trim($validated['code']));
         $validated['is_active'] = $validated['is_active'] ?? true;
 
-        Unit::create($validated);
+        Room::create($validated);
 
-        return redirect()->route('units.index')->with('success', 'Unit kerja rumah sakit berhasil ditambahkan.');
+        return redirect()->back()->with('success', 'Ruangan rumah sakit berhasil ditambahkan.');
     }
 
     /**
-     * Update the specified unit.
+     * Update the specified room.
      */
-    public function update(Request $request, Unit $unit)
+    public function update(Request $request, $id)
     {
+        $room = Room::findOrFail($id);
+
         $validated = $request->validate([
-            'code' => ['required', 'string', 'max:50', Rule::unique('units', 'code')->ignore($unit->id)],
-            'name' => ['required', 'string', 'max:255'],
-            'category' => ['required', 'in:MEDIK,NON_MEDIK'],
+            'name' => ['required', 'string', 'max:150'],
+            'building_name' => ['nullable', 'string', 'max:150'],
+            'location_floor' => ['nullable', 'string', 'max:100'],
             'is_active' => ['boolean'],
         ]);
 
-        $validated['code'] = strtoupper(trim($validated['code']));
-        $unit->update($validated);
+        $room->update($validated);
 
-        return redirect()->route('units.index')->with('success', 'Data unit kerja berhasil diperbarui.');
+        return redirect()->back()->with('success', 'Data ruangan berhasil diperbarui.');
     }
 
     /**
-     * Remove the specified unit from storage.
+     * Remove the specified room from storage.
      */
-    public function destroy(Unit $unit)
+    public function destroy($id)
     {
+        $room = Room::findOrFail($id);
+
         // Check relationships
-        if ($unit->reports()->exists() || $unit->staff()->exists() || $unit->users()->exists()) {
-            return redirect()->route('units.index')->with('error', 'Unit ini tidak dapat dihapus karena memiliki riwayat laporan, staf, atau pengguna terkait. Nonaktifkan status unit sebagai gantinya.');
+        if ($room->reports()->exists() || $room->staff()->exists() || $room->users()->exists()) {
+            return redirect()->back()->with('error', 'Ruangan ini tidak dapat dihapus karena memiliki riwayat laporan, staf, atau pengguna terkait. Nonaktifkan status ruangan sebagai gantinya.');
         }
 
-        $unit->delete();
+        $room->delete();
 
-        return redirect()->route('units.index')->with('success', 'Unit kerja berhasil dihapus.');
+        return redirect()->back()->with('success', 'Ruangan berhasil dihapus.');
     }
 
     /**
-     * Toggle active status of the unit.
+     * Toggle active status of the room.
      */
-    public function toggleStatus(Unit $unit)
+    public function toggleStatus($id)
     {
-        $unit->is_active = !$unit->is_active;
-        $unit->save();
+        $room = Room::findOrFail($id);
+        $room->is_active = !$room->is_active;
+        $room->save();
 
-        $statusText = $unit->is_active ? 'diaktifkan' : 'dinonaktifkan';
-        return redirect()->route('units.index')->with('success', "Unit {$unit->name} berhasil {$statusText}.");
+        $statusText = $room->is_active ? 'diaktifkan' : 'dinonaktifkan';
+        return redirect()->back()->with('success', "Ruangan {$room->name} berhasil {$statusText}.");
     }
 }

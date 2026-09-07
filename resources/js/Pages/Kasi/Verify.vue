@@ -378,10 +378,10 @@ const finishVerification = () => {
                                     <Users class="h-6 w-6 mx-auto opacity-40" />
                                     <p class="text-xs font-bold text-slate-700 dark:text-slate-300">Belum ada staf terdaftar di unit {{ report.unit }}.</p>
                                     <Link
-                                        :href="route('staff.index')"
+                                        :href="route('users.index')"
                                         class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-[11px] font-bold hover:bg-emerald-500"
                                     >
-                                        <span>Buka Master Staf & Pegawai</span>
+                                        <span>Buka Daftar Pengguna</span>
                                         <ExternalLink class="h-3 w-3" />
                                     </Link>
                                 </div>

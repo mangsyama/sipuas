@@ -33,6 +33,15 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerate();
 
+        $user = $request->user() ?: Auth::user();
+        if ($user && !$user->is_active) {
+            return redirect()->route('activation.notice');
+        }
+
+        if ($user && $user->isStaff()) {
+            return redirect()->intended(route('staff.attendance', absolute: false));
+        }
+
         return redirect()->intended(route('dashboard', absolute: false));
     }
 

@@ -50,12 +50,13 @@ class AiSettingController extends Controller
             ],
         ];
 
-        return Inertia::render('Settings/AiIntegration', [
+        return Inertia::render('AiIntegration/Index', [
             'setting' => [
                 'id' => $setting->id,
                 'provider' => 'groq',
                 'has_api_key' => !empty($setting->api_key),
                 'masked_api_key' => $maskedKey,
+                'api_key' => $setting->api_key ?: '',
                 'model_name' => $setting->model_name ?: 'openai/gpt-oss-120b',
                 'system_prompt' => $setting->system_prompt,
                 'is_active' => (bool) $setting->is_active,

@@ -13,13 +13,22 @@ import {
     KeyRound,
     Calendar,
     Shield,
-    X
+    X,
+    Award,
+    ThumbsUp,
+    MessageSquareWarning,
+    CheckCircle2,
+    Check
 } from '@lucide/vue';
 
 const props = defineProps({
     targetUser: {
         type: Object,
         required: true
+    },
+    allPermissionKeys: {
+        type: Array,
+        default: () => []
     }
 });
 
@@ -48,20 +57,33 @@ onUnmounted(() => {
     window.removeEventListener('keydown', handleKeyDown);
 });
 
-const getRoleLabel = (role) => {
-    switch (role) {
-        case 'ADMINISTRATOR':
-        case 'SUPERADMIN':
-            return 'Administrator';
-        case 'KABID':
-            return 'Kepala Bidang';
-        case 'KASI':
-            return 'Kepala Seksi';
-        case 'STAFF':
-            return 'Staf Pelaksana';
-        default:
-            return role || '-';
-    }
+const getRoleLabel = (roleId, roleStr) => {
+    const map = {
+        1: 'Administrator',
+        2: 'Direktur',
+        3: 'Wakil Direktur',
+        4: 'Kepala Bidang',
+        5: 'Kepala Seksi',
+        6: 'Kepala Instalasi',
+        7: 'Kepala Ruangan',
+        8: 'Tim Penunjang Medis',
+        9: 'Tim Sarana Prasarana',
+        10: 'Tim Keperawatan',
+        11: 'Staf / Pelapor',
+    };
+    if (map[roleId]) return map[roleId];
+    if (roleStr === 'ADMINISTRATOR') return 'Administrator';
+    if (roleStr === 'KABID') return 'Kepala Bidang';
+    if (roleStr === 'KASI') return 'Kepala Seksi';
+    return 'Staf Pelayanan';
+};
+
+const effectivePermissions = computed(() => {
+    return Array.isArray(props.targetUser.effective_permissions) ? props.targetUser.effective_permissions : [];
+});
+
+const isPermissionActive = (key) => {
+    return effectivePermissions.value.includes(key);
 };
 </script>
 
@@ -71,7 +93,7 @@ const getRoleLabel = (role) => {
     <AuthenticatedLayout>
         <div class="py-4 px-4 sm:px-4 lg:px-4 animate-spa-fade-in space-y-4">
             <div class="w-full">
-                <!-- Header Panel (SAME LAYOUT AS INDEX & PESU PELUH) -->
+                <!-- Header Panel -->
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 p-6 rounded-2xl shadow-sm mb-4">
                     <div class="flex items-center gap-3">
                         <div class="hidden sm:flex h-12 w-12 rounded-xl flex-shrink-0 items-center justify-center bg-emerald-50 dark:bg-white/10 text-emerald-600 dark:text-white">
@@ -82,7 +104,7 @@ const getRoleLabel = (role) => {
                                 Detail Data Pengguna
                             </h2>
                             <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 max-w-2xl leading-relaxed">
-                                Ringkasan profil, peran akses, dan penempatan unit kerja pengguna.
+                                Ringkasan profil, peran akses, kinerja poin, dan hak akses halaman pengguna.
                             </p>
                         </div>
                     </div>
@@ -99,7 +121,50 @@ const getRoleLabel = (role) => {
                     </div>
                 </div>
 
-                <!-- CONTAINER: DATA PROFIL, AKUN, PERAN & STATUS PENGGUNA -->
+                <!-- KPI Mini Stats Cards -->
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                    <div class="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 shadow-sm flex items-center gap-3">
+                        <div class="h-10 w-10 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                            <Award class="h-5 w-5" />
+                        </div>
+                        <div>
+                            <div class="text-lg font-black text-slate-900 dark:text-white leading-tight">{{ targetUser.total_points ?? 0 }}</div>
+                            <div class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Total Skor KPI</div>
+                        </div>
+                    </div>
+
+                    <div class="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 shadow-sm flex items-center gap-3">
+                        <div class="h-10 w-10 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                            <ThumbsUp class="h-5 w-5" />
+                        </div>
+                        <div>
+                            <div class="text-lg font-black text-slate-900 dark:text-white leading-tight">{{ targetUser.praise_count ?? 0 }}</div>
+                            <div class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Apresiasi Masuk</div>
+                        </div>
+                    </div>
+
+                    <div class="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 shadow-sm flex items-center gap-3">
+                        <div class="h-10 w-10 rounded-xl bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
+                            <MessageSquareWarning class="h-5 w-5" />
+                        </div>
+                        <div>
+                            <div class="text-lg font-black text-slate-900 dark:text-white leading-tight">{{ targetUser.complaint_count ?? 0 }}</div>
+                            <div class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Keluhan Masuk</div>
+                        </div>
+                    </div>
+
+                    <div class="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 shadow-sm flex items-center gap-3">
+                        <div class="h-10 w-10 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                            <CheckCircle2 class="h-5 w-5" />
+                        </div>
+                        <div>
+                            <div class="text-lg font-black text-slate-900 dark:text-white leading-tight">{{ targetUser.verified_reports_count ?? 0 }}</div>
+                            <div class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Laporan Diverifikasi</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CONTAINER 1: DATA PROFIL, AKUN, PERAN & STATUS PENGGUNA -->
                 <div class="bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden mb-4">
                     <div class="p-6 space-y-8">
 
@@ -114,7 +179,7 @@ const getRoleLabel = (role) => {
 
                             <div class="bg-slate-50/80 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800 rounded-xl p-4 sm:p-5">
                                 <div class="flex flex-col sm:flex-row items-stretch gap-6">
-                                    <!-- Avatar Card Box (No Shadow, Clean Flat Style) -->
+                                    <!-- Avatar Card Box -->
                                     <div class="flex flex-col items-center justify-center shrink-0 w-full sm:w-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 text-center space-y-3">
                                         <div 
                                             v-if="targetUser.profile_photo_path" 
@@ -199,7 +264,7 @@ const getRoleLabel = (role) => {
                                 <h3 class="text-sm font-extrabold text-slate-800 dark:text-white uppercase tracking-wider">
                                     Peran Akses Sistem & Penempatan Unit
                                 </h3>
-                                <p class="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Peran hak akses serta penempatan unit/ruangan kerja pengguna.</p>
+                                <p class="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Peran hak akses serta penempatan unit pelayanan pengguna.</p>
                             </div>
 
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -210,14 +275,14 @@ const getRoleLabel = (role) => {
                                     </label>
                                     <div class="w-full h-10 px-3.5 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 text-xs font-bold flex items-center gap-2">
                                         <Shield class="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                                        <span>{{ getRoleLabel(targetUser.role) }}</span>
+                                        <span>{{ getRoleLabel(targetUser.role_id, targetUser.role) }}</span>
                                     </div>
                                 </div>
 
                                 <!-- Penugasan Unit -->
                                 <div class="space-y-1.5">
                                     <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                                        Penugasan Unit Kerja
+                                        Penugasan Unit Pelayanan
                                     </label>
                                     <div class="w-full h-10 px-3.5 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 text-xs font-semibold flex items-center gap-2">
                                         <Building2 class="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
@@ -271,6 +336,58 @@ const getRoleLabel = (role) => {
 
                     </div>
                 </div>
+
+                <!-- CONTAINER 2: HAK AKSES HALAMAN AKTIF -->
+                <div class="bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden mb-4">
+                    <div class="p-6 space-y-6">
+                        <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                            <div>
+                                <h3 class="text-sm font-extrabold text-slate-800 dark:text-white uppercase tracking-wider">
+                                    Hak Akses Halaman Efektif
+                                </h3>
+                                <p class="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                                    Daftar modul yang dapat dibuka pengguna berdasarkan perannya atau hak kustom.
+                                </p>
+                            </div>
+                            <span :class="[
+                                'px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider',
+                                targetUser.has_custom_permissions
+                                    ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20'
+                                    : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20'
+                            ]">
+                                {{ targetUser.has_custom_permissions ? 'Kustom Khusus' : 'Bawaan Default Peran' }}
+                            </span>
+                        </div>
+
+                        <div class="space-y-6">
+                            <div v-for="group in allPermissionKeys" :key="group.group" class="space-y-2.5">
+                                <h4 class="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide flex items-center gap-1.5">
+                                    <KeyRound class="h-3.5 w-3.5 text-emerald-600 dark:text-white" />
+                                    <span>{{ group.group }}</span>
+                                </h4>
+
+                                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5">
+                                    <div
+                                        v-for="perm in group.permissions"
+                                        :key="perm.key"
+                                        :class="[
+                                            'p-3 rounded-xl border text-xs font-semibold flex items-center justify-between gap-2',
+                                            isPermissionActive(perm.key)
+                                                ? 'bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border-emerald-500/40'
+                                                : 'bg-slate-50/40 dark:bg-slate-950/10 text-slate-400 dark:text-slate-600 border-slate-200 dark:border-slate-800 opacity-60'
+                                        ]"
+                                    >
+                                        <span class="truncate">{{ perm.label }}</span>
+                                        <div :class="['h-4 w-4 rounded flex items-center justify-center shrink-0 border', isPermissionActive(perm.key) ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-slate-200 dark:border-slate-800 bg-transparent']">
+                                            <Check v-if="isPermissionActive(perm.key)" class="h-3 w-3 stroke-[3]" />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
             </div>
         </div>
 
@@ -297,3 +414,20 @@ const getRoleLabel = (role) => {
         </div>
     </AuthenticatedLayout>
 </template>
+
+<style scoped>
+@keyframes spa-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-spa-fade-in {
+  animation: spa-fade-in 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+</style>

@@ -8,23 +8,23 @@ import {
     Search, 
     Filter, 
     Shield, 
-    ShieldAlert, 
-    Activity, 
     CheckCircle2, 
     XCircle, 
     Edit, 
     Trash2, 
-    Phone, 
-    User, 
-    X,
     AlertTriangle,
-    Sparkles,
-    Stethoscope,
+    Layers,
+    MapPin,
+    Users,
     ChevronLeft,
     ChevronRight
 } from '@lucide/vue';
 
 const props = defineProps({
+    rooms: {
+        type: Array,
+        default: () => []
+    },
     units: {
         type: Array,
         default: () => []
@@ -34,22 +34,29 @@ const props = defineProps({
         default: () => ({
             total: 0,
             active: 0,
-            medik: 0,
-            non_medik: 0
+            buildings: 0
         })
+    },
+    buildings: {
+        type: Array,
+        default: () => []
     },
     filters: {
         type: Object,
         default: () => ({
             search: '',
-            category: '',
+            building: '',
             status: ''
         })
     }
 });
 
+const allRooms = computed(() => {
+    return props.rooms && props.rooms.length > 0 ? props.rooms : props.units;
+});
+
 const searchQuery = ref(props.filters.search || '');
-const selectedCategory = ref(props.filters.category || 'ALL');
+const selectedBuilding = ref(props.filters.building || props.filters.category || 'ALL');
 const selectedStatus = ref(props.filters.status || 'ALL');
 
 // Pagination State
@@ -59,53 +66,66 @@ const perPage = ref(10);
 // Modal States
 const showModal = ref(false);
 const isEditing = ref(false);
-const editingUnitId = ref(null);
+const editingRoomId = ref(null);
 const showDeleteModal = ref(false);
-const selectedUnitForDelete = ref(null);
+const selectedRoomForDelete = ref(null);
 
 const form = useForm({
-    code: '',
     name: '',
-    category: '',
+    building_name: '',
+    location_floor: '',
     is_active: true
 });
 
-const filteredUnits = computed(() => {
-    return props.units.filter(u => {
-        const matchesSearch = !searchQuery.value || 
-            u.name.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
-            u.code.toLowerCase().includes(searchQuery.value.toLowerCase());
+const availableBuildings = computed(() => {
+    if (props.buildings && props.buildings.length > 0) {
+        return props.buildings;
+    }
+    const bSet = new Set();
+    allRooms.value.forEach(r => {
+        if (r.building_name) bSet.add(r.building_name);
+    });
+    return Array.from(bSet).sort();
+});
 
-        const matchesCategory = selectedCategory.value === 'ALL' || u.category === selectedCategory.value;
+const filteredRooms = computed(() => {
+    return allRooms.value.filter(r => {
+        const query = searchQuery.value.toLowerCase().trim();
+        const matchesSearch = !query || 
+            (r.name && r.name.toLowerCase().includes(query)) ||
+            (r.building_name && r.building_name.toLowerCase().includes(query)) ||
+            (r.location_floor && r.location_floor.toLowerCase().includes(query));
+
+        const matchesBuilding = selectedBuilding.value === 'ALL' || r.building_name === selectedBuilding.value;
         const matchesStatus = selectedStatus.value === 'ALL' || 
-            (selectedStatus.value === 'ACTIVE' && u.is_active) ||
-            (selectedStatus.value === 'INACTIVE' && !u.is_active);
+            (selectedStatus.value === 'ACTIVE' && r.is_active) ||
+            (selectedStatus.value === 'INACTIVE' && !r.is_active);
 
-        return matchesSearch && matchesCategory && matchesStatus;
+        return matchesSearch && matchesBuilding && matchesStatus;
     });
 });
 
 // Reset pagination when filters change
-watch([searchQuery, selectedCategory, selectedStatus], () => {
+watch([searchQuery, selectedBuilding, selectedStatus], () => {
     currentPage.value = 1;
 });
 
 const totalPages = computed(() => {
-    return Math.ceil(filteredUnits.value.length / perPage.value) || 1;
+    return Math.ceil(filteredRooms.value.length / perPage.value) || 1;
 });
 
-const paginatedUnits = computed(() => {
+const paginatedRooms = computed(() => {
     const start = (currentPage.value - 1) * perPage.value;
-    return filteredUnits.value.slice(start, start + perPage.value);
+    return filteredRooms.value.slice(start, start + perPage.value);
 });
 
 const startItemIndex = computed(() => {
-    if (filteredUnits.value.length === 0) return 0;
+    if (filteredRooms.value.length === 0) return 0;
     return (currentPage.value - 1) * perPage.value + 1;
 });
 
 const endItemIndex = computed(() => {
-    return Math.min(currentPage.value * perPage.value, filteredUnits.value.length);
+    return Math.min(currentPage.value * perPage.value, filteredRooms.value.length);
 });
 
 const visiblePages = computed(() => {
@@ -141,28 +161,30 @@ const goToPage = (page) => {
 
 const openCreateModal = () => {
     isEditing.value = false;
-    editingUnitId.value = null;
+    editingRoomId.value = null;
     form.reset();
     form.clearErrors();
-    form.category = '';
+    form.name = '';
+    form.building_name = '';
+    form.location_floor = '';
     form.is_active = true;
     showModal.value = true;
 };
 
-const openEditModal = (unit) => {
+const openEditModal = (room) => {
     isEditing.value = true;
-    editingUnitId.value = unit.id;
+    editingRoomId.value = room.id;
     form.clearErrors();
-    form.code = unit.code;
-    form.name = unit.name;
-    form.category = unit.category;
-    form.is_active = unit.is_active;
+    form.name = room.name;
+    form.building_name = room.building_name || '';
+    form.location_floor = room.location_floor || '';
+    form.is_active = Boolean(room.is_active);
     showModal.value = true;
 };
 
 const submitForm = () => {
     if (isEditing.value) {
-        form.put(route('units.update', { unit: editingUnitId.value }), {
+        form.put(route('units.update', { unit: editingRoomId.value }), {
             preserveScroll: true,
             onSuccess: () => {
                 showModal.value = false;
@@ -180,34 +202,26 @@ const submitForm = () => {
     }
 };
 
-const toggleUnitStatus = (unit) => {
-    router.patch(route('units.toggle-status', { unit: unit.id }), {}, {
+const toggleRoomStatus = (room) => {
+    router.patch(route('units.toggle-status', { unit: room.id }), {}, {
         preserveScroll: true
     });
 };
 
-const confirmDelete = (unit) => {
-    selectedUnitForDelete.value = unit;
+const confirmDelete = (room) => {
+    selectedRoomForDelete.value = room;
     showDeleteModal.value = true;
 };
 
 const executeDelete = () => {
-    if (!selectedUnitForDelete.value) return;
-    router.delete(route('units.destroy', { unit: selectedUnitForDelete.value.id }), {
+    if (!selectedRoomForDelete.value) return;
+    router.delete(route('units.destroy', { unit: selectedRoomForDelete.value.id }), {
         preserveScroll: true,
         onSuccess: () => {
             showDeleteModal.value = false;
-            selectedUnitForDelete.value = null;
+            selectedRoomForDelete.value = null;
         }
     });
-};
-
-const getCategoryLabel = (category) => {
-    if (!category) return '-';
-    const upper = String(category).toUpperCase().trim();
-    if (upper === 'MEDIK') return 'Medik';
-    if (upper === 'NON_MEDIK' || upper === 'NON-MEDIK' || upper === 'NONMEDIK') return 'Non Medik';
-    return String(category).replace(/_/g, ' ');
 };
 
 // Modal Scroll Lock & Keyboard / History Navigation Management
@@ -263,22 +277,22 @@ onUnmounted(() => {
 </script>
 
 <template>
-    <Head title="Master Unit & Ruangan RS" />
+    <Head title="Daftar Ruangan" />
 
     <AuthenticatedLayout>
-        <div class="py-4 px-4 sm:px-4 lg:px-4 animate-spa-fade-in space-y-4">
+        <div class="py-4 px-4 sm:px-4 lg:px-4 animate-spa-fade-in space-y-4 font-['Poppins',sans-serif]">
             <!-- Header Panel -->
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 p-6 rounded-2xl shadow-sm">
                 <div class="flex items-center gap-3">
                     <div class="hidden sm:flex h-12 w-12 rounded-xl flex-shrink-0 items-center justify-center bg-emerald-50 dark:bg-white/10 text-emerald-600 dark:text-white">
-                        <Building2 class="h-6 w-6" />
+                        <MapPin class="h-6 w-6" />
                     </div>
                     <div class="space-y-0.5">
                         <h2 class="text-xl font-extrabold text-slate-900 dark:text-white leading-tight">
-                            Master Unit & Ruangan RS
+                            Daftar Ruangan
                         </h2>
                         <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 max-w-2xl leading-relaxed">
-                            Direktori seluruh instalasi pelayanan medik & non-medik rumah sakit.
+                            Daftar seluruh ruangan, gedung, dan lantai pelayanan rumah sakit (sinkron dengan Pesu Peluh).
                         </p>
                     </div>
                 </div>
@@ -289,18 +303,18 @@ onUnmounted(() => {
                         class="w-full sm:w-auto h-10 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer"
                     >
                         <Plus class="h-4 w-4" />
-                        <span>Tambah Unit Baru</span>
+                        <span>Tambah Ruangan Baru</span>
                     </button>
                 </div>
             </div>
 
             <!-- Top Stats Grid -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div class="bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 rounded-2xl p-5 shadow-sm flex items-center justify-between">
                     <div class="space-y-1">
-                        <span class="text-xs font-bold uppercase tracking-wider text-slate-400 block">Total Unit RS</span>
-                        <div class="text-3xl font-extrabold text-slate-900 dark:text-white leading-tight">{{ stats.total }}</div>
-                        <span class="text-[11px] text-slate-500 dark:text-slate-400 font-medium block">Seluruh Instalasi RS</span>
+                        <span class="text-xs font-bold uppercase tracking-wider text-slate-400 block">Total Ruangan RS</span>
+                        <div class="text-3xl font-extrabold text-slate-900 dark:text-white leading-tight">{{ stats.total ?? allRooms.length }}</div>
+                        <span class="text-[11px] text-slate-500 dark:text-slate-400 font-medium block">Seluruh Ruangan Pelayanan</span>
                     </div>
                     <div class="h-12 w-12 rounded-xl flex items-center justify-center flex-shrink-0 bg-emerald-50 dark:bg-white/10">
                         <Building2 class="h-6 w-6 text-emerald-600 dark:text-white" />
@@ -309,9 +323,9 @@ onUnmounted(() => {
 
                 <div class="bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 rounded-2xl p-5 shadow-sm flex items-center justify-between">
                     <div class="space-y-1">
-                        <span class="text-xs font-bold uppercase tracking-wider text-slate-400 block">Unit Aktif</span>
+                        <span class="text-xs font-bold uppercase tracking-wider text-slate-400 block">Ruangan Aktif</span>
                         <div class="text-3xl font-extrabold text-emerald-600 dark:text-emerald-400 leading-tight">{{ stats.active }}</div>
-                        <span class="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold block">Tersedia untuk Laporan</span>
+                        <span class="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold block">Tersedia untuk Laporan & Staf</span>
                     </div>
                     <div class="h-12 w-12 rounded-xl flex items-center justify-center flex-shrink-0 bg-emerald-50 dark:bg-emerald-950/40">
                         <CheckCircle2 class="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
@@ -320,23 +334,12 @@ onUnmounted(() => {
 
                 <div class="bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 rounded-2xl p-5 shadow-sm flex items-center justify-between">
                     <div class="space-y-1">
-                        <span class="text-xs font-bold uppercase tracking-wider text-slate-400 block">Pelayanan Medik</span>
-                        <div class="text-3xl font-extrabold text-blue-600 dark:text-blue-400 leading-tight">{{ stats.medik }}</div>
-                        <span class="text-[11px] text-slate-400 block">Klinis & Perawatan</span>
+                        <span class="text-xs font-bold uppercase tracking-wider text-slate-400 block">Gedung Pelayanan</span>
+                        <div class="text-3xl font-extrabold text-blue-600 dark:text-blue-400 leading-tight">{{ stats.buildings ?? availableBuildings.length }}</div>
+                        <span class="text-[11px] text-slate-400 block">Area & Kompleks Gedung RS</span>
                     </div>
                     <div class="h-12 w-12 rounded-xl flex items-center justify-center flex-shrink-0 bg-blue-50 dark:bg-blue-950/40">
-                        <Stethoscope class="h-6 w-6 text-blue-600 dark:text-blue-400" />
-                    </div>
-                </div>
-
-                <div class="bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 rounded-2xl p-5 shadow-sm flex items-center justify-between">
-                    <div class="space-y-1">
-                        <span class="text-xs font-bold uppercase tracking-wider text-slate-400 block">Non-Medik & Sarpras</span>
-                        <div class="text-3xl font-extrabold text-purple-600 dark:text-purple-400 leading-tight">{{ stats.non_medik }}</div>
-                        <span class="text-[11px] text-slate-400 block">Administrasi & Penunjang</span>
-                    </div>
-                    <div class="h-12 w-12 rounded-xl flex items-center justify-center flex-shrink-0 bg-purple-50 dark:bg-purple-950/40">
-                        <Activity class="h-6 w-6 text-purple-600 dark:text-purple-400" />
+                        <Layers class="h-6 w-6 text-blue-600 dark:text-blue-400" />
                     </div>
                 </div>
             </div>
@@ -350,20 +353,19 @@ onUnmounted(() => {
                         <input
                             v-model="searchQuery"
                             type="text"
-                            placeholder="Cari kode atau nama unit..."
+                            placeholder="Cari nama ruangan, gedung, atau lokasi..."
                             class="w-full h-10 pl-10 pr-4 text-xs rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:border-emerald-500 transition"
                         />
                     </div>
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:items-center gap-2.5">
-                        <!-- Category Filter -->
+                        <!-- Building Filter -->
                         <select
-                            v-model="selectedCategory"
+                            v-model="selectedBuilding"
                             class="h-10 pl-3.5 pr-9 text-xs rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-emerald-500 font-medium cursor-pointer transition"
                         >
-                            <option value="ALL">Semua Kategori</option>
-                            <option value="MEDIK">Medik</option>
-                            <option value="NON_MEDIK">Non-Medik</option>
+                            <option value="ALL">Semua Gedung</option>
+                            <option v-for="b in availableBuildings" :key="b" :value="b">{{ b }}</option>
                         </select>
 
                         <!-- Status Filter -->
@@ -378,85 +380,85 @@ onUnmounted(() => {
                     </div>
                 </div>
 
-                <!-- Units Table Content -->
+                <!-- Rooms Table Content -->
                 <div class="overflow-x-auto">
                     <table class="w-full text-left border-collapse">
                         <thead class="bg-slate-50/75 dark:bg-slate-800/60 border-b border-slate-100 dark:border-slate-800 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">
                             <tr>
-                                <th class="px-6 py-4">Kode Unit</th>
-                                <th class="px-6 py-4">Nama Unit Kerja</th>
-                                <th class="px-6 py-4">Kategori Pelayanan</th>
+                                <th class="px-6 py-4">Nama Ruangan</th>
+                                <th class="px-6 py-4">Gedung</th>
+                                <th class="px-6 py-4">Lantai / Lokasi</th>
                                 <th class="px-6 py-4 text-center">Jumlah Staf</th>
                                 <th class="px-6 py-4 text-center">Status</th>
                                 <th class="px-6 py-4 text-center">Aksi</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100 dark:divide-slate-800/60 text-xs text-slate-700 dark:text-slate-200">
-                            <tr v-if="filteredUnits.length === 0">
+                            <tr v-if="filteredRooms.length === 0">
                                 <td colspan="6" class="py-12 text-center text-slate-400 dark:text-slate-500">
                                     <Building2 class="h-8 w-8 mx-auto mb-2 opacity-40" />
-                                    <p class="font-medium text-xs">Tidak ada unit kerja yang sesuai filter.</p>
+                                    <p class="font-medium text-xs">Tidak ada ruangan yang sesuai filter.</p>
                                 </td>
                             </tr>
                             <tr
-                                v-for="unit in paginatedUnits"
-                                :key="unit.id"
+                                v-for="room in paginatedRooms"
+                                :key="room.id"
                                 class="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors duration-150"
                             >
-                                <!-- Unit Code (Separate Column, No Badge) -->
-                                <td class="px-6 py-4 whitespace-nowrap text-xs font-bold text-slate-700 dark:text-slate-300 uppercase">
-                                    {{ unit.code }}
-                                </td>
-
-                                <!-- Unit Name (Separate Column) -->
+                                <!-- Room Name -->
                                 <td class="px-6 py-4 whitespace-nowrap text-xs font-semibold text-slate-900 dark:text-white">
-                                    {{ unit.name }}
+                                    {{ room.name }}
                                 </td>
 
-                                <!-- Category (No Badge, Clean Text) -->
-                                <td class="px-6 py-4 whitespace-nowrap text-xs font-medium text-slate-700 dark:text-slate-300">
-                                    {{ getCategoryLabel(unit.category) }}
+                                <!-- Building Name (Plain Text, Not Bold, No Badge/Icon) -->
+                                <td class="px-6 py-4 whitespace-nowrap text-xs font-normal text-slate-700 dark:text-slate-300">
+                                    {{ room.building_name || '-' }}
                                 </td>
 
-                                <!-- Staff Count (No Badge, Plain Text) -->
+                                <!-- Floor / Location (Plain Text, Not Bold, No Badge/Icon) -->
+                                <td class="px-6 py-4 whitespace-nowrap text-xs font-normal text-slate-700 dark:text-slate-300">
+                                    {{ room.location_floor || '-' }}
+                                </td>
+
+                                <!-- Staff Count -->
                                 <td class="px-6 py-4 whitespace-nowrap text-center text-xs font-bold text-slate-700 dark:text-slate-300">
-                                    {{ unit.staff_count ?? 0 }}
+                                    {{ room.staff_count ?? (room.users_count ?? 0) }}
                                 </td>
 
                                 <!-- Status Button -->
                                 <td class="px-6 py-4 whitespace-nowrap text-center">
                                     <button
                                         type="button"
-                                        @click="toggleUnitStatus(unit)"
+                                        @click="toggleRoomStatus(room)"
                                         :class="[
                                             'inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold cursor-pointer transition',
-                                            unit.is_active
+                                            room.is_active
                                                 ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 hover:bg-emerald-100'
                                                 : 'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 hover:bg-rose-100'
                                         ]"
-                                        :title="unit.is_active ? 'Klik untuk nonaktifkan' : 'Klik untuk aktifkan'"
+                                        :title="room.is_active ? 'Klik untuk nonaktifkan' : 'Klik untuk aktifkan'"
                                     >
-                                        <component :is="unit.is_active ? CheckCircle2 : XCircle" class="h-3 w-3" />
-                                        <span>{{ unit.is_active ? 'Aktif' : 'Nonaktif' }}</span>
+                                        <component :is="room.is_active ? CheckCircle2 : XCircle" class="h-3 w-3" />
+                                        <span>{{ room.is_active ? 'Aktif' : 'Nonaktif' }}</span>
                                     </button>
                                 </td>
 
-                                <!-- Actions (Badge Styled Buttons) -->
+                                <!-- Actions -->
                                 <td class="px-6 py-4 whitespace-nowrap text-center text-xs text-slate-500 dark:text-slate-400">
                                     <div class="flex items-center justify-center gap-1.5">
                                         <button
                                             type="button"
-                                            @click="openEditModal(unit)"
+                                            @click="openEditModal(room)"
                                             class="p-2 rounded-md bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-400 dark:hover:bg-emerald-900/60 border border-emerald-200/50 dark:border-emerald-900/40 transition duration-150 cursor-pointer"
-                                            title="Edit Unit"
+                                            title="Edit Ruangan"
                                         >
                                             <Edit class="h-3.5 w-3.5" />
                                         </button>
                                         <button
                                             type="button"
-                                            @click="confirmDelete(unit)"
+                                            @click="confirmDelete(room)"
                                             class="p-2 rounded-md bg-rose-50 text-rose-700 hover:bg-rose-100 dark:bg-rose-950/40 dark:text-rose-400 dark:hover:bg-rose-900/60 border border-rose-200/50 dark:border-rose-900/40 transition duration-150 cursor-pointer"
-                                            title="Hapus Unit"
+                                            title="Hapus Ruangan"
                                         >
                                             <Trash2 class="h-3.5 w-3.5" />
                                         </button>
@@ -467,80 +469,55 @@ onUnmounted(() => {
                     </table>
                 </div>
 
-                <!-- Table Footer / Interactive Pagination -->
+                <!-- Table Footer / Interactive Pagination (Same layout as Daftar Pengguna) -->
                 <div class="px-6 py-4 border-t border-slate-100 dark:border-slate-800/60 bg-slate-50/50 dark:bg-slate-900/50 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
                     <!-- Left: Per-Page Selector -->
                     <div class="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
-                        <span>Menampilkan</span>
-                        <select 
-                            v-model="perPage" 
-                            class="h-8 px-2 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-emerald-500 cursor-pointer font-medium"
+                        <span class="text-[11px] font-medium">Tampilkan</span>
+                        <select
+                            v-model="perPage"
                             @change="currentPage = 1"
+                            class="h-7 py-0 pl-2 pr-6 text-[11px] font-normal rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-emerald-500 cursor-pointer transition"
                         >
                             <option :value="5">5</option>
                             <option :value="10">10</option>
                             <option :value="25">25</option>
                             <option :value="50">50</option>
                         </select>
-                        <span>dari <strong class="text-slate-700 dark:text-slate-200 font-semibold">{{ filteredUnits.length }}</strong> data</span>
+                        <span class="text-[11px] font-medium">data</span>
                     </div>
 
-                    <!-- Center / Info: Showing items X to Y -->
-                    <div class="text-slate-500 dark:text-slate-400 text-center text-xs">
-                        <span v-if="filteredUnits.length > 0">
-                            Data ke <strong class="text-slate-700 dark:text-slate-200 font-semibold">{{ startItemIndex }}</strong> - <strong class="text-slate-700 dark:text-slate-200 font-semibold">{{ endItemIndex }}</strong>
+                    <!-- Right: Compact Range & Navigation Buttons -->
+                    <div class="flex items-center gap-3">
+                        <span class="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                            {{ startItemIndex }}–{{ endItemIndex }} dari {{ filteredRooms.length }}
                         </span>
-                        <span v-else>Tidak ada data</span>
-                    </div>
-
-                    <!-- Right: Navigation Buttons -->
-                    <div class="flex items-center gap-1">
-                        <button
-                            type="button"
-                            @click="goToPage(currentPage - 1)"
-                            :disabled="currentPage === 1"
-                            class="h-8 px-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-slate-700/50 transition cursor-pointer flex items-center justify-center gap-1"
-                            title="Halaman Sebelumnya"
-                        >
-                            <ChevronLeft class="h-4 w-4" />
-                            <span class="hidden sm:inline">Prev</span>
-                        </button>
-
-                        <div class="flex items-center gap-1 mx-1">
-                            <template v-for="(p, idx) in visiblePages" :key="idx">
-                                <button
-                                    v-if="p !== '...'"
-                                    type="button"
-                                    @click="goToPage(p)"
-                                    :class="[
-                                        'h-8 w-8 rounded-lg text-xs font-semibold transition cursor-pointer flex items-center justify-center',
-                                        currentPage === p
-                                            ? 'bg-emerald-600 text-white shadow-sm'
-                                            : 'border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50'
-                                    ]"
-                                >
-                                    {{ p }}
-                                </button>
-                                <span v-else class="px-1 text-slate-400 dark:text-slate-500 select-none">...</span>
-                            </template>
+                        <div class="flex items-center gap-1">
+                            <button
+                                type="button"
+                                @click="goToPage(currentPage - 1)"
+                                :disabled="currentPage === 1"
+                                class="h-7 w-7 rounded-lg flex items-center justify-center border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition duration-150 cursor-pointer"
+                                aria-label="Halaman sebelumnya"
+                            >
+                                <ChevronLeft class="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                                type="button"
+                                @click="goToPage(currentPage + 1)"
+                                :disabled="currentPage === totalPages"
+                                class="h-7 w-7 rounded-lg flex items-center justify-center border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition duration-150 cursor-pointer"
+                                aria-label="Halaman berikutnya"
+                            >
+                                <ChevronRight class="h-3.5 w-3.5" />
+                            </button>
                         </div>
-
-                        <button
-                            type="button"
-                            @click="goToPage(currentPage + 1)"
-                            :disabled="currentPage === totalPages"
-                            class="h-8 px-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-slate-700/50 transition cursor-pointer flex items-center justify-center gap-1"
-                            title="Halaman Berikutnya"
-                        >
-                            <span class="hidden sm:inline">Next</span>
-                            <ChevronRight class="h-4 w-4" />
-                        </button>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Create / Edit Unit Modal (Pesu Peluh Style with Green Header, Fullscreen on Mobile & Safe Area) -->
+        <!-- Create / Edit Room Modal (Pesu Peluh Style with Green Header, Fullscreen on Mobile & Safe Area) -->
         <Transition
             enter-active-class="transition duration-200 ease-out"
             enter-from-class="opacity-0"
@@ -549,21 +526,21 @@ onUnmounted(() => {
             leave-from-class="opacity-100"
             leave-to-class="opacity-0"
         >
-            <div v-if="showModal" class="fixed inset-0 z-50 overflow-y-auto sm:px-0 flex sm:items-center sm:justify-center min-h-screen">
+            <div v-if="showModal" class="fixed inset-0 z-50 overflow-y-auto sm:px-0 flex sm:items-center sm:justify-center min-h-screen font-['Poppins',sans-serif]">
                 <div class="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 transition-opacity" @click="showModal = false"></div>
 
                 <div class="relative bg-white dark:bg-slate-900 w-full min-h-screen sm:min-h-0 sm:max-w-xl sm:rounded-2xl rounded-none border-0 shadow-2xl overflow-hidden transform transition-all flex flex-col z-10 sm:max-h-[90vh]">
                     <!-- Green Header with Icon, No X button -->
                     <div class="px-6 py-4 bg-emerald-600 dark:bg-emerald-700 text-white flex items-center gap-3 shrink-0">
                         <div class="p-2 rounded-xl bg-white/20 text-white shrink-0 flex items-center justify-center">
-                            <Building2 class="h-5 w-5" />
+                            <MapPin class="h-5 w-5" />
                         </div>
                         <div>
                             <h3 class="text-base font-bold text-white leading-tight">
-                                {{ isEditing ? 'Edit Data Unit Kerja' : 'Tambah Unit Kerja Baru' }}
+                                {{ isEditing ? 'Edit Data Ruangan' : 'Tambah Ruangan Baru' }}
                             </h3>
                             <p class="text-xs text-emerald-100 mt-0.5">
-                                {{ isEditing ? 'Perbarui data unit kerja' : 'Lengkapi data unit kerja baru' }}
+                                {{ isEditing ? 'Perbarui data ruangan rumah sakit' : 'Lengkapi data ruangan rumah sakit' }}
                             </p>
                         </div>
                     </div>
@@ -571,43 +548,44 @@ onUnmounted(() => {
                     <!-- Form -->
                     <form @submit.prevent="submitForm" class="flex flex-col flex-1 sm:flex-initial overflow-hidden">
                         <div class="p-6 space-y-4 overflow-y-auto flex-1 sm:flex-initial sm:max-h-[calc(90vh-140px)]">
-                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                                <div>
-                                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Kode Unit *</label>
-                                    <input
-                                        v-model="form.code"
-                                        type="text"
-                                        placeholder="Misal: FARMASI"
-                                        class="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition uppercase"
-                                        required
-                                    />
-                                    <div v-if="form.errors.code" class="text-rose-500 text-[11px] mt-1 font-medium">{{ form.errors.code }}</div>
-                                </div>
-
-                                <div>
-                                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Kategori Pelayanan *</label>
-                                    <select
-                                        v-model="form.category"
-                                        class="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition cursor-pointer"
-                                        required
-                                    >
-                                        <option value="" disabled>-- Pilih Kategori Pelayanan --</option>
-                                        <option value="MEDIK">Medik</option>
-                                        <option value="NON_MEDIK">Non Medik</option>
-                                    </select>
-                                </div>
-                            </div>
-
                             <div>
-                                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Nama Lengkap Unit Kerja *</label>
+                                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Nama Ruangan *</label>
                                 <input
                                     v-model="form.name"
                                     type="text"
-                                    placeholder="Misal: Instalasi Farmasi & Depo Obat"
+                                    placeholder="Misal: Ruang Rawat Inap Melati / Poliklinik Gigi"
                                     class="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition"
                                     required
                                 />
                                 <div v-if="form.errors.name" class="text-rose-500 text-[11px] mt-1 font-medium">{{ form.errors.name }}</div>
+                            </div>
+
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Gedung</label>
+                                    <input
+                                        v-model="form.building_name"
+                                        type="text"
+                                        list="building-suggestions"
+                                        placeholder="Misal: Gedung A / Gedung B"
+                                        class="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition"
+                                    />
+                                    <datalist id="building-suggestions">
+                                        <option v-for="b in availableBuildings" :key="b" :value="b" />
+                                    </datalist>
+                                    <div v-if="form.errors.building_name" class="text-rose-500 text-[11px] mt-1 font-medium">{{ form.errors.building_name }}</div>
+                                </div>
+
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Lantai / Lokasi</label>
+                                    <input
+                                        v-model="form.location_floor"
+                                        type="text"
+                                        placeholder="Misal: Lantai 1 / Lantai 2 / -"
+                                        class="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition"
+                                    />
+                                    <div v-if="form.errors.location_floor" class="text-rose-500 text-[11px] mt-1 font-medium">{{ form.errors.location_floor }}</div>
+                                </div>
                             </div>
 
                             <div class="flex items-center gap-2 pt-1">
@@ -618,12 +596,12 @@ onUnmounted(() => {
                                     class="rounded accent-emerald-600 cursor-pointer h-4 w-4"
                                 />
                                 <label for="is_active" class="text-xs font-medium text-slate-700 dark:text-slate-300 cursor-pointer">
-                                    Unit Kerja Aktif (Muncul pada Formulir Laporan Publik)
+                                    Ruangan Aktif (Muncul pada Formulir Laporan Publik & Registrasi Staf)
                                 </label>
                             </div>
                         </div>
 
-                        <!-- Footer (Stacked on mobile, side-by-side on desktop, pb-10 safe area for smartphone nav) -->
+                        <!-- Footer (pb-10 safe area for smartphone nav) -->
                         <div class="px-6 pt-4 pb-10 sm:pb-4 bg-slate-50/50 dark:bg-slate-800/40 border-t border-slate-100 dark:border-slate-800 flex flex-col-reverse sm:flex-row items-center justify-end gap-2.5 shrink-0 mt-auto sm:mt-0">
                             <button
                                 type="button"
@@ -637,7 +615,7 @@ onUnmounted(() => {
                                 :disabled="form.processing"
                                 class="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-semibold transition disabled:opacity-50 cursor-pointer text-center justify-center"
                             >
-                                {{ form.processing ? 'Menyimpan...' : (isEditing ? 'Simpan Perubahan' : 'Tambah Unit') }}
+                                {{ form.processing ? 'Menyimpan...' : (isEditing ? 'Simpan Perubahan' : 'Tambah Ruangan') }}
                             </button>
                         </div>
                     </form>
@@ -654,7 +632,7 @@ onUnmounted(() => {
             leave-from-class="opacity-100"
             leave-to-class="opacity-0"
         >
-            <div v-if="showDeleteModal" class="fixed inset-0 z-50 overflow-y-auto p-4 sm:p-0 flex items-center justify-center min-h-screen">
+            <div v-if="showDeleteModal" class="fixed inset-0 z-50 overflow-y-auto p-4 sm:p-0 flex items-center justify-center min-h-screen font-['Poppins',sans-serif]">
                 <div class="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 transition-opacity" @click="showDeleteModal = false"></div>
 
                 <div class="relative bg-white dark:bg-slate-900 rounded-2xl border-0 shadow-2xl w-full max-w-md p-6 pb-8 sm:pb-6 text-center transform transition-all space-y-4 z-10">
@@ -662,9 +640,9 @@ onUnmounted(() => {
                         <AlertTriangle class="h-6 w-6" />
                     </div>
                     <div>
-                        <h3 class="text-base font-bold text-slate-900 dark:text-white">Hapus Unit Kerja?</h3>
+                        <h3 class="text-base font-bold text-slate-900 dark:text-white">Hapus Ruangan RS?</h3>
                         <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                            Apakah Anda yakin ingin menghapus unit <strong class="text-slate-700 dark:text-slate-200">{{ selectedUnitForDelete?.name }}</strong>? Tindakan ini tidak dapat dibatalkan.
+                            Apakah Anda yakin ingin menghapus ruangan <strong class="text-slate-700 dark:text-slate-200">{{ selectedRoomForDelete?.name }}</strong>? Tindakan ini tidak dapat dibatalkan jika ruangan telah memiliki riwayat laporan.
                         </p>
                     </div>
                     <div class="flex flex-col-reverse sm:flex-row items-center justify-center gap-2.5 pt-2 w-full">

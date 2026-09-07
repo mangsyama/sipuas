@@ -28,6 +28,10 @@ Route::middleware('auth')->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
+    // Modul Staf Pelayanan — Live Attendance & Personal KPI
+    Route::get('/staff/attendance', [\App\Http\Controllers\AttendanceController::class, 'index'])->name('staff.attendance');
+    Route::get('/staff/dashboard', [\App\Http\Controllers\StaffDashboardController::class, 'index'])->name('staff.dashboard');
+
     // Modul Kepala Seksi (Kasi) — PRD System
     Route::get('/kasi/dashboard', [KasiController::class, 'dashboard'])->name('kasi.dashboard');
     Route::get('/kasi/verify/{id?}', [KasiController::class, 'verify'])->name('kasi.verify');
@@ -39,9 +43,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/executive/kasi-responsiveness', [KabidController::class, 'kasiResponsiveness'])->name('executive.kasi-responsiveness');
     Route::get('/executive/leaderboard', [KabidController::class, 'leaderboard'])->name('executive.leaderboard');
 
-    Route::get('/settings', function () {
-        return redirect()->route('profile.edit');
-    })->name('settings.index');
+    // Pengaturan Sistem & Preferensi Notifikasi
+    Route::get('/settings', [\App\Http\Controllers\SettingsController::class, 'index'])->name('settings.index');
+    Route::patch('/settings/notifications', [\App\Http\Controllers\SettingsController::class, 'updateNotifications'])->name('settings.notifications.update');
+    Route::patch('/profile/notifications', [\App\Http\Controllers\SettingsController::class, 'updateNotifications'])->name('profile.update-notifications');
 
     Route::get('/notifications', function () {
         return redirect()->route('dashboard');
@@ -94,6 +99,7 @@ Route::middleware('auth')->group(function () {
     Route::delete('/users/{user}', [\App\Http\Controllers\UserManagementController::class, 'destroy'])->name('users.destroy');
     Route::patch('/users/{user}/toggle-status', [\App\Http\Controllers\UserManagementController::class, 'toggleStatus'])->name('users.toggle-status');
     Route::post('/users/{user}/reset-password', [\App\Http\Controllers\UserManagementController::class, 'resetPassword'])->name('users.reset-password');
+    Route::patch('/users/{user}/permissions', [\App\Http\Controllers\UserManagementController::class, 'updatePermissions'])->name('users.permissions.update');
     
     // User Approvals (Persetujuan Pendaftaran Akun)
     Route::get('/users-approvals', [\App\Http\Controllers\UserApprovalController::class, 'index'])->name('users.approvals');
@@ -108,12 +114,13 @@ Route::middleware('auth')->group(function () {
     Route::delete('/units/{unit}', [\App\Http\Controllers\UnitManagementController::class, 'destroy'])->name('units.destroy');
     Route::patch('/units/{unit}/toggle-status', [\App\Http\Controllers\UnitManagementController::class, 'toggleStatus'])->name('units.toggle-status');
 
-    // Master Data 3: Hospital Staff / Pegawai Unit & Saldo KPI
-    Route::get('/staff', [\App\Http\Controllers\StaffManagementController::class, 'index'])->name('staff.index');
-    Route::post('/staff', [\App\Http\Controllers\StaffManagementController::class, 'store'])->name('staff.store');
-    Route::put('/staff/{staff}', [\App\Http\Controllers\StaffManagementController::class, 'update'])->name('staff.update');
-    Route::delete('/staff/{staff}', [\App\Http\Controllers\StaffManagementController::class, 'destroy'])->name('staff.destroy');
-    Route::patch('/staff/{staff}/toggle-status', [\App\Http\Controllers\StaffManagementController::class, 'toggleStatus'])->name('staff.toggle-status');
+    // Redirect legacy staff route to users
+    Route::get('/staff', fn () => redirect()->route('users.index'))->name('staff.index');
+
+    // Staff Attendance / Presensi Kehadiran Dinas
+    Route::get('/attendance/status', [\App\Http\Controllers\AttendanceController::class, 'currentStatus'])->name('attendance.status');
+    Route::post('/attendance/check-in', [\App\Http\Controllers\AttendanceController::class, 'checkIn'])->name('attendance.check-in');
+    Route::post('/attendance/check-out', [\App\Http\Controllers\AttendanceController::class, 'checkOut'])->name('attendance.check-out');
 
     Route::get('/design-system', fn () => redirect()->route('dashboard'))->name('design-system.index');
     Route::get('/design-system/buttons-badges', fn () => redirect()->route('dashboard'))->name('design-system.buttons-badges');
@@ -121,6 +128,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/design-system/modals-alerts', fn () => redirect()->route('dashboard'))->name('design-system.modals-alerts');
     Route::get('/design-system/tables', fn () => redirect()->route('dashboard'))->name('design-system.tables');
     Route::get('/design-system/cards', fn () => redirect()->route('dashboard'))->name('design-system.cards');
+    Route::get('/design-system/notifications', fn () => redirect()->route('dashboard'))->name('design-system.notifications');
 
     Route::get('/admin/qr-code', fn () => redirect()->route('dashboard'))->name('admin.qr-code.index');
     Route::get('/admin/qr-generator', fn () => redirect()->route('dashboard'))->name('admin.qr-generator.index');

@@ -4,7 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Report;
 use App\Models\ReportAttachment;
-use App\Models\Unit;
+use App\Models\Room;
 use App\Services\AiAnalysisService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -20,22 +20,32 @@ class ReportController extends Controller
         $this->aiService = $aiService;
     }
 
-
     /**
      * Show public report creation form.
      */
     public function create(Request $request): Response
     {
-        $units = Unit::where('is_active', true)
+        $rooms = Room::where('is_active', true)
+            ->orderBy('building_name')
             ->orderBy('name')
-            ->get(['id', 'code', 'name', 'category']);
+            ->get()
+            ->map(fn ($r) => [
+                'id' => $r->id,
+                'name' => $r->name,
+                'code' => $r->location_info,
+                'building_name' => $r->building_name,
+                'location_floor' => $r->location_floor,
+            ]);
 
         $step = $request->query('step');
+        $selectedRoomId = $request->query('room', $request->query('unit', ''));
 
         return Inertia::render('Report/Create', [
-            'unitId' => $request->query('unit', ''),
+            'roomId' => $selectedRoomId,
+            'unitId' => $selectedRoomId, // Backward compatibility
             'initialStep' => $step !== null ? (int) $step : null,
-            'units' => $units,
+            'rooms' => $rooms,
+            'units' => $rooms, // Backward compatibility
         ]);
     }
 
@@ -45,7 +55,8 @@ class ReportController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'unit_id' => 'required',
+            'room_id' => 'nullable',
+            'unit_id' => 'nullable',
             'target_object' => 'nullable|string|max:255',
             'isi_laporan' => 'required|string|min:5|max:3000',
             'reporter_name' => 'nullable|string|max:150',
@@ -53,27 +64,29 @@ class ReportController extends Controller
             'attachment' => 'nullable|file|mimes:jpg,jpeg,png,webp,mp4,mov,avi,webm|max:10240', // Max 10MB
         ]);
 
-        // Find unit either by id or code
-        $unit = Unit::where('id', $validated['unit_id'])
-            ->orWhere('code', $validated['unit_id'])
+        $roomId = $validated['room_id'] ?? $validated['unit_id'] ?? null;
+
+        // Find room either by id or name
+        $room = Room::where('id', $roomId)
+            ->orWhere('name', $roomId)
             ->first();
 
-        if (!$unit) {
-            $unit = Unit::first();
+        if (!$room) {
+            $room = Room::first();
         }
 
         // Run AI Analysis with safety fallback
         try {
             $aiAnalysis = $this->aiService->analyzeReport(
                 $validated['isi_laporan'],
-                $unit ? $unit->name : 'Umum',
+                $room ? $room->name : 'Umum',
                 $validated['target_object'] ?? null
             );
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::warning('AI Analysis Warning: ' . $e->getMessage());
             $aiAnalysis = $this->aiService->fallbackHeuristicAnalysis(
                 $validated['isi_laporan'],
-                $unit ? $unit->name : 'Umum',
+                $room ? $room->name : 'Umum',
                 $validated['target_object'] ?? null
             );
         }
@@ -93,7 +106,7 @@ class ReportController extends Controller
 
         $report = Report::create([
             'ticket_number' => $ticketNumber,
-            'unit_id' => $unit->id,
+            'room_id' => $room->id,
             'target_object' => $validated['target_object'] ?? null,
             'isi_laporan' => $validated['isi_laporan'],
             'ai_sentiment' => $sentiment,
@@ -126,9 +139,12 @@ class ReportController extends Controller
             ]);
         }
 
-        // Kirim Notifikasi WhatsApp Siaga ke Kasi Unit Terkait (Non-blocking)
+        // Kirim Notifikasi WhatsApp Siaga ke Kasi Terkait (Non-blocking)
         try {
-            $kasiUsers = \App\Models\User::where('unit_id', $unit->id)
+            $kasiUsers = \App\Models\User::where(function ($q) use ($room) {
+                    $q->where('room_id', $room->id)
+                      ->orWhere('unit_id', $room->id);
+                })
                 ->where('role', 'KASI')
                 ->where('is_active', true)
                 ->whereNotNull('phone_number')
@@ -139,9 +155,9 @@ class ReportController extends Controller
                 $secretKey = config('services.wa_gateway.secret_key');
 
                 $waMessage = "🔔 *NOTIFIKASI SIAGA SIPUAS*\n"
-                    . "Ada laporan pelayanan baru di unit kerja Anda:\n\n"
+                    . "Ada laporan pelayanan baru di ruangan Anda:\n\n"
                     . "📋 *No. Tiket:* {$ticketNumber}\n"
-                    . "🏥 *Unit:* " . ($unit->name ?? 'Umum') . "\n"
+                    . "🏥 *Ruangan:* " . ($room->name ?? 'Umum') . " (" . ($room->location_info ?? '-') . ")\n"
                     . "👤 *Sasaran/Staf:* " . ($validated['target_object'] ?? '-') . "\n"
                     . "🕒 *Shift:* {$shiftInfo}\n"
                     . "📊 *Sentimen AI:* {$sentiment}\n"
@@ -166,6 +182,7 @@ class ReportController extends Controller
             return response()->json([
                 'success' => true,
                 'ticket_number' => $ticketNumber,
+                'uuid' => $report->uuid,
                 'report_id' => $report->id,
             ]);
         }
@@ -196,14 +213,18 @@ class ReportController extends Controller
 
         if (!empty($ticket)) {
             $searched = true;
-            $report = Report::with(['unit', 'attachments'])
+            $report = Report::with(['room', 'attachments'])
                 ->where('ticket_number', $ticket)
+                ->orWhere('uuid', $ticket)
                 ->first();
 
             if ($report) {
                 $reportData = [
+                    'uuid' => $report->uuid,
                     'ticket_number' => $report->ticket_number,
-                    'unit_name' => $report->unit ? $report->unit->name : 'Unit Umum',
+                    'room_name' => $report->room ? $report->room->name : 'Ruangan Umum',
+                    'unit_name' => $report->room ? $report->room->name : 'Ruangan Umum',
+                    'location_info' => $report->room ? $report->room->location_info : '-',
                     'target_object' => $report->target_object,
                     'isi_laporan' => $report->isi_laporan,
                     'status' => $report->status ?? 'PENDING',
@@ -225,4 +246,3 @@ class ReportController extends Controller
         ]);
     }
 }
-

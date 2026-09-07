@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Models\Room;
 use App\Models\User;
 use App\Models\Unit;
 use App\Services\SecureFileUpload;
@@ -22,10 +23,18 @@ class RegisteredUserController extends Controller
      */
     public function create(): Response
     {
-        $units = Unit::query()
+        $units = Room::query()
             ->where('is_active', true)
+            ->orderBy('building_name')
             ->orderBy('name')
-            ->get(['id', 'name', 'code']);
+            ->get()
+            ->map(fn ($r) => [
+                'id' => $r->id,
+                'name' => $r->name,
+                'code' => $r->location_info,
+                'building_name' => $r->building_name,
+                'location_floor' => $r->location_floor,
+            ]);
 
         return Inertia::render('Auth/Register', [
             'units' => $units,
@@ -43,7 +52,7 @@ class RegisteredUserController extends Controller
             'name' => 'required|string|max:255',
             'username' => ['required', 'string', 'max:255', 'unique:'.User::class],
             'nip' => ['required', 'string', 'regex:/^[0-9]+$/', 'max:18'],
-            'unit_id' => ['nullable', 'exists:units,id'],
+            'unit_id' => ['nullable', 'exists:rooms,id'],
             'phone_number' => ['nullable', 'string', 'regex:/^[0-9]+$/', 'max:15'],
             'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:'.User::class],
             'profile_photo' => ['required', 'image', 'mimes:jpeg,png,jpg,webp', 'max:10240'],

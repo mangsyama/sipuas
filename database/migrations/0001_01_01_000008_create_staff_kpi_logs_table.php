@@ -13,10 +13,10 @@ return new class extends Migration
     {
         Schema::create('staff_kpi_logs', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('staff_id')->constrained('staff')->cascadeOnDelete();
+            $table->foreignId('user_id')->constrained('users')->cascadeOnDelete();
             $table->foreignId('report_id')->nullable()->constrained('reports')->nullOnDelete();
             $table->foreignId('verified_by')->nullable()->constrained('users')->nullOnDelete();
-            $table->string('action_type', 30); // PENAMBAHAN, PEMOTONGAN
+            $table->string('action_type', 30); // PENAMBAHAN, PEMOTONGAN, NETRAL
             $table->integer('points'); // e.g. 5 or -5
             $table->text('note')->nullable();
             $table->timestampTz('logged_at')->useCurrent();

@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('report_staff', function (Blueprint $table) {
             $table->id();
             $table->foreignId('report_id')->constrained('reports')->cascadeOnDelete();
-            $table->foreignId('staff_id')->constrained('staff')->cascadeOnDelete();
+            $table->foreignId('user_id')->constrained('users')->cascadeOnDelete();
             $table->string('action_type', 30)->default('PEMOTONGAN'); // PENAMBAHAN, PEMOTONGAN, NETRAL
             $table->integer('points')->default(0); // e.g. +5, -5
             $table->timestampsTz();

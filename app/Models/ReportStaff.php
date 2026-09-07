@@ -14,7 +14,7 @@ class ReportStaff extends Model
 
     protected $fillable = [
         'report_id',
-        'staff_id',
+        'user_id',
         'action_type',
         'points',
     ];
@@ -31,8 +31,13 @@ class ReportStaff extends Model
         return $this->belongsTo(Report::class);
     }
 
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'user_id');
+    }
+
     public function staff(): BelongsTo
     {
-        return $this->belongsTo(Staff::class);
+        return $this->belongsTo(User::class, 'user_id');
     }
 }

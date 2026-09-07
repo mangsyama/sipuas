@@ -12,6 +12,7 @@ class ReportAttachment extends Model
     use HasFactory;
 
     protected $fillable = [
+        'uuid',
         'report_id',
         'file_path',
         'file_name',
@@ -19,6 +20,15 @@ class ReportAttachment extends Model
         'mime_type',
         'file_size_bytes',
     ];
+
+    protected static function booted(): void
+    {
+        static::creating(function (ReportAttachment $attachment) {
+            if (empty($attachment->uuid)) {
+                $attachment->uuid = (string) \Illuminate\Support\Str::uuid();
+            }
+        });
+    }
 
     protected $appends = [
         'file_url',

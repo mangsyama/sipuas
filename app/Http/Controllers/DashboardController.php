@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Report;
 use App\Models\Unit;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -13,9 +14,14 @@ class DashboardController extends Controller
     /**
      * Display main hospital dashboard with live data.
      */
-    public function index(Request $request): Response
+    public function index(Request $request): Response|RedirectResponse
     {
         $user = $request->user();
+
+        // Staf pelayanan diarahkan langsung ke halaman presensi utama
+        if ($user && $user->isStaff()) {
+            return redirect()->route('staff.attendance');
+        }
 
         // 1. Calculate Aggregate Stats
         $totalReports = Report::count();

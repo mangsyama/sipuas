@@ -11,7 +11,7 @@ class StaffKpiLog extends Model
     use HasFactory;
 
     protected $fillable = [
-        'staff_id',
+        'user_id',
         'report_id',
         'verified_by',
         'action_type',
@@ -28,9 +28,14 @@ class StaffKpiLog extends Model
         ];
     }
 
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'user_id');
+    }
+
     public function staff(): BelongsTo
     {
-        return $this->belongsTo(Staff::class);
+        return $this->belongsTo(User::class, 'user_id');
     }
 
     public function report(): BelongsTo

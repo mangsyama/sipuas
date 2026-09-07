@@ -33,15 +33,17 @@ class HandleInertiaRequests extends Middleware
     {
         $user = $request->user();
 
-        if ($user && !$user->is_active) {
-            \Illuminate\Support\Facades\Auth::guard('web')->logout();
-            $user = null;
-        }
+        $permissions = $user ? $user->getEffectivePermissions() : [];
+        $pendingApprovalsCount = $user && ($user->isAdministrator() || $user->hasPageAccess('users.approvals')) 
+            ? \App\Models\User::where('is_active', false)->count() 
+            : 0;
 
         return [
             ...parent::share($request),
             'auth' => [
                 'user' => $user,
+                'page_permissions' => $permissions,
+                'pending_approvals_count' => $pendingApprovalsCount,
             ],
             'locale' => app()->getLocale(),
             'translations' => $this->getTranslations(),

@@ -2,40 +2,20 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\HasMany;
-
-class Unit extends Model
+/**
+ * Backward compatibility alias for Room model.
+ */
+class Unit extends Room
 {
-    use HasFactory;
+    protected $table = 'rooms';
 
-    protected $fillable = [
+    protected $appends = [
+        'location_info',
         'code',
-        'name',
-        'category',
-        'is_active',
     ];
 
-    protected function casts(): array
+    public function getCodeAttribute(): string
     {
-        return [
-            'is_active' => 'boolean',
-        ];
-    }
-
-    public function users(): HasMany
-    {
-        return $this->hasMany(User::class);
-    }
-
-    public function staff(): HasMany
-    {
-        return $this->hasMany(Staff::class);
-    }
-
-    public function reports(): HasMany
-    {
-        return $this->hasMany(Report::class);
+        return $this->location_info;
     }
 }

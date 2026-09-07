@@ -114,6 +114,24 @@ return [
             'trust_server_certificate' => env('DB_TRUST_SERVER_CERTIFICATE', 'true'),
         ],
 
+        // Koneksi ke Database Pesupeluh untuk Integrasi & SSO JIT Login
+        'pesupeluh' => [
+            'driver' => env('DB_PESUPELUH_CONNECTION', env('DB_CONNECTION', 'sqlite')),
+            'url' => env('DB_PESUPELUH_URL'),
+            'host' => env('DB_PESUPELUH_HOST', env('DB_HOST', '127.0.0.1')),
+            'port' => env('DB_PESUPELUH_PORT', env('DB_PORT', '1433')),
+            'database' => env('DB_PESUPELUH_DATABASE', env('DB_CONNECTION') === 'sqlite' 
+                ? base_path('../pesupeluh/database/db_pesupeluh.sqlite') 
+                : 'db_pesupeluh'),
+            'username' => env('DB_PESUPELUH_USERNAME', env('DB_USERNAME', 'root')),
+            'password' => env('DB_PESUPELUH_PASSWORD', env('DB_PASSWORD', '')),
+            'prefix' => '',
+            'charset' => 'utf8',
+            'encrypt' => env('DB_ENCRYPT', 'false'),
+            'trust_server_certificate' => env('DB_TRUST_SERVER_CERTIFICATE', 'true'),
+            'foreign_key_constraints' => env('DB_FOREIGN_KEYS', true),
+        ],
+
     ],
 
     /*

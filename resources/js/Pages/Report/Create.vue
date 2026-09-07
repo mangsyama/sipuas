@@ -602,16 +602,17 @@ const copyReceipt = () => {
 
                         <!-- Pilih Unit Pelayanan via SearchableSelect -->
                         <div class="space-y-1.5">
-                            <InputLabel for="unit_id" value="Unit Pelayanan *" />
+                            <InputLabel for="unit_id" value="Ruangan / Unit Pelayanan *" />
                             <div>
                                 <SearchableSelect
                                     v-model="form.unit_id"
                                     :options="units"
                                     valueKey="id"
                                     labelKey="name"
+                                    subtitleKey="code"
                                     :absolute="false"
-                                    placeholder="-- Pilih Lokasi Pelayanan Rumah Sakit --"
-                                    searchPlaceholder="Cari unit pelayanan..."
+                                    placeholder="-- Pilih Ruangan / Lokasi Rumah Sakit --"
+                                    searchPlaceholder="Cari nama ruangan atau gedung..."
                                 />
                             </div>
                         </div>

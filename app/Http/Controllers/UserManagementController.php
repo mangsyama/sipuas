@@ -2,7 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Unit;
+use App\Models\Role;
+use App\Models\Room;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -14,7 +15,58 @@ use Inertia\Response;
 class UserManagementController extends Controller
 {
     /**
-     * Display a listing of all system users.
+     * Get all permission keys structured by category groups.
+     */
+    public static function getAllPermissionKeys(): array
+    {
+        return [
+            [
+                'group' => 'Menu Utama',
+                'permissions' => [
+                    ['key' => 'dashboard', 'label' => 'Dashboard Utama'],
+                ],
+            ],
+            [
+                'group' => 'Modul Staf Pelayanan',
+                'permissions' => [
+                    ['key' => 'staff.attendance', 'label' => 'Presensi Mandiri / Live Attendance'],
+                    ['key' => 'staff.dashboard', 'label' => 'Dashboard Kinerja Staf & Presensi'],
+                    ['key' => 'attendance.status', 'label' => 'Akses Status Presensi Mandiri'],
+                ],
+            ],
+            [
+                'group' => 'Modul Kepala Seksi (Kasi)',
+                'permissions' => [
+                    ['key' => 'kasi.dashboard', 'label' => 'Feed Aduan & Monitoring Shift'],
+                    ['key' => 'kasi.verify', 'label' => 'Verifikasi Laporan & Evaluasi KPI'],
+                    ['key' => 'kasi.logbook', 'label' => 'Digital Logbook Staf Unit'],
+                ],
+            ],
+            [
+                'group' => 'Modul Kepala Bidang (Kabid)',
+                'permissions' => [
+                    ['key' => 'executive.dashboard', 'label' => 'Executive Analytics & Responsiveness'],
+                    ['key' => 'executive.kasi-responsiveness', 'label' => 'Tingkat Responsivitas Kasi'],
+                    ['key' => 'executive.leaderboard', 'label' => 'Leaderboard Integritas Unit'],
+                ],
+            ],
+            [
+                'group' => 'Master Data & Pengaturan',
+                'permissions' => [
+                    ['key' => 'units.index', 'label' => 'Master Ruangan RS'],
+                    ['key' => 'rooms.index', 'label' => 'Master Ruangan RS'],
+                    ['key' => 'users.approvals', 'label' => 'Persetujuan Pendaftar Baru'],
+                    ['key' => 'users.index', 'label' => 'Kelola Akun Sistem'],
+                    ['key' => 'admin.ai-settings.index', 'label' => 'Integrasi AI (Gemini/Groq/OpenAI)'],
+                    ['key' => 'admin.wa-gateway.index', 'label' => 'WhatsApp Gateway Management'],
+                    ['key' => 'settings.index', 'label' => 'Preferensi Notifikasi Akun'],
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * Display a listing of system users with comprehensive filters.
      */
     public function index(Request $request): Response
     {
@@ -23,7 +75,7 @@ class UserManagementController extends Controller
         $unitFilter = $request->query('unit', '');
         $statusFilter = $request->query('status', '');
 
-        $query = User::with('unit')->latest();
+        $query = User::with('room')->latest();
 
         if (!empty($search)) {
             $query->where(function ($q) use ($search) {
@@ -36,11 +88,20 @@ class UserManagementController extends Controller
         }
 
         if (!empty($roleFilter) && $roleFilter !== 'ALL') {
-            $query->where('role', $roleFilter);
+            $roleId = match ($roleFilter) {
+                'ADMINISTRATOR', 'SUPERADMIN' => Role::ADMINISTRATOR,
+                'DIREKTUR' => Role::DIREKTUR,
+                'KABID' => Role::KEPALA_BIDANG,
+                'KASI' => Role::KEPALA_SEKSI,
+                default => Role::STAFF,
+            };
+            $query->where('role_id', $roleId);
         }
 
         if (!empty($unitFilter) && $unitFilter !== 'ALL') {
-            $query->where('unit_id', $unitFilter);
+            $query->where(function ($q) use ($unitFilter) {
+                $q->where('room_id', $unitFilter)->orWhere('unit_id', $unitFilter);
+            });
         }
 
         if ($statusFilter !== '' && $statusFilter !== 'ALL') {
@@ -58,29 +119,46 @@ class UserManagementController extends Controller
                 'phone_number' => $u->phone_number ?? '-',
                 'profile_photo_path' => $u->profile_photo_path,
                 'role' => $u->role,
-                'unit_id' => $u->unit_id,
-                'unit_name' => $u->unit ? $u->unit->name : 'Semua Unit (Global)',
+                'role_id' => $u->role_id,
+                'room_id' => $u->room_id,
+                'unit_id' => $u->room_id,
+                'unit_name' => $u->room ? $u->room->name : 'Semua Ruangan (Global)',
+                'room_name' => $u->room ? $u->room->name : 'Semua Ruangan (Global)',
+                'room_location' => $u->room ? $u->room->location_info : '-',
                 'is_active' => (bool) $u->is_active,
                 'created_at' => $u->created_at ? $u->created_at->format('Y-m-d H:i') : '-',
             ];
         });
 
-        $units = Unit::where('is_active', true)->orderBy('name')->get(['id', 'code', 'name']);
+        $units = Room::where('is_active', true)->orderBy('building_name')->orderBy('name')->get(['id', 'name', 'building_name', 'location_floor'])->map(function ($r) {
+            return [
+                'id' => $r->id,
+                'code' => $r->location_info,
+                'name' => $r->name,
+                'building_name' => $r->building_name,
+                'location_floor' => $r->location_floor,
+            ];
+        });
+        $roles = Role::orderBy('id', 'asc')->get();
 
         $stats = [
             'total' => User::count(),
-            'administrator' => User::whereIn('role', ['ADMINISTRATOR', 'SUPERADMIN'])->count(),
-            'superadmin' => User::whereIn('role', ['ADMINISTRATOR', 'SUPERADMIN'])->count(),
-            'kabid' => User::where('role', 'KABID')->count(),
-            'kasi' => User::where('role', 'KASI')->count(),
-            'staff' => User::where('role', 'STAFF')->count(),
+            'administrator' => User::where('role_id', Role::ADMINISTRATOR)->count(),
+            'superadmin' => User::where('role_id', Role::ADMINISTRATOR)->count(),
+            'direktur' => User::where('role_id', Role::DIREKTUR)->count(),
+            'kabid' => User::where('role_id', Role::KEPALA_BIDANG)->count(),
+            'kasi' => User::where('role_id', Role::KEPALA_SEKSI)->count(),
+            'staff' => User::where('role_id', Role::STAFF)->count(),
             'active' => User::where('is_active', true)->count(),
         ];
 
         return Inertia::render('UserManagement/Index', [
             'users' => $users,
             'units' => $units,
+            'rooms' => $units,
+            'roles' => $roles,
             'stats' => $stats,
+            'allPermissionKeys' => self::getAllPermissionKeys(),
             'filters' => [
                 'search' => $search,
                 'role' => $roleFilter,
@@ -102,10 +180,24 @@ class UserManagementController extends Controller
             'email' => ['required', 'string', 'email', 'max:150', Rule::unique('users')->whereNull('deleted_at')],
             'phone_number' => 'nullable|string|max:30',
             'password' => 'required|string|min:6',
-            'role' => 'required|string|in:ADMINISTRATOR,SUPERADMIN,KABID,KASI,STAFF',
-            'unit_id' => 'nullable|exists:units,id',
+            'role' => 'required|string|in:ADMINISTRATOR,SUPERADMIN,DIREKTUR,KABID,KASI,STAFF',
+            'room_id' => 'nullable|exists:rooms,id',
+            'unit_id' => 'nullable|exists:rooms,id',
         ]);
 
+        if (!empty($validated['unit_id']) && empty($validated['room_id'])) {
+            $validated['room_id'] = $validated['unit_id'];
+        }
+
+        $roleId = match ($validated['role']) {
+            'ADMINISTRATOR', 'SUPERADMIN' => Role::ADMINISTRATOR,
+            'DIREKTUR' => Role::DIREKTUR,
+            'KABID' => Role::KEPALA_BIDANG,
+            'KASI' => Role::KEPALA_SEKSI,
+            default => Role::STAFF,
+        };
+
+        $validated['role_id'] = $roleId;
         $validated['password'] = Hash::make($validated['password']);
         $validated['is_active'] = true;
 
@@ -119,7 +211,7 @@ class UserManagementController extends Controller
      */
     public function show(User $user): Response
     {
-        $user->load(['unit', 'verifiedReports']);
+        $user->load(['room', 'verifiedReports']);
 
         return Inertia::render('UserManagement/Show', [
             'targetUser' => [
@@ -131,12 +223,22 @@ class UserManagementController extends Controller
                 'phone_number' => $user->phone_number ?? '-',
                 'profile_photo_path' => $user->profile_photo_path,
                 'role' => $user->role,
-                'unit_id' => $user->unit_id,
-                'unit_name' => $user->unit ? $user->unit->name : 'Semua Unit (Global)',
+                'role_id' => $user->role_id,
+                'room_id' => $user->room_id,
+                'unit_id' => $user->room_id,
+                'room_name' => $user->room ? $user->room->name : 'Semua Ruangan (Global)',
+                'unit_name' => $user->room ? $user->room->name : 'Semua Ruangan (Global)',
+                'room_location' => $user->room ? $user->room->location_info : '-',
                 'is_active' => (bool) $user->is_active,
+                'total_points' => (int) $user->total_points,
+                'praise_count' => (int) $user->praise_count,
+                'complaint_count' => (int) $user->complaint_count,
                 'created_at' => $user->created_at ? $user->created_at->format('d M Y, H:i') : '-',
                 'verified_reports_count' => $user->verifiedReports->count(),
+                'effective_permissions' => $user->getEffectivePermissions(),
+                'has_custom_permissions' => $user->page_permissions !== null,
             ],
+            'allPermissionKeys' => self::getAllPermissionKeys(),
         ]);
     }
 
@@ -145,7 +247,15 @@ class UserManagementController extends Controller
      */
     public function edit(User $user): Response
     {
-        $units = Unit::where('is_active', true)->orderBy('name')->get(['id', 'code', 'name']);
+        $rooms = Room::where('is_active', true)->orderBy('building_name')->orderBy('name')->get();
+        $units = $rooms->map(fn ($r) => [
+            'id' => $r->id,
+            'code' => $r->location_info,
+            'name' => $r->name,
+            'building_name' => $r->building_name,
+            'location_floor' => $r->location_floor,
+        ]);
+        $roles = Role::orderBy('id', 'asc')->get();
 
         return Inertia::render('UserManagement/Edit', [
             'targetUser' => [
@@ -157,10 +267,18 @@ class UserManagementController extends Controller
                 'phone_number' => $user->phone_number ?? '',
                 'profile_photo_path' => $user->profile_photo_path,
                 'role' => $user->role,
-                'unit_id' => $user->unit_id,
+                'role_id' => $user->role_id,
+                'room_id' => $user->room_id,
+                'unit_id' => $user->room_id,
                 'is_active' => (bool) $user->is_active,
+                'page_permissions' => $user->page_permissions,
+                'effective_permissions' => $user->getEffectivePermissions(),
+                'use_role_default' => $user->page_permissions === null,
             ],
             'units' => $units,
+            'rooms' => $units,
+            'roles' => $roles,
+            'allPermissionKeys' => self::getAllPermissionKeys(),
         ]);
     }
 
@@ -175,12 +293,15 @@ class UserManagementController extends Controller
             'nip' => ['nullable', 'string', 'max:50', Rule::unique('users')->ignore($user->id)->whereNull('deleted_at')],
             'email' => ['required', 'string', 'email', 'max:150', Rule::unique('users')->ignore($user->id)->whereNull('deleted_at')],
             'phone_number' => 'nullable|string|max:30',
-            'role' => 'required|string|in:ADMINISTRATOR,SUPERADMIN,KABID,KASI,STAFF',
-            'unit_id' => 'nullable|exists:units,id',
+            'role' => 'nullable|string',
+            'role_id' => 'nullable|exists:roles,id',
+            'room_id' => 'nullable|exists:rooms,id',
+            'unit_id' => 'nullable|exists:rooms,id',
             'is_active' => 'nullable|boolean',
+            'page_permissions' => 'nullable|array',
+            'use_role_default' => 'nullable|boolean',
         ];
 
-        // Jika salah satu kolom kata sandi diisi
         if (!empty($request->password) || !empty($request->current_password)) {
             $rules['current_password'] = ['required', 'current_password'];
             $rules['password'] = ['required', 'string', 'min:6'];
@@ -193,6 +314,27 @@ class UserManagementController extends Controller
             'password.min' => 'Kata sandi baru minimal 6 karakter.',
         ]);
 
+        if (!empty($validated['role_id'])) {
+            $roleId = (int) $validated['role_id'];
+            $validated['role'] = match ($roleId) {
+                Role::ADMINISTRATOR => 'ADMINISTRATOR',
+                Role::DIREKTUR => 'DIREKTUR',
+                Role::KEPALA_BIDANG => 'KABID',
+                Role::KEPALA_SEKSI => 'KASI',
+                default => 'STAFF',
+            };
+        } else {
+            $roleId = match ($validated['role'] ?? 'STAFF') {
+                'ADMINISTRATOR', 'SUPERADMIN' => Role::ADMINISTRATOR,
+                'DIREKTUR' => Role::DIREKTUR,
+                'KABID' => Role::KEPALA_BIDANG,
+                'KASI' => Role::KEPALA_SEKSI,
+                default => Role::STAFF,
+            };
+            $validated['role_id'] = $roleId;
+            $validated['role'] = $validated['role'] ?? 'STAFF';
+        }
+
         if (!empty($validated['password'])) {
             $validated['password'] = Hash::make($validated['password']);
         } else {
@@ -201,9 +343,37 @@ class UserManagementController extends Controller
 
         unset($validated['current_password']);
 
+        if ($request->boolean('use_role_default')) {
+            $validated['page_permissions'] = null;
+        }
+
+        if (array_key_exists('unit_id', $validated) && !array_key_exists('room_id', $validated)) {
+            $validated['room_id'] = $validated['unit_id'];
+        }
+
         $user->update($validated);
 
         return redirect()->route('users.index')->with('success', 'Data pengguna berhasil diperbarui.');
+    }
+
+    /**
+     * Update page permissions specifically for a user.
+     */
+    public function updatePermissions(Request $request, User $user)
+    {
+        $validated = $request->validate([
+            'page_permissions' => 'nullable|array',
+            'page_permissions.*' => 'string',
+            'use_role_default' => 'boolean',
+        ]);
+
+        if ($request->boolean('use_role_default')) {
+            $user->update(['page_permissions' => null]);
+        } else {
+            $user->update(['page_permissions' => $validated['page_permissions'] ?? []]);
+        }
+
+        return redirect()->back()->with('success', 'Hak akses halaman pengguna berhasil diperbarui.');
     }
 
     /**

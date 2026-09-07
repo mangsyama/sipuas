@@ -4,8 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\Report;
 use App\Models\ReportStaff;
-use App\Models\Staff;
+use App\Models\Role;
 use App\Models\StaffKpiLog;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 use Inertia\Inertia;
@@ -20,9 +21,10 @@ class KasiController extends Controller
     {
         $user = $request->user();
         
-        $query = Report::with(['unit', 'verifier']);
-        if ($user && $user->unit_id && !$user->isSuperAdmin()) {
-            $query->where('unit_id', $user->unit_id);
+        $query = Report::with(['room', 'unit', 'verifier']);
+        $userRoomId = $user ? ($user->room_id ?? $user->unit_id) : null;
+        if ($userRoomId && !$user->isSuperAdmin()) {
+            $query->where('room_id', $userRoomId);
         }
 
         $reports = $query->latest()->get()->map(function ($r) {
@@ -64,8 +66,9 @@ class KasiController extends Controller
             $report = Report::with(['unit', 'attachments', 'staff', 'verifier'])->latest()->first();
         }
 
-        $unitId = $report ? $report->unit_id : null;
-        $staffList = Staff::where('unit_id', $unitId)
+        $roomId = $report ? ($report->room_id ?? $report->unit_id) : null;
+        $staffList = User::where('room_id', $roomId)
+            ->where('role_id', Role::STAFF)
             ->where('is_active', true)
             ->get()
             ->map(function ($s) use ($report) {
@@ -74,8 +77,9 @@ class KasiController extends Controller
                     'id' => $s->id,
                     'name' => $s->name,
                     'nip' => $s->nip ?? '-',
-                    'role' => $s->role,
+                    'role' => $s->role ?? 'Staf Pelayanan',
                     'total_points' => $s->total_points,
+                    'is_on_duty' => (bool)$s->is_on_duty,
                     'selected' => $isLinked,
                 ];
             });
@@ -168,14 +172,14 @@ class KasiController extends Controller
             'supervisor_notes' => $validated['supervisor_notes'],
         ]);
 
-        // Sync report staff & update staff KPI logs
+        // Sync report staff & update staff KPI logs directly on User model
         $selectedStaffIds = $validated['selected_staff_ids'] ?? [];
         foreach ($selectedStaffIds as $staffId) {
-            $staff = Staff::find($staffId);
+            $staff = User::find($staffId);
             if (!$staff) continue;
 
             ReportStaff::updateOrCreate(
-                ['report_id' => $report->id, 'staff_id' => $staff->id],
+                ['report_id' => $report->id, 'user_id' => $staff->id],
                 ['action_type' => $validated['action_type'], 'points' => $points]
             );
 
@@ -191,7 +195,7 @@ class KasiController extends Controller
 
             // Add KPI Log
             StaffKpiLog::create([
-                'staff_id' => $staff->id,
+                'user_id' => $staff->id,
                 'report_id' => $report->id,
                 'verified_by' => $request->user() ? $request->user()->id : null,
                 'action_type' => $validated['action_type'],
@@ -211,9 +215,10 @@ class KasiController extends Controller
     {
         $user = $request->user();
 
-        $query = Staff::with(['unit', 'kpiLogs.report', 'kpiLogs.verifier'])->where('is_active', true);
-        if ($user && $user->unit_id && !$user->isSuperAdmin()) {
-            $query->where('unit_id', $user->unit_id);
+        $query = User::where('role_id', Role::STAFF)->with(['room', 'unit', 'kpiLogs.report', 'kpiLogs.verifier'])->where('is_active', true);
+        $userRoomId = $user ? ($user->room_id ?? $user->unit_id) : null;
+        if ($userRoomId && !$user->isSuperAdmin()) {
+            $query->where('room_id', $userRoomId);
         }
 
         $staffLogbooks = $query->get()->map(function ($s) {
@@ -221,7 +226,7 @@ class KasiController extends Controller
                 'id' => $s->id,
                 'name' => $s->name,
                 'nip' => $s->nip ?? '-',
-                'role' => $s->role,
+                'role' => $s->role ?? 'STAFF',
                 'total_points' => $s->total_points,
                 'praise_count' => $s->praise_count,
                 'complaint_count' => $s->complaint_count,

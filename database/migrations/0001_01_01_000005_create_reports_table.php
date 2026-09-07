@@ -3,6 +3,7 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\DB;
 
 return new class extends Migration
 {
@@ -13,8 +14,9 @@ return new class extends Migration
     {
         Schema::create('reports', function (Blueprint $table) {
             $table->id();
+            $table->uuid('uuid')->default(DB::raw(DB::getDriverName() === 'sqlsrv' ? 'NEWID()' : 'NULL'))->unique();
             $table->string('ticket_number', 50)->unique(); // e.g. LP-2026-08-001
-            $table->foreignId('unit_id')->constrained('units')->cascadeOnDelete();
+            $table->foreignId('room_id')->constrained('rooms')->cascadeOnDelete();
             $table->string('target_object', 255)->nullable(); // Nama staf/petugas/fasilitas spesifik
             $table->text('isi_laporan');
             $table->string('ai_sentiment', 30)->default('NETRAL'); // POSITIF, NEGATIF, NETRAL

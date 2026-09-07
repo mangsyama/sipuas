@@ -219,7 +219,7 @@ onUnmounted(() => {
                         class="w-full sm:w-auto h-10 px-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer"
                     >
                         <Users class="h-4 w-4" />
-                        <span>Master Pengguna Aktif</span>
+                        <span>Daftar Pengguna</span>
                     </Link>
                 </div>
             </div>
@@ -504,7 +504,7 @@ onUnmounted(() => {
                             required
                             class="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-emerald-500 font-medium cursor-pointer transition"
                         >
-                            <option value="STAFF">Staf Pelaksana</option>
+                            <option value="STAFF">Staf Pelayanan</option>
                             <option value="KASI">Kepala Seksi (Kasi)</option>
                             <option value="KABID">Kepala Bidang (Kabid)</option>
                             <option value="ADMINISTRATOR">Administrator</option>

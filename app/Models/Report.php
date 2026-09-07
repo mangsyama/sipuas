@@ -13,8 +13,9 @@ class Report extends Model
     use HasFactory;
 
     protected $fillable = [
+        'uuid',
         'ticket_number',
-        'unit_id',
+        'room_id',
         'target_object',
         'isi_laporan',
         'ai_sentiment',
@@ -35,6 +36,15 @@ class Report extends Model
         'resolved_at',
     ];
 
+    protected static function booted(): void
+    {
+        static::creating(function (Report $report) {
+            if (empty($report->uuid)) {
+                $report->uuid = (string) \Illuminate\Support\Str::uuid();
+            }
+        });
+    }
+
     protected function casts(): array
     {
         return [
@@ -48,9 +58,17 @@ class Report extends Model
         ];
     }
 
+    public function room(): BelongsTo
+    {
+        return $this->belongsTo(Room::class, 'room_id');
+    }
+
+    /**
+     * Backward-compatibility alias
+     */
     public function unit(): BelongsTo
     {
-        return $this->belongsTo(Unit::class);
+        return $this->belongsTo(Room::class, 'room_id');
     }
 
     public function verifier(): BelongsTo
@@ -65,14 +83,14 @@ class Report extends Model
 
     public function staff(): BelongsToMany
     {
-        return $this->belongsToMany(Staff::class, 'report_staff')
+        return $this->belongsToMany(User::class, 'report_staff', 'report_id', 'user_id')
                     ->withPivot('action_type', 'points')
                     ->withTimestamps();
     }
 
     public function kpiLogs(): HasMany
     {
-        return $this->hasMany(StaffKpiLog::class);
+        return $this->hasMany(StaffKpiLog::class, 'report_id');
     }
 
     /**

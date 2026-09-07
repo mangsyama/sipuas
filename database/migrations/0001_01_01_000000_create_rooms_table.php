@@ -11,11 +11,11 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('units', function (Blueprint $table) {
+        Schema::create('rooms', function (Blueprint $table) {
             $table->id();
-            $table->string('code', 50)->unique();
-            $table->string('name', 150);
-            $table->string('category', 50)->default('MEDIK'); // MEDIK, NON_MEDIK
+            $table->string('name', 150); // Nama Ruangan
+            $table->string('building_name', 150)->nullable(); // Gedung (e.g. Gedung A, Gedung B)
+            $table->string('location_floor', 100)->nullable(); // Lantai / Lokasi (e.g. Lantai 1, Lantai 2)
             $table->boolean('is_active')->default(true);
             $table->timestampsTz();
         });
@@ -26,6 +26,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('units');
+        Schema::dropIfExists('rooms');
     }
 };

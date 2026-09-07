@@ -213,7 +213,10 @@ const submitDeleteUser = () => {
 const getRoleBadgeClass = (role) => {
     switch (role) {
         case 'SUPERADMIN':
+        case 'ADMINISTRATOR':
             return 'bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border-purple-200 dark:border-purple-800';
+        case 'DIREKTUR':
+            return 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border-amber-200 dark:border-amber-800';
         case 'KABID':
             return 'bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border-blue-200 dark:border-blue-800';
         case 'KASI':
@@ -228,12 +231,14 @@ const getRoleLabel = (role) => {
         case 'ADMINISTRATOR':
         case 'SUPERADMIN':
             return 'Administrator';
+        case 'DIREKTUR':
+            return 'Direktur';
         case 'KABID':
             return 'Kepala Bidang';
         case 'KASI':
             return 'Kepala Seksi';
         case 'STAFF':
-            return 'Staf Pelaksana';
+            return 'Staf Pelayanan';
         default:
             return role;
     }
@@ -292,7 +297,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-    <Head title="Manajemen Pengguna" />
+    <Head title="Daftar Pengguna" />
 
     <AuthenticatedLayout>
         <div class="py-4 px-4 sm:px-4 lg:px-4 animate-spa-fade-in space-y-4">
@@ -304,10 +309,10 @@ onUnmounted(() => {
                     </div>
                     <div class="space-y-0.5">
                         <h2 class="text-xl font-extrabold text-slate-900 dark:text-white leading-tight">
-                            Master Pengguna Sistem
+                            Daftar Pengguna
                         </h2>
                         <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 max-w-2xl leading-relaxed">
-                            Kelola akun, penugasan unit, dan hak akses staf rumah sakit yang berwenang di SIPUAS.
+                            Kelola akun, penugasan ruangan, dan hak akses staf rumah sakit yang berwenang di SIPUAS.
                         </p>
                     </div>
                 </div>
@@ -392,9 +397,10 @@ onUnmounted(() => {
                         >
                             <option value="ALL">Semua Peran</option>
                             <option value="ADMINISTRATOR">Administrator</option>
+                            <option value="DIREKTUR">Direktur</option>
                             <option value="KABID">Kepala Bidang</option>
                             <option value="KASI">Kepala Seksi</option>
-                            <option value="STAFF">Staf Pelaksana</option>
+                            <option value="STAFF">Staf Pelayanan</option>
                         </select>
 
                         <!-- Filter Unit -->
@@ -668,9 +674,10 @@ onUnmounted(() => {
                                     >
                                         <option value="" disabled>-- Pilih Peran / Hak Akses --</option>
                                         <option value="ADMINISTRATOR">Administrator</option>
+                                        <option value="DIREKTUR">Direktur</option>
                                         <option value="KABID">Kepala Bidang</option>
                                         <option value="KASI">Kepala Seksi</option>
-                                        <option value="STAFF">Staf Pelaksana</option>
+                                        <option value="STAFF">Staf Pelayanan</option>
                                     </select>
                                 </div>
                                 <div>
