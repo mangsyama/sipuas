@@ -34,24 +34,20 @@ const submit = () => {
 </script>
 
 <template>
-    <GuestLayout :hide-logo="true" :no-padding="true" max-width="max-w-[420px]">
+    <GuestLayout :hide-logo="true" :no-padding="true" max-width="max-w-[440px]">
         <Head title="Atur Ulang Kata Sandi" />
 
         <!-- Card Header Section for Logo & Subtitle (Flat Solid) -->
         <div
             class="border-b border-slate-200 bg-slate-50 p-7 text-center dark:border-slate-800 dark:bg-slate-950 sm:p-9"
         >
-            <Link
-                href="/"
-                class="inline-flex items-center justify-center transition-transform hover:scale-105 cursor-pointer"
-                title="SIPUAS"
-            >
+            <div class="inline-flex items-center justify-center select-none">
                 <img
                     src="/images/logo-sidebar.png"
                     alt="SIPUAS Logo"
-                    class="h-9 sm:h-10 w-auto object-contain mx-auto dark:brightness-0 dark:invert"
+                    class="h-9 sm:h-10 w-auto object-contain mx-auto dark:brightness-0 dark:invert pointer-events-none"
                 />
-            </Link>
+            </div>
 
             <p class="mt-2 text-xs text-slate-500 dark:text-slate-400 font-medium">
                 Silakan masukkan kata sandi baru untuk akun Anda
@@ -78,11 +74,11 @@ const submit = () => {
                             type="email"
                             name="email"
                             required
-                            autofocus
+                            :readonly="!!props.email"
                             autocomplete="username"
                             placeholder="nama@email.com"
                             v-model="form.email"
-                            class="block w-full h-11 rounded-xl border border-slate-300 bg-slate-50 pl-10 pr-4 text-sm text-slate-900 placeholder:text-slate-400 transition-colors focus:border-emerald-500 focus:bg-white focus:outline-none focus:ring-0 focus:shadow-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-emerald-400 dark:focus:bg-slate-950"
+                            class="block w-full h-11 rounded-xl border border-slate-300 bg-slate-50 pl-10 pr-4 text-sm text-slate-900 placeholder:text-slate-400 transition-colors focus:border-emerald-500 focus:bg-white focus:outline-none focus:ring-0 focus:shadow-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-emerald-400 dark:focus:bg-slate-950 read-only:opacity-80 read-only:cursor-not-allowed"
                         />
                     </div>
                     <InputError :message="form.errors.email" />

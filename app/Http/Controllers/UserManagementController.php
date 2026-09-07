@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Role;
 use App\Models\Room;
 use App\Models\User;
+use App\Channels\WaGatewayChannel;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -388,6 +389,27 @@ class UserManagementController extends Controller
         $user->update([
             'is_active' => !$user->is_active,
         ]);
+
+        if ($user->is_active && !empty($user->phone_number)) {
+            try {
+                $user->load('room');
+                $unitName = $user->room ? ($user->room->name . ' (' . $user->room->location_info . ')') : 'Pelayanan Rumah Sakit';
+                $waMsg = "Halo *{$user->name}*,\n\n"
+                    . "Akun Anda di sistem *SIPUAS* telah *DISETUJUI & DIAKTIFKAN* oleh Administrator.\n\n"
+                    . "🏥 *Ruangan :* {$unitName}\n"
+                    . "👤 *Username :* {$user->username}\n\n"
+                    . "Silakan login menggunakan akun Pesu Peluh Anda dan pastikan melakukan Presensi dinas harian (Clock-In) saat bertugas.\n\n"
+                    . "Salam hangat,\n_Tim Manajemen Pelayanan SIPUAS_";
+
+                $channel = new WaGatewayChannel();
+                $channel->send($user->phone_number, new class($waMsg) extends \Illuminate\Notifications\Notification {
+                    public function __construct(public string $msg) {}
+                    public function toWaGateway($notifiable) { return $this->msg; }
+                });
+            } catch (\Throwable $e) {
+                // Silently log or ignore
+            }
+        }
 
         $statusText = $user->is_active ? 'diaktifkan' : 'dinonaktifkan';
         return redirect()->back()->with('success', "Akun pengguna berhasil {$statusText}.");

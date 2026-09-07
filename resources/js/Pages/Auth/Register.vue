@@ -180,17 +180,13 @@ const submit = () => {
         <div
             class="border-b border-slate-200 bg-slate-50 p-6 text-center dark:border-slate-800 dark:bg-slate-950 sm:p-8"
         >
-            <Link
-                href="/"
-                class="inline-flex items-center justify-center transition-transform hover:scale-105 cursor-pointer"
-                title="SIPUAS"
-            >
+            <div class="inline-flex items-center justify-center select-none">
                 <img
                     src="/images/logo-sidebar.png"
                     alt="SIPUAS Logo"
-                    class="h-9 sm:h-10 w-auto object-contain mx-auto dark:brightness-0 dark:invert"
+                    class="h-9 sm:h-10 w-auto object-contain mx-auto dark:brightness-0 dark:invert pointer-events-none"
                 />
-            </Link>
+            </div>
 
             <p class="mt-2 text-xs text-slate-500 dark:text-slate-400 font-medium">
                 Lengkapi data diri dan pasfoto untuk membuat akun SIPUAS

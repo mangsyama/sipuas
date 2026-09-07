@@ -185,12 +185,11 @@ class UserApprovalController extends Controller
             try {
                 $user->load('room');
                 $unitName = $user->room ? ($user->room->name . ' (' . $user->room->location_info . ')') : 'Pelayanan Rumah Sakit';
-                $waMsg = "Halo Bapak/Ibu *{$user->name}*,\n\n"
+                $waMsg = "Halo *{$user->name}*,\n\n"
                     . "Akun Anda di sistem *SIPUAS* telah *DISETUJUI & DIAKTIFKAN* oleh Administrator.\n\n"
-                    . "• Penempatan Ruangan : {$unitName}\n"
-                    . "• Role Sistem        : {$roleStr}\n"
-                    . "• Username           : {$user->username}\n\n"
-                    . "Silakan login menggunakan akun Pesu Peluh Anda dan pastikan melakukan absensi dinas harian (Check-In) saat bertugas.\n\n"
+                    . "🏥 *Ruangan :* {$unitName}\n"
+                    . "👤 *Username :* {$user->username}\n\n"
+                    . "Silakan login menggunakan akun Pesu Peluh Anda dan pastikan melakukan Presensi dinas harian (Clock-In) saat bertugas.\n\n"
                     . "Salam hangat,\n_Tim Manajemen Pelayanan SIPUAS_";
 
                 $channel = new WaGatewayChannel();

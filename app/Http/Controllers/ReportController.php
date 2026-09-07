@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Report;
 use App\Models\ReportAttachment;
 use App\Models\Room;
+use App\Channels\WaGatewayChannel;
 use App\Services\AiAnalysisService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -156,12 +157,12 @@ class ReportController extends Controller
 
                 $waMessage = "🔔 *NOTIFIKASI SIAGA SIPUAS*\n"
                     . "Ada laporan pelayanan baru di ruangan Anda:\n\n"
-                    . "📋 *No. Tiket:* {$ticketNumber}\n"
-                    . "🏥 *Ruangan:* " . ($room->name ?? 'Umum') . " (" . ($room->location_info ?? '-') . ")\n"
-                    . "👤 *Sasaran/Staf:* " . ($validated['target_object'] ?? '-') . "\n"
-                    . "🕒 *Shift:* {$shiftInfo}\n"
-                    . "📊 *Sentimen AI:* {$sentiment}\n"
-                    . "📝 *Uraian Singkat:* " . mb_substr($validated['isi_laporan'], 0, 100) . "...\n\n"
+                    . "📋 *No. Tiket :* {$ticketNumber}\n"
+                    . "🏥 *Ruangan :* " . ($room->name ?? 'Umum') . " (" . ($room->location_info ?? '-') . ")\n"
+                    . "👤 *Sasaran/Staf :* " . ($validated['target_object'] ?? '-') . "\n"
+                    . "🕒 *Waktu :* " . now()->translatedFormat('d F Y, H:i') . " WITA\n"
+                    . "📊 *Sentimen AI :* {$sentiment}\n"
+                    . "📝 *Uraian Singkat :* " . mb_substr($validated['isi_laporan'], 0, 100) . "...\n\n"
                     . "Mohon segera buka menu *Feed Aduan Masuk Unit* untuk melakukan verifikasi staf dinas.\n"
                     . "🔗 " . url('/kasi/dashboard');
 
@@ -176,6 +177,37 @@ class ReportController extends Controller
             }
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::info('WA Gateway notification notice: ' . $e->getMessage());
+        }
+
+        // Kirim Notifikasi WhatsApp Konfirmasi & Pengingat Tiket ke Pelapor (jika nomor HP diisi)
+        if (!empty($validated['reporter_phone'])) {
+            try {
+                $hasName = !empty($validated['reporter_name']) && strtolower(trim($validated['reporter_name'])) !== 'anonim';
+                $greeting = $hasName ? "Halo *{$validated['reporter_name']}*," : "Halo,";
+                $waktuLaporan = now()->translatedFormat('d F Y, H:i') . ' WITA';
+                $trackingUrl = url('/report/track?ticket=' . $ticketNumber);
+                $roomLabel = $room ? ($room->name . ' (' . $room->location_info . ')') : 'Pelayanan Rumah Sakit';
+
+                $reporterWaMsg = "{$greeting}\n\n"
+                    . "Terima kasih telah menyampaikan laporan/aspirasi pelayanan Anda melalui sistem *SIPUAS*.\n\n"
+                    . "Berikut adalah rincian tiket aduan Anda:\n"
+                    . "📋 *Nomor Tiket :* *{$ticketNumber}*\n"
+                    . "🏥 *Ruangan :* {$roomLabel}\n"
+                    . "🕒 *Waktu :* {$waktuLaporan}\n"
+                    . "📊 *Status :* Menunggu Verifikasi Kepala Seksi\n\n"
+                    . "Simpan nomor tiket ini untuk memantau proses tindak lanjut penanganan aduan Anda secara berkala melalui tautan berikut:\n"
+                    . "🔗 {$trackingUrl}\n\n"
+                    . "Setiap masukan Anda sangat berarti untuk peningkatan mutu pelayanan kami.\n\n"
+                    . "Salam sehat,\n_Tim Manajemen Pelayanan Rumah Sakit_";
+
+                $channel = new WaGatewayChannel();
+                $channel->send($validated['reporter_phone'], new class($reporterWaMsg) extends \Illuminate\Notifications\Notification {
+                    public function __construct(public string $msg) {}
+                    public function toWaGateway($notifiable) { return $this->msg; }
+                });
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::info('Reporter WA confirmation failed: ' . $e->getMessage());
+            }
         }
 
         if ($request->wantsJson() || $request->ajax() || $request->expectsJson() || $request->header('X-Requested-With') === 'XMLHttpRequest') {
