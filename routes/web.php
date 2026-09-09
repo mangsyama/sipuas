@@ -78,9 +78,13 @@ Route::middleware('auth')->group(function () {
     Route::get('/technicians/position', fn () => redirect()->route('dashboard'))->name('technicians.position');
     Route::get('/technicians/radar', fn () => redirect()->route('dashboard'))->name('technicians.radar');
 
-    Route::get('/reports', fn () => redirect()->route('dashboard'))->name('reports.index');
-    Route::get('/reports/history', fn () => redirect()->route('dashboard'))->name('reports.history');
-    Route::get('/reports/{id}', fn () => redirect()->route('dashboard'))->name('reports.show');
+    // Rekapitulasi & Ekspor Laporan (Modul Kabid, Kasi & Admin)
+    Route::get('/reports', [\App\Http\Controllers\ReportExportController::class, 'index'])->name('reports.index');
+    Route::get('/reports/export/pdf', [\App\Http\Controllers\ReportExportController::class, 'exportPdf'])->name('reports.export.pdf');
+    Route::get('/reports/export/excel', [\App\Http\Controllers\ReportExportController::class, 'exportExcel'])->name('reports.export.excel');
+    Route::get('/reports/export/csv', [\App\Http\Controllers\ReportExportController::class, 'exportCsv'])->name('reports.export.csv');
+    Route::get('/reports/history', fn () => redirect()->route('reports.index'))->name('reports.history');
+    Route::get('/reports/{id}', fn () => redirect()->route('reports.index'))->name('reports.show');
 
     Route::get('/reports-management', fn () => redirect()->route('dashboard'))->name('reports-management.index');
     Route::get('/reports-management/{id}', fn () => redirect()->route('dashboard'))->name('reports-management.show');
@@ -130,8 +134,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/design-system/cards', fn () => redirect()->route('dashboard'))->name('design-system.cards');
     Route::get('/design-system/notifications', fn () => redirect()->route('dashboard'))->name('design-system.notifications');
 
-    Route::get('/admin/qr-code', fn () => redirect()->route('dashboard'))->name('admin.qr-code.index');
-    Route::get('/admin/qr-generator', fn () => redirect()->route('dashboard'))->name('admin.qr-generator.index');
+    Route::get('/admin/qr-generator', [\App\Http\Controllers\QrGeneratorController::class, 'index'])->name('admin.qr-generator.index');
+    Route::get('/admin/qr-code', fn () => redirect()->route('admin.qr-generator.index'))->name('admin.qr-code.index');
 });
 
 Route::get('lang/{locale}', function ($locale) {

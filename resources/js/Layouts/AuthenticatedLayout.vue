@@ -265,7 +265,8 @@ const menuGroups = computed(() => {
             items: [
                 { label: 'Command Center', routeName: 'executive.dashboard', permKey: 'executive.dashboard', icon: Activity },
                 { label: 'Responsivitas Kasi', routeName: 'executive.kasi-responsiveness', permKey: 'executive.kasi-responsiveness', icon: BarChart3 },
-                { label: 'Leaderboard Staf', routeName: 'executive.leaderboard', permKey: 'executive.leaderboard', icon: Award }
+                { label: 'Leaderboard Staf', routeName: 'executive.leaderboard', permKey: 'executive.leaderboard', icon: Award },
+                { label: 'Laporan & Ekspor', routeName: 'reports.index', permKey: 'reports.index', icon: FileBarChart2 }
             ]
         },
         {
@@ -280,7 +281,8 @@ const menuGroups = computed(() => {
             title: 'System / Integrasi',
             items: [
                 { label: 'Integrasi AI', routeName: 'admin.ai-settings.index', permKey: 'admin.ai-settings.index', icon: Sparkles },
-                { label: 'WhatsApp Gateway', routeName: 'admin.wa-gateway.index', permKey: 'admin.wa-gateway.index', icon: MessageSquareCode }
+                { label: 'WhatsApp Gateway', routeName: 'admin.wa-gateway.index', permKey: 'admin.wa-gateway.index', icon: MessageSquareCode },
+                { label: 'Generator QR Code', routeName: 'admin.qr-generator.index', permKey: 'admin.qr-generator.index', icon: QrCode }
             ]
         },
         ...(!isStaff ? [

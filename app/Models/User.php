@@ -245,8 +245,9 @@ class User extends Authenticatable
                 'dashboard', 'staff.attendance', 'staff.dashboard', 'attendance.status',
                 'kasi.dashboard', 'kasi.verify', 'kasi.logbook',
                 'executive.dashboard', 'executive.kasi-responsiveness', 'executive.leaderboard',
+                'reports.index',
                 'units.index', 'users.approvals', 'users.index',
-                'admin.ai-settings.index', 'admin.wa-gateway.index', 'settings.index',
+                'admin.ai-settings.index', 'admin.wa-gateway.index', 'admin.qr-generator.index', 'settings.index',
             ];
         }
 
@@ -260,11 +261,11 @@ class User extends Authenticatable
         return $this->memoizedPermissions = match ((int)$this->role_id) {
             Role::DIREKTUR, Role::KEPALA_BIDANG => [
                 'dashboard', 'executive.dashboard', 'executive.kasi-responsiveness', 'executive.leaderboard',
-                'kasi.dashboard', 'kasi.logbook', 'units.index', 'settings.index',
+                'kasi.dashboard', 'kasi.logbook', 'reports.index', 'units.index', 'settings.index',
             ],
             Role::KEPALA_SEKSI => [
                 'dashboard', 'kasi.dashboard', 'kasi.verify', 'kasi.logbook',
-                'staff.dashboard', 'units.index', 'settings.index',
+                'staff.dashboard', 'reports.index', 'units.index', 'settings.index',
             ],
             default => [
                 'staff.dashboard', 'attendance.status', 'settings.index',

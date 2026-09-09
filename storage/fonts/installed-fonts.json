@@ -1,0 +1,10 @@
+{
+    "poppins": {
+        "300": "C:\\Project\\sipuas\\storage\\fonts\/poppins_300_8e46d8fe5990d651514088b48efd9fff",
+        "normal": "C:\\Project\\sipuas\\storage\\fonts\/poppins_normal_42e7282dc855ced94ae51cc194c3e895",
+        "italic": "C:\\Project\\sipuas\\storage\\fonts\/poppins_italic_df46b29424b39e3732d0573df6e9ab00",
+        "500": "C:\\Project\\sipuas\\storage\\fonts\/poppins_500_bb45b1696220e0d384e13a0f1f369e7e",
+        "600": "C:\\Project\\sipuas\\storage\\fonts\/poppins_600_71a55be181b2ce798974f9ecec9d5e6b",
+        "bold": "poppins_bold_ba88c13de6cdd0d6a32150b2f3d2415b"
+    }
+}

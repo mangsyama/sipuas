@@ -39,7 +39,7 @@ class ReportController extends Controller
             ]);
 
         $step = $request->query('step');
-        $selectedRoomId = $request->query('room', $request->query('unit', ''));
+        $selectedRoomId = $request->query('room_id', $request->query('room', $request->query('unit', '')));
 
         return Inertia::render('Report/Create', [
             'roomId' => $selectedRoomId,

@@ -49,6 +49,7 @@ class UserManagementController extends Controller
                     ['key' => 'executive.dashboard', 'label' => 'Executive Analytics & Responsiveness'],
                     ['key' => 'executive.kasi-responsiveness', 'label' => 'Tingkat Responsivitas Kasi'],
                     ['key' => 'executive.leaderboard', 'label' => 'Leaderboard Integritas Unit'],
+                    ['key' => 'reports.index', 'label' => 'Pusat Rekapitulasi & Ekspor Laporan'],
                 ],
             ],
             [
@@ -60,6 +61,7 @@ class UserManagementController extends Controller
                     ['key' => 'users.index', 'label' => 'Kelola Akun Sistem'],
                     ['key' => 'admin.ai-settings.index', 'label' => 'Integrasi AI (Gemini/Groq/OpenAI)'],
                     ['key' => 'admin.wa-gateway.index', 'label' => 'WhatsApp Gateway Management'],
+                    ['key' => 'admin.qr-generator.index', 'label' => 'Generator QR Code Ruangan'],
                     ['key' => 'settings.index', 'label' => 'Preferensi Notifikasi Akun'],
                 ],
             ],
