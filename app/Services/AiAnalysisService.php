@@ -29,8 +29,15 @@ class AiAnalysisService
         $model = $setting->model_name ?: 'llama-3.3-70b-versatile';
         $url = 'https://api.groq.com/openai/v1/chat/completions';
 
-        $systemInstruction = $setting->system_prompt ?? "Anda adalah AI Triase & Konsultan Manajemen Mutu Pelayanan Publik Rumah Sakit (SIPUAS).
-Analisis teks laporan masyarakat secara objektif dan berikan output HANYA dalam format JSON valid dengan struktur:
+        $systemInstruction = "Anda adalah AI Triase & Konsultan Manajemen Mutu Pelayanan Publik Rumah Sakit (SIPUAS).
+Tugas Anda adalah menelaah teks laporan masyarakat secara objektif untuk mutu pelayanan dan penilaian KPI staf.
+
+PANDUAN KLASIFIKASI & KPI:
+1. KELUHAN SARANA & FASILITAS: Jika laporan murni mengenai kerusakan fisik/sarana/fasilitas (contoh: wastafel rusak/mati, air tidak mengalir, AC rusak/panas, lift, toilet, lampu, gedung, kamar mandi) tanpa adanya laporan kelalaian personal staf spesifik, tetapkan \"sentiment\": \"NETRAL\", \"score\": 0, dan \"category\": \"Sarana & Fasilitas\". Laporan ini berstatus NETRAL (0 Poin KPI) bagi staf pelayanan, namun \"urgency\" tetap bisa \"TINGGI\" atau \"KRITIS\" agar fasilitas segera diperbaiki teknisi.
+2. KELUHAN SIKAP / PELAYANAN STAF (NEGATIF): Tetapkan \"sentiment\": \"NEGATIF\" hanya jika terdapat keluhan atas sikap petugas (kasar, judes, lamban), kelalaian medis, kesalahan obat, atau pelanggaran SOP staf.
+3. APRESIASI / PUJIAN (POSITIF): Tetapkan \"sentiment\": \"POSITIF\" jika ada apresiasi, kepuasan, atau pujian atas pelayanan.
+
+Berikan output HANYA dalam format JSON valid tanpa markdown dengan struktur:
 {
   \"sentiment\": \"POSITIF\" | \"NETRAL\" | \"NEGATIF\",
   \"score\": integer (-10 s/d 10),
@@ -39,7 +46,7 @@ Analisis teks laporan masyarakat secara objektif dan berikan output HANYA dalam 
   \"summary\": string (ringkasan kronologi 1-2 kalimat),
   \"urgency\": \"RENDAH\" | \"NORMAL\" | \"TINGGI\" | \"KRITIS\",
   \"mentioned_entities\": array string (nama staf atau fasilitas yang terdeteksi),
-  \"action_recommendation\": string (rekomendasi manajerial solutif, mendalam, dan komprehensif 2-4 kalimat untuk Kepala Ruangan/Kasi. PENTING: Jika sentimen NETRAL atau komplain sarana umum, tegaskan bahwa laporan bersifat NETRAL (0 Poin KPI) dan tidak memotong poin staf).
+  \"action_recommendation\": string (rekomendasi manajerial solutif 2-4 kalimat untuk Kasi/Kepala Ruangan. Untuk keluhan sarana, rekomendasikan koordinasi teknisi/IPSRS dan tegaskan status NETRAL 0 Poin KPI staf)
 }";
         $prompt = "Informasi Unit: " . ($unitName ?? 'Umum') . "\nObjek/Sasaran: " . ($targetObject ?? 'Tidak ada') . "\nIsi Laporan Pasien:\n\"" . $text . "\"";
 
@@ -116,7 +123,7 @@ Analisis teks laporan masyarakat secara objektif dan berikan output HANYA dalam 
             $category = 'Farmasi & Obat';
         } elseif (preg_match('/(dokter|perawat|suster|bidan|tindakan|infus|suntik|diagnosa|medis|operasi)/i', $lower)) {
             $category = 'Pelayanan Medis';
-        } elseif (preg_match('/(ac|kran|air|toilet|wc|lampu|kursi|kamar|bed|ruangan|pintu|lift|kotor|bau|sarana|fasilitas|panas|rusak|bocor)/i', $lower)) {
+        } elseif (preg_match('/(ac|kran|air|toilet|wc|lampu|kursi|kamar|bed|ruangan|pintu|lift|kotor|bau|sarana|fasilitas|panas|rusak|bocor|wastafel|pipa)/i', $lower)) {
             $category = 'Sarana & Fasilitas';
         } elseif (preg_match('/(antre|antri|lama|nunggu|waktu|panggilan|jam|telat|keterlambatan)/i', $lower)) {
             $category = 'Waktu Tunggu & Antrean';
@@ -130,7 +137,13 @@ Analisis teks laporan masyarakat secara objektif dan berikan output HANYA dalam 
         $unitStr = $unitName ? "di unit {$unitName}" : 'di unit pelayanan';
 
         // 2. Sentiment determination & Rich Multi-Sentence Action Recommendation
-        if ($negCount > $posCount) {
+        // Aturan Cerdas: Jika kategori Sarana & Fasilitas murni keluhan fisik tanpa unsur pujian, arahkan ke NETRAL bagi KPI staf
+        if ($category === 'Sarana & Fasilitas' && $posCount === 0) {
+            $sentiment = 'NETRAL';
+            $score = 0;
+            $urgency = ($negCount >= 2 || str_contains($lower, 'darurat') || str_contains($lower, 'parah') || str_contains($lower, 'mati') || str_contains($lower, 'bocor') || str_contains($lower, 'tidak berfungsi')) ? 'TINGGI' : 'NORMAL';
+            $recommendation = "Laporan ini merupakan keluhan sarana/kondisi fisik fasilitas rumah sakit {$unitStr} ({$category}) tanpa adanya bukti pelanggaran etika langsung oleh petugas. Sesuai ketentuan SIPUAS, status ini adalah TINDAKAN NETRAL (0 Poin KPI) dan TIDAK dikenakan pemotongan poin staf. Kasi disarankan berkoordinasi dengan instalasi pemeliharaan sarana (IPSRS) atau teknisi untuk perbaikan fisik.";
+        } elseif ($negCount > $posCount) {
             $sentiment = 'NEGATIF';
             $score = -5;
             $urgency = ($negCount >= 2 || str_contains($lower, 'darurat') || str_contains($lower, 'parah')) ? 'TINGGI' : 'NORMAL';
@@ -182,15 +195,26 @@ Analisis teks laporan masyarakat secara objektif dan berikan output HANYA dalam 
         $summary = $parsed['summary'] ?? mb_substr($originalText, 0, 120) . '...';
         $urgency = strtoupper($parsed['urgency'] ?? ($sentiment === 'NEGATIF' ? 'TINGGI' : 'RENDAH'));
         $mentionedEntities = (array) ($parsed['mentioned_entities'] ?? []);
-        
-        $actionRecommendation = $parsed['action_recommendation'] ?? ($parsed['recommendation'] ?? '');
-        if (empty($actionRecommendation) || strlen($actionRecommendation) < 20) {
-            if ($sentiment === 'POSITIF') {
-                $actionRecommendation = "Apresiasi Pelayanan Prima: Pasien memberikan tanggapan sangat baik atas mutu layanan pada aspek {$category}. Disarankan Kasi memberikan pengakuan kinerja dan mengalokasikan penambahan poin reward (+ Poin KPI) kepada staf shift bertugas.";
-            } elseif ($sentiment === 'NEGATIF') {
-                $actionRecommendation = "Tindak Lanjut Evaluasi: Teridentifikasi keluhan masyarakat terkait {$category}. Disarankan Kasi segera menelusuri kronologi bersama staf shift bersangkutan, mengevaluasi standar SOP, dan menerapkan penyesuaian poin pembinaan jika terbukti terdapat ketidaksesuaian prosedur.";
-            } else {
-                $actionRecommendation = "Laporan Masukan Umum: Informasi ini bersifat masukan fasilitas atau saran operasional. Status ini adalah TINDAKAN NETRAL (0 Poin KPI) dan TIDAK memotong nilai kinerja staf unit.";
+
+        // Aturan Cerdas: Jika kategori murni mengenai sarana/fasilitas fisik dan tidak ada tuduhan personal staf,
+        // sentimen diarahkan ke NETRAL (0 Poin KPI) agar staf tidak menjadi korban pemotongan poin.
+        $categoryLower = strtolower($category);
+        $isFacilityIssue = str_contains($categoryLower, 'sarana') || str_contains($categoryLower, 'fasilitas') || str_contains($categoryLower, 'prasarana');
+
+        if ($isFacilityIssue && $sentiment === 'NEGATIF') {
+            $sentiment = 'NETRAL';
+            $score = 0;
+            $actionRecommendation = "Laporan terkait kendala sarana/fasilitas fisik rumah sakit. Sesuai regulasi mutu SIPUAS, status laporan ini berstatus TINDAKAN NETRAL (0 Poin KPI) agar tidak merugikan evaluasi kinerja staf jaga unit. Disarankan Kepala Ruangan/Kasi segera berkoordinasi dengan instalasi pemeliharaan sarana (IPSRS) atau teknisi untuk perbaikan fisik.";
+        } else {
+            $actionRecommendation = $parsed['action_recommendation'] ?? ($parsed['recommendation'] ?? '');
+            if (empty($actionRecommendation) || strlen($actionRecommendation) < 20) {
+                if ($sentiment === 'POSITIF') {
+                    $actionRecommendation = "Apresiasi Pelayanan Prima: Pasien memberikan tanggapan sangat baik atas mutu layanan pada aspek {$category}. Disarankan Kasi memberikan pengakuan kinerja dan mengalokasikan penambahan poin reward (+ Poin KPI) kepada staf shift bertugas.";
+                } elseif ($sentiment === 'NEGATIF') {
+                    $actionRecommendation = "Tindak Lanjut Evaluasi: Teridentifikasi keluhan masyarakat terkait {$category}. Disarankan Kasi segera menelusuri kronologi bersama staf shift bersangkutan, mengevaluasi standar SOP, dan menerapkan penyesuaian poin pembinaan jika terbukti terdapat ketidaksesuaian prosedur.";
+                } else {
+                    $actionRecommendation = "Laporan Masukan Umum: Informasi ini bersifat masukan fasilitas atau saran operasional. Status ini adalah TINDAKAN NETRAL (0 Poin KPI) dan TIDAK memotong nilai kinerja staf unit.";
+                }
             }
         }
 

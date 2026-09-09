@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Report;
 use App\Models\ReportStaff;
 use App\Models\Role;
+use App\Models\StaffAttendance;
 use App\Models\StaffKpiLog;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -31,10 +32,15 @@ class KasiController extends Controller
             return [
                 'id' => $r->ticket_number,
                 'created_at' => $r->created_at ? $r->created_at->format('d M Y, H:i') : '-',
-                'unit' => $r->unit ? $r->unit->name : 'Unit Umum',
+                'created_at_full' => $r->created_at ? $r->created_at->translatedFormat('d M Y, H:i') . ' WITA' : '-',
+                'created_at_human' => $r->created_at ? $r->created_at->diffForHumans() : '-',
+                'created_at_time' => $r->created_at ? $r->created_at->format('H:i') . ' WITA' : '-',
+                'created_at_date' => $r->created_at ? $r->created_at->translatedFormat('d F Y') : '-',
+                'unit' => $r->room ? $r->room->name : ($r->unit ? $r->unit->name : 'Unit Umum'),
                 'target_object' => $r->target_object,
-                'shift_info' => $r->shift_info ?? 'Shift Normal',
+                'shift_info' => $r->created_at ? $r->created_at->format('H:i') . ' WITA' : 'Waktu Aduan',
                 'reporter_name' => $r->is_anonymous ? 'Anonim' : ($r->reporter_name ?: 'Anonim'),
+                'reporter_phone' => $r->is_anonymous ? null : $r->reporter_phone,
                 'isi_laporan' => $r->isi_laporan,
                 'ai_sentiment' => $r->ai_sentiment,
                 'ai_category' => $r->ai_category ?? 'Pelayanan',
@@ -56,23 +62,72 @@ class KasiController extends Controller
     {
         $report = null;
         if ($id) {
-            $report = Report::with(['unit', 'attachments', 'staff', 'verifier'])
+            $report = Report::with(['room', 'unit', 'attachments', 'staff', 'verifier'])
                 ->where('ticket_number', $id)
                 ->orWhere('id', $id)
                 ->first();
         }
 
         if (!$report) {
-            $report = Report::with(['unit', 'attachments', 'staff', 'verifier'])->latest()->first();
+            $report = Report::with(['room', 'unit', 'attachments', 'staff', 'verifier'])->latest()->first();
         }
 
         $roomId = $report ? ($report->room_id ?? $report->unit_id) : null;
+        $reportTime = $report ? $report->created_at : null;
+        $reportDate = $reportTime ? $reportTime->toDateString() : null;
+
+        // Ambil riwayat presensi staf di ruangan ini pada tanggal laporan masuk
+        $attendancesOnDate = ($reportDate && $roomId) 
+            ? StaffAttendance::where('room_id', $roomId)
+                ->whereDate('duty_date', $reportDate)
+                ->get()
+                ->groupBy('user_id') 
+            : collect();
+
         $staffList = User::where('room_id', $roomId)
             ->where('role_id', Role::STAFF)
             ->where('is_active', true)
             ->get()
-            ->map(function ($s) use ($report) {
+            ->map(function ($s) use ($report, $reportTime, $attendancesOnDate) {
                 $isLinked = $report && $report->staff->contains('id', $s->id);
+                $isPending = $report && $report->status === 'PENDING';
+
+                // Evaluasi kehadiran presensi nyata (Clock-In)
+                $userAtts = $attendancesOnDate->get($s->id, collect());
+                $activeAtTime = false;
+                $attendanceType = 'NONE';
+                $attendanceLabel = 'Belum Presensi';
+                $clockInTime = null;
+
+                foreach ($userAtts as $att) {
+                    $in = $att->check_in_at ? Carbon::parse($att->check_in_at) : null;
+                    $out = $att->check_out_at ? Carbon::parse($att->check_out_at) : null;
+
+                    if ($in && $reportTime) {
+                        // Jika laporan masuk saat staf sedang dinas (setelah check-in dan belum checkout / checkout setelah jam aduan)
+                        if ($reportTime->gte($in) && (!$out || $reportTime->lte($out) || $att->status === 'ON_DUTY')) {
+                            $activeAtTime = true;
+                            $attendanceType = 'ACTIVE_AT_REPORT';
+                            $attendanceLabel = 'Berdinas saat aduan (' . $in->format('H.i') . ')';
+                            $clockInTime = $in->format('H.i');
+                            break;
+                        }
+                    }
+
+                    if ($in) {
+                        $attendanceType = 'TODAY';
+                        $attendanceLabel = 'Hadir Hari Ini (' . $in->format('H.i') . ')';
+                        $clockInTime = $in->format('H.i');
+                    }
+                }
+
+                if (!$activeAtTime && $s->is_on_duty) {
+                    $attendanceLabel = 'Sedang On-Duty';
+                }
+
+                // Otomatis centang staf yang tercatat berdinas saat kejadian jika aduan belum diverifikasi
+                $autoSelected = $isPending && $activeAtTime;
+
                 return [
                     'id' => $s->id,
                     'name' => $s->name,
@@ -80,7 +135,11 @@ class KasiController extends Controller
                     'role' => $s->role ?? 'Staf Pelayanan',
                     'total_points' => $s->total_points,
                     'is_on_duty' => (bool)$s->is_on_duty,
-                    'selected' => $isLinked,
+                    'active_at_time' => $activeAtTime,
+                    'attendance_type' => $attendanceType,
+                    'attendance_label' => $attendanceLabel,
+                    'clock_in_time' => $clockInTime,
+                    'selected' => $isLinked || $autoSelected,
                 ];
             });
 
@@ -99,6 +158,22 @@ class KasiController extends Controller
         $aiMeta = [];
         if ($report && $report->ai_metadata) {
             $aiMeta = is_array($report->ai_metadata) ? $report->ai_metadata : json_decode($report->ai_metadata, true);
+        }
+
+        $verifiedActionType = null;
+        $verifiedPoints = null;
+        if ($report && $report->status === 'VERIFIED') {
+            $firstStaff = $report->staff->first();
+            if ($firstStaff && $firstStaff->pivot) {
+                $verifiedActionType = $firstStaff->pivot->action_type;
+                $verifiedPoints = abs($firstStaff->pivot->points);
+            } else {
+                $firstKpi = StaffKpiLog::where('report_id', $report->id)->first();
+                if ($firstKpi) {
+                    $verifiedActionType = $firstKpi->action_type;
+                    $verifiedPoints = abs($firstKpi->points);
+                }
+            }
         }
 
         $reportDetail = $report ? [
@@ -120,17 +195,21 @@ class KasiController extends Controller
             'ai_recommendation' => $aiMeta['action_recommendation'] ?? ($aiMeta['recommendation'] ?? ($report->ai_sentiment === 'POSITIF' 
                 ? 'Apresiasi Pelayanan Prima: Pelayanan dinilai sangat memuaskan oleh masyarakat. Direkomendasikan kepada Kepala Ruangan/Kasi untuk memberikan pengakuan formal dan mengalokasikan penambahan poin reward (+ Poin KPI) kepada staf bertugas guna menjaga standar keunggulan kerja.' 
                 : ($report->ai_sentiment === 'NEGATIF' 
-                    ? 'Tindak Lanjut Keluhan: Laporan menunjukkan adanya ketidakpuasan pelayanan. Disarankan Kepala Ruangan/Kasi segera mengklarifikasi kronologi kejadian bersama staf shift dinas, meninjau kesesuaian SOP, dan menerapkan penyesuaian poin pembinaan (- Poin KPI) jika terbukti ada kelalaian petugas.' 
+                    ? 'Tindak Lanjut Keluhan: Laporan menunjukkan adanya ketidakpuasan pelayanan. Disarankan Kepala Ruangan/Kasi segera mengklarifikasi kronologi kejadian bersama staf yang bertugas saat kejadian, meninjau kesesuaian SOP, dan menerapkan penyesuaian poin pembinaan (- Poin KPI) jika terbukti ada kelalaian petugas.' 
                     : 'Laporan Masukan Umum: Informasi ini bersifat saran atau terkait sarana/kondisi fisik lingkungan rumah sakit tanpa keterlibatan langsung pelanggaran individu staf. Sesuai regulasi, status ini adalah TINDAKAN NETRAL (0 Poin KPI) dan TIDAK mengubah saldo kinerja staf unit.'))),
             'ai_provider' => ($aiMeta['engine'] ?? ($aiMeta['provider'] ?? '')) === 'HEURISTIC_RULE_BASED' 
                 ? 'AI Heuristik Internal' 
                 : (($aiMeta['engine'] ?? ($aiMeta['provider'] ?? '')) === 'GROQ_AI' ? 'Groq AI (Llama-3)' : 'Sistem AI SIPUAS'),
-            'shift_info' => $report->shift_info ?? 'Shift Pagi / Siang',
+            'created_at_time' => $report->created_at ? $report->created_at->format('H:i') . ' WITA' : '-',
+            'created_at_human' => $report->created_at ? $report->created_at->diffForHumans() : '-',
+            'shift_info' => $report->created_at ? $report->created_at->format('H:i') . ' WITA' : 'Waktu Aduan',
             'status' => $report->status,
             'priority' => $report->priority,
             'supervisor_notes' => $report->supervisor_notes,
             'verified_at' => $report->verified_at ? $report->verified_at->format('d M Y, H:i') : null,
             'verified_by' => $report->verifier ? $report->verifier->name : null,
+            'verified_action_type' => $verifiedActionType,
+            'verified_points' => $verifiedPoints,
             'attachments' => $attachments,
         ] : null;
 
@@ -146,6 +225,12 @@ class KasiController extends Controller
      */
     public function processVerification(Request $request, $id)
     {
+        $report = Report::where('ticket_number', $id)->orWhere('id', $id)->firstOrFail();
+
+        if ($report->status === 'VERIFIED') {
+            return redirect()->route('kasi.dashboard');
+        }
+
         $isNeutral = $request->input('action_type') === 'NETRAL';
 
         $validated = $request->validate([

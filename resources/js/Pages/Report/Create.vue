@@ -936,7 +936,7 @@ const copyReceipt = () => {
                         <div class="bg-slate-50 dark:bg-slate-950 rounded-2xl p-4 border border-slate-200 dark:border-slate-800">
                             <span class="text-[10px] font-bold uppercase tracking-widest text-slate-400 block mb-1">Nomor Registrasi Laporan</span>
                             <div class="flex items-center justify-center gap-2">
-                                <span class="text-xl font-mono font-extrabold text-emerald-600 dark:text-emerald-400 tracking-wider">{{ generatedReportId }}</span>
+                                <span class="text-xl font-sans font-extrabold text-emerald-600 dark:text-emerald-400 tracking-wider">{{ generatedReportId }}</span>
                                 <button
                                     @click="copyReceipt"
                                     class="p-1.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition cursor-pointer focus:outline-none"

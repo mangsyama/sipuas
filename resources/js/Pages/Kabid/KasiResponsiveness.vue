@@ -98,7 +98,7 @@ const kasiData = ref(props.kasiData || []);
                                 <td class="py-4 px-4 text-center font-bold">{{ kasi.total_incoming }}</td>
                                 <td class="py-4 px-4 text-center font-bold text-emerald-600 dark:text-emerald-400">{{ kasi.verified_count }}</td>
                                 <td class="py-4 px-4 text-center font-bold text-amber-600 dark:text-amber-400">{{ kasi.pending_count }}</td>
-                                <td class="py-4 px-4 text-center font-mono font-medium">{{ kasi.avg_response }}</td>
+                                <td class="py-4 px-4 text-center font-sans font-medium">{{ kasi.avg_response }}</td>
                                 <td class="py-4 px-4 text-center">
                                     <span v-if="kasi.response_rate !== null" class="text-sm font-extrabold" :class="kasi.response_rate < 80 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'">
                                         {{ kasi.response_rate }}%

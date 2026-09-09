@@ -61,53 +61,53 @@ const activeTab = ref('kpi'); // 'kpi', 'reports', 'attendance'
                 </div>
             </div>
 
-            <!-- 2. Kartu Metrik Kinerja (Grid Responsif 3 Kolom) -->
+            <!-- 2. Kartu Metrik Kinerja (Grid Responsif 3 Kolom - Standar SIPUAS Sesuai Dashboard Kasi) -->
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <!-- Saldo Poin KPI -->
-                <div class="bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 rounded-2xl p-6 shadow-sm flex items-center justify-between">
+                <div class="bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 rounded-2xl p-5 shadow-sm flex items-center justify-between">
                     <div class="space-y-1">
-                        <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block">Saldo Poin Kinerja (KPI)</span>
-                        <div class="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white leading-tight">
-                            {{ staff.total_points }} <span class="text-xs font-semibold text-slate-400">Poin</span>
+                        <span class="text-xs font-bold uppercase tracking-wider text-slate-400 block">Saldo Poin Kinerja (KPI)</span>
+                        <div class="text-3xl font-extrabold text-slate-900 dark:text-white leading-tight">
+                            {{ staff.total_points }}
                         </div>
-                        <span class="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 block">
-                            Standar Nilai Awal: 100 Poin
+                        <span class="text-[11px] text-slate-400 block">
+                            Standar nilai awal: 100 Poin
                         </span>
                     </div>
-                    <div class="h-12 w-12 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
-                        <Award class="h-6 w-6" />
+                    <div class="h-12 w-12 rounded-xl flex items-center justify-center flex-shrink-0 bg-emerald-50 dark:bg-white/10">
+                        <Award class="h-6 w-6 text-emerald-600 dark:text-white" />
                     </div>
                 </div>
 
                 <!-- Apresiasi Pujian Pasien -->
-                <div class="bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 rounded-2xl p-6 shadow-sm flex items-center justify-between">
+                <div class="bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 rounded-2xl p-5 shadow-sm flex items-center justify-between">
                     <div class="space-y-1">
-                        <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block">Apresiasi Pujian Pasien</span>
-                        <div class="text-2xl sm:text-3xl font-black text-emerald-600 dark:text-emerald-400 leading-tight">
-                            +{{ staff.praise_count }} <span class="text-xs font-semibold text-slate-400">Pujian</span>
+                        <span class="text-xs font-bold uppercase tracking-wider text-slate-400 block">Apresiasi Pujian Pasien</span>
+                        <div class="text-3xl font-extrabold text-emerald-600 dark:text-emerald-400 leading-tight">
+                            +{{ staff.praise_count }}
                         </div>
-                        <span class="text-[11px] font-semibold text-slate-400 block">
-                            Memberi reward +Poin kinerja
+                        <span class="text-[11px] text-slate-400 block">
+                            Memberi reward +poin kinerja
                         </span>
                     </div>
-                    <div class="h-12 w-12 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
-                        <ThumbsUp class="h-6 w-6" />
+                    <div class="h-12 w-12 rounded-xl flex items-center justify-center flex-shrink-0 bg-emerald-50 dark:bg-emerald-950/40">
+                        <ThumbsUp class="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
                     </div>
                 </div>
 
                 <!-- Keluhan / Evaluasi -->
-                <div class="bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 rounded-2xl p-6 shadow-sm flex items-center justify-between">
+                <div class="bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 rounded-2xl p-5 shadow-sm flex items-center justify-between">
                     <div class="space-y-1">
-                        <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block">Keluhan / Evaluasi SOP</span>
-                        <div class="text-2xl sm:text-3xl font-black text-rose-600 dark:text-rose-400 leading-tight">
-                            -{{ staff.complaint_count }} <span class="text-xs font-semibold text-slate-400">Kasus</span>
+                        <span class="text-xs font-bold uppercase tracking-wider text-slate-400 block">Keluhan / Evaluasi SOP</span>
+                        <div class="text-3xl font-extrabold text-rose-600 dark:text-rose-400 leading-tight">
+                            -{{ staff.complaint_count }}
                         </div>
-                        <span class="text-[11px] font-semibold text-slate-400 block">
+                        <span class="text-[11px] text-slate-400 block">
                             Kelalaian SOP terverifikasi Kasi
                         </span>
                     </div>
-                    <div class="h-12 w-12 rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
-                        <AlertCircle class="h-6 w-6" />
+                    <div class="h-12 w-12 rounded-xl flex items-center justify-center flex-shrink-0 bg-rose-50 dark:bg-rose-950/40">
+                        <AlertCircle class="h-6 w-6 text-rose-600 dark:text-rose-400" />
                     </div>
                 </div>
             </div>

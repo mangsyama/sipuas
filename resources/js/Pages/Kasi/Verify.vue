@@ -50,30 +50,60 @@ const showSuccessModal = ref(false);
 const selectedImagePreview = ref(null);
 
 const report = computed(() => props.reportDetail);
+const isVerified = computed(() => report.value?.status === 'VERIFIED');
 const staffList = ref(props.staffMembers ? props.staffMembers.map(s => ({ ...s, selected: s.selected || false })) : []);
 
-const actionType = ref(report.value?.ai_sentiment === 'POSITIF' ? 'PENAMBAHAN' : (report.value?.ai_sentiment === 'NEGATIF' ? 'PEMOTONGAN' : 'NETRAL'));
-const pointValue = ref(5);
+const isFacilityComplaint = computed(() => {
+    const cat = (report.value?.ai_category || '').toLowerCase();
+    return cat.includes('sarana') || cat.includes('fasilitas') || cat.includes('prasarana');
+});
+
+const defaultActionType = computed(() => {
+    if (report.value?.verified_action_type) {
+        return report.value.verified_action_type;
+    }
+    // Jika keluhan sarana/fasilitas fisik dan bukan apresiasi, otomatis default ke NETRAL (0 Poin)
+    if (isFacilityComplaint.value && report.value?.ai_sentiment !== 'POSITIF') {
+        return 'NETRAL';
+    }
+    if (report.value?.ai_sentiment === 'POSITIF') {
+        return 'PENAMBAHAN';
+    }
+    if (report.value?.ai_sentiment === 'NEGATIF') {
+        return 'PEMOTONGAN';
+    }
+    return 'NETRAL';
+});
+
+const actionType = ref(defaultActionType.value);
+const pointValue = ref(
+    report.value?.verified_points !== null && report.value?.verified_points !== undefined 
+        ? report.value.verified_points 
+        : (actionType.value === 'NETRAL' ? 0 : 5)
+);
 const supervisorNotes = ref(report.value?.supervisor_notes || '');
 
 const incrementPoint = () => {
+    if (isVerified.value) return;
     if (pointValue.value < 100) {
         pointValue.value++;
     }
 };
 
 const decrementPoint = () => {
+    if (isVerified.value) return;
     if (pointValue.value > 1) {
         pointValue.value--;
     }
 };
 
 const submitVerification = () => {
+    if (isVerified.value) return;
     isSubmitting.value = true;
     const selectedIds = staffList.value.filter(s => s.selected).map(s => s.id);
     
     if (actionType.value !== 'NETRAL' && selectedIds.length === 0 && staffList.value.length > 0) {
-        alert('Mohon pilih setidaknya 1 staf yang bertugas pada shift tersebut untuk mengaitkan poin KPI.');
+        alert('Mohon pilih setidaknya 1 staf yang bertugas saat kejadian untuk mengaitkan poin KPI.');
         isSubmitting.value = false;
         return;
     }
@@ -113,7 +143,7 @@ const finishVerification = () => {
                 <div class="space-y-1">
                     <h3 class="text-base font-bold text-slate-800 dark:text-slate-200">Tidak Ada Laporan yang Dipilih</h3>
                     <p class="text-xs text-slate-400 max-w-md mx-auto">
-                        Silakan pilih laporan dari feed aduan unit untuk melakukan verifikasi shift dan distribusi poin KPI staf.
+                        Silakan pilih laporan dari feed aduan unit untuk melakukan verifikasi aduan dan distribusi poin KPI staf.
                     </p>
                 </div>
                 <div>
@@ -140,7 +170,7 @@ const finishVerification = () => {
                                 Verifikasi Laporan {{ report.id }}
                             </h2>
                             <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                                Verifikasi shift kerja, evaluasi analisis AI, dan kelola saldo poin KPI staf unit.
+                                Verifikasi staf bertugas, evaluasi analisis AI, dan kelola saldo poin KPI staf unit.
                             </p>
                         </div>
                     </div>
@@ -157,97 +187,116 @@ const finishVerification = () => {
                     </div>
                 </div>
 
-                <!-- Main Grid Layout -->
-                <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                <!-- Stacked Containers Layout (Tumpukan Atas ke Bawah) -->
+                <div class="space-y-4">
                     
-                    <!-- Left Column: Report Details & Separate AI Insights (7 cols) -->
-                    <div class="lg:col-span-7 space-y-4">
+                    <!-- Top Row: Dua Kontainer Mandiri Berdampingan (Tanpa Container di dalam Container) -->
+                    <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
                         
-                        <!-- 1. Container Detail Laporan & Lampiran Pasien -->
-                        <div class="bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden divide-y divide-slate-100 dark:divide-slate-800">
-                            
-                            <!-- Container Header: Unit & Tanggal -->
-                            <div class="p-5 bg-slate-50/60 dark:bg-slate-950/60 flex flex-wrap items-center justify-between gap-3">
-                                <div>
-                                    <span class="px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-700 dark:bg-white/10 dark:text-white border border-emerald-200 dark:border-white/20">
-                                        {{ report.unit }}
-                                    </span>
-                                </div>
-
-                                <div class="text-[11px] text-slate-400 flex items-center gap-1.5 font-medium">
-                                    <Calendar class="h-3.5 w-3.5" />
-                                    <span>{{ report.timestamp }}</span>
-                                </div>
+                        <!-- 1. Container: Data & Uraian Aduan Pasien (8 Kolom) -->
+                        <div class="lg:col-span-8 bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden divide-y divide-slate-100 dark:divide-slate-800">
+                            <!-- Header Kontainer -->
+                            <div class="p-4 sm:p-5 bg-slate-50/60 dark:bg-slate-950/60 flex items-center justify-between gap-3">
+                                <h3 class="text-xs font-extrabold uppercase tracking-wider text-slate-900 dark:text-white">
+                                    Data & Uraian Aduan
+                                </h3>
+                                <span :class="[
+                                    'px-2.5 py-1 rounded-lg text-[10px] font-medium',
+                                    report.is_anonymous ? 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300' : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                                ]">
+                                    {{ report.is_anonymous ? 'Mode Anonim' : 'Identitas Terverifikasi' }}
+                                </span>
                             </div>
 
-                            <!-- Section 1: Rincian Teks Aduan Pasien -->
-                            <div class="p-5 space-y-2.5">
-                                <div class="flex items-center justify-between">
-                                    <span class="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Rincian Teks Aduan Pasien</span>
-                                    <span v-if="report.target_object" class="text-[10px] text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded font-bold">
-                                        Petugas / Loket: {{ report.target_object }}
-                                    </span>
-                                </div>
-                                <div class="bg-slate-50 dark:bg-slate-950 p-4 rounded-xl border border-slate-200/80 dark:border-slate-800 text-slate-800 dark:text-slate-100 text-sm leading-relaxed italic font-medium">
-                                    "{{ report.isi_laporan }}"
-                                </div>
-                            </div>
-
-                            <!-- Section 2: Identitas & Kontak Pelapor -->
-                            <div class="p-5 space-y-3">
-                                <div class="flex items-center justify-between">
-                                    <span class="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Identitas & Kontak Pelapor</span>
-                                    <span :class="[
-                                        'px-2 py-0.5 rounded-full text-[9px] font-bold uppercase',
-                                        report.is_anonymous ? 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400' : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
-                                    ]">
-                                        {{ report.is_anonymous ? 'Mode Anonim' : 'Identitas Terverifikasi' }}
-                                    </span>
-                                </div>
-
-                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    <div class="p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200/80 dark:border-slate-800 space-y-0.5">
-                                        <span class="text-[9px] font-bold uppercase text-slate-400 block">Nama Pasien</span>
-                                        <div class="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                                            <div class="h-5 w-5 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center text-[10px]">
+                            <!-- Section 1: Identitas & Kontak Pelapor -->
+                            <div class="p-4 sm:p-5 space-y-2">
+                                <span class="text-[11px] font-medium text-slate-400 dark:text-slate-500 block">Identitas & Kontak Pelapor</span>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                    <div class="p-3 bg-slate-50/70 dark:bg-slate-950/50 rounded-xl border border-slate-200/70 dark:border-slate-800/80 space-y-1">
+                                        <span class="text-[10px] text-slate-400 dark:text-slate-500 block">Nama Pasien</span>
+                                        <div class="text-xs font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                                            <div class="h-5 w-5 rounded-full bg-slate-200/80 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center text-[10px] font-medium">
                                                 {{ report.reporter_name.charAt(0) }}
                                             </div>
                                             <span>{{ report.reporter_name }}</span>
                                         </div>
                                     </div>
 
-                                    <div class="p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200/80 dark:border-slate-800 space-y-0.5">
-                                        <span class="text-[9px] font-bold uppercase text-slate-400 block">No. WhatsApp / Telepon</span>
-                                        <div v-if="report.reporter_phone" class="flex items-center justify-between">
-                                            <span class="text-xs font-bold text-slate-900 dark:text-white">{{ report.reporter_phone }}</span>
-                                            <a
-                                                :href="`https://wa.me/${report.reporter_phone.replace(/[^0-9]/g, '')}`"
-                                                target="_blank"
-                                                class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold transition"
-                                            >
-                                                <Phone class="h-3 w-3" />
-                                                <span>Chat WA</span>
-                                            </a>
+                                    <div class="p-3 bg-slate-50/70 dark:bg-slate-950/50 rounded-xl border border-slate-200/70 dark:border-slate-800/80 space-y-1">
+                                        <span class="text-[10px] text-slate-400 dark:text-slate-500 block">No. WhatsApp / Telepon</span>
+                                        <div v-if="report.reporter_phone" class="text-xs font-semibold text-slate-800 dark:text-slate-100">
+                                            {{ report.reporter_phone }}
                                         </div>
                                         <span v-else class="text-xs text-slate-400 italic">Tidak dicantumkan</span>
                                     </div>
                                 </div>
                             </div>
 
-                            <!-- Section 3: Lampiran Foto / Bukti -->
-                            <div class="p-5 space-y-3">
+                            <!-- Section 2: Rincian Teks Aduan Pasien -->
+                            <div class="p-4 sm:p-5 space-y-2">
+                                <span class="text-[11px] font-medium text-slate-400 dark:text-slate-500 block">Rincian Teks Aduan Pasien</span>
+                                <div class="bg-slate-50/70 dark:bg-slate-950/50 p-3.5 sm:p-4 rounded-xl border border-slate-200/70 dark:border-slate-800/80 text-slate-800 dark:text-slate-200 text-xs sm:text-sm leading-relaxed font-normal">
+                                    "{{ report.isi_laporan }}"
+                                </div>
+                            </div>
+
+                            <!-- Section 3: Parameter & Lokasi Aduan -->
+                            <div class="p-4 sm:p-5 space-y-2">
+                                <span class="text-[11px] font-medium text-slate-400 dark:text-slate-500 block">Parameter & Lokasi Aduan</span>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                    <!-- Ruangan / Instalasi -->
+                                    <div class="p-3 bg-slate-50/70 dark:bg-slate-950/50 rounded-xl border border-slate-200/70 dark:border-slate-800/80 space-y-1">
+                                        <span class="text-[10px] text-slate-400 dark:text-slate-500 block">Ruangan / Instalasi</span>
+                                        <div class="text-xs font-semibold text-slate-800 dark:text-slate-100 truncate">
+                                            {{ report.unit }}
+                                        </div>
+                                    </div>
+
+                                    <!-- Sasaran Aduan / Petugas / Loket -->
+                                    <div class="p-3 bg-slate-50/70 dark:bg-slate-950/50 rounded-xl border border-slate-200/70 dark:border-slate-800/80 space-y-1">
+                                        <span class="text-[10px] text-slate-400 dark:text-slate-500 block">Sasaran / Petugas</span>
+                                        <div class="text-xs font-semibold text-slate-800 dark:text-slate-100 truncate">
+                                            {{ report.target_object || 'Pelayanan Umum / Semua Staf' }}
+                                        </div>
+                                    </div>
+
+                                    <!-- Waktu & Tanggal Laporan -->
+                                    <div class="p-3 bg-slate-50/70 dark:bg-slate-950/50 rounded-xl border border-slate-200/70 dark:border-slate-800/80 space-y-1">
+                                        <span class="text-[10px] text-slate-400 dark:text-slate-500 block">Waktu Aduan</span>
+                                        <div class="text-xs font-semibold text-slate-800 dark:text-slate-100">
+                                            {{ report.timestamp }}
+                                        </div>
+                                    </div>
+
+                                    <!-- Tingkat Prioritas -->
+                                    <div class="p-3 bg-slate-50/70 dark:bg-slate-950/50 rounded-xl border border-slate-200/70 dark:border-slate-800/80 space-y-1">
+                                        <span class="text-[10px] text-slate-400 dark:text-slate-500 block">Tingkat Prioritas</span>
+                                        <div>
+                                            <span :class="[
+                                                'px-2 py-0.5 rounded text-[11px] font-semibold',
+                                                report.priority === 'HIGH' ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300' : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                                            ]">
+                                                {{ report.priority === 'HIGH' ? 'Prioritas Tinggi' : 'Prioritas Standar' }}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Section 4: Lampiran Foto / Bukti -->
+                            <div class="p-4 sm:p-5 space-y-2">
                                 <div class="flex items-center justify-between">
-                                    <span class="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Lampiran Foto & Bukti</span>
-                                    <span class="text-[10px] text-slate-400 font-bold">
+                                    <span class="text-[11px] font-medium text-slate-400 dark:text-slate-500">Lampiran Foto & Bukti</span>
+                                    <span class="text-[10px] text-slate-400">
                                         {{ report.attachments.length }} Berkas
                                     </span>
                                 </div>
 
-                                <div v-if="report.attachments.length > 0" class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                <div v-if="report.attachments.length > 0" class="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                                     <div
                                         v-for="att in report.attachments"
                                         :key="att.id"
-                                        class="group relative rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-slate-950 aspect-video flex items-center justify-center cursor-pointer shadow-sm"
+                                        class="group relative rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-slate-950 aspect-video flex items-center justify-center cursor-pointer"
                                         @click="selectedImagePreview = att.url"
                                     >
                                         <img
@@ -255,93 +304,151 @@ const finishVerification = () => {
                                             :alt="att.file_name"
                                             class="w-full h-full object-cover group-hover:scale-105 transition duration-200"
                                         />
-                                        <div class="absolute inset-0 bg-slate-950/50 opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-white gap-1 text-xs font-bold">
-                                            <Maximize2 class="h-4 w-4" />
+                                        <div class="absolute inset-0 bg-slate-950/50 opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-white gap-1.5 text-xs font-medium">
+                                            <Maximize2 class="h-3.5 w-3.5" />
                                             <span>Perbesar</span>
                                         </div>
                                     </div>
                                 </div>
-                                <div v-else class="py-3 text-center text-slate-400 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200/80 dark:border-slate-800 text-xs">
+                                <div v-else class="py-2.5 text-center text-slate-400 bg-slate-50/70 dark:bg-slate-950/50 rounded-xl border border-slate-200/70 dark:border-slate-800/80 text-xs">
                                     <span>Pelapor tidak menyertakan foto lampiran.</span>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- 2. Container Terpisah: Hasil Analisis AI Pintar (Groq AI Insights) -->
-                        <div class="bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden divide-y divide-slate-100 dark:divide-slate-800">
-                            
-                            <!-- AI Container Header -->
-                            <div class="p-5 bg-slate-50/60 dark:bg-slate-950/60 flex flex-wrap items-center justify-between gap-3">
-                                <h3 class="text-xs font-extrabold uppercase tracking-wider text-slate-900 dark:text-white">
-                                    Hasil Analisis AI Pintar
-                                </h3>
-                                <span class="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300">
-                                    {{ report.ai_provider }}
+                        <!-- 2. Container: Hasil Analisis AI Pintar (4 Kolom - Lebih Ramping & Ditumpuk) -->
+                        <div class="lg:col-span-4 bg-white dark:bg-slate-900 border border-emerald-300/80 dark:border-emerald-800/80 rounded-2xl shadow-sm overflow-hidden divide-y divide-emerald-100 dark:divide-slate-800 relative">
+                            <!-- Header Hijau Solid yang Keren & Jelas -->
+                            <div class="p-4 sm:p-5 bg-emerald-600 dark:bg-emerald-700 text-white flex items-center justify-between gap-3 shadow-xs">
+                                <div class="flex items-center gap-2.5">
+                                    <div class="h-7 w-7 rounded-lg bg-white/20 text-white flex items-center justify-center shrink-0">
+                                        <Sparkles class="h-3.5 w-3.5" />
+                                    </div>
+                                    <div>
+                                        <h3 class="text-xs font-extrabold uppercase tracking-wider text-white">
+                                            Hasil Analisis AI
+                                        </h3>
+                                        <p class="text-[10px] text-emerald-100 font-normal">
+                                            Klasifikasi real-time & deteksi urgensi
+                                        </p>
+                                    </div>
+                                </div>
+                                <span class="relative flex h-2 w-2 shrink-0">
+                                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+                                    <span class="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
                                 </span>
                             </div>
 
-                            <!-- AI Container Body -->
-                            <div class="p-5 space-y-3.5">
-                                <div class="grid grid-cols-3 gap-2.5">
-                                    <div class="bg-slate-50 dark:bg-slate-950 p-2.5 rounded-xl border border-slate-200/80 dark:border-slate-800">
-                                        <span class="text-[9px] font-bold uppercase text-slate-400 block">Sentimen AI</span>
-                                        <span :class="[
-                                            'text-xs font-extrabold',
-                                            report.ai_sentiment === 'POSITIF' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
-                                        ]">
-                                            {{ report.ai_sentiment }} ({{ report.ai_confidence }})
-                                        </span>
+                            <!-- Body Analisis AI -->
+                            <div class="p-4 sm:p-5 space-y-4">
+                                <!-- 4 Kartu Metrik AI Ditumpuk Vertikal (1 Kolom) -->
+                                <div class="grid grid-cols-1 gap-2.5">
+                                    <!-- Metrik 1: Sentimen AI -->
+                                    <div class="bg-slate-50/70 dark:bg-slate-950/50 hover:bg-slate-100/70 dark:hover:bg-slate-800/50 border border-slate-200/80 dark:border-slate-800 rounded-xl p-3 transition space-y-1">
+                                        <span class="text-[10px] text-slate-500 dark:text-slate-400 block font-normal">Sentimen Pasien</span>
+                                        <div class="flex items-center justify-between">
+                                            <span :class="[
+                                                'text-xs font-semibold flex items-center gap-1',
+                                                report.ai_sentiment === 'POSITIF' ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
+                                            ]">
+                                                <TrendingUp v-if="report.ai_sentiment === 'POSITIF'" class="h-3 w-3 shrink-0" />
+                                                <TrendingDown v-else class="h-3 w-3 shrink-0" />
+                                                <span>{{ report.ai_sentiment }}</span>
+                                            </span>
+                                            <span class="text-[10px] text-slate-400 font-normal">({{ report.ai_confidence }})</span>
+                                        </div>
                                     </div>
 
-                                    <div class="bg-slate-50 dark:bg-slate-950 p-2.5 rounded-xl border border-slate-200/80 dark:border-slate-800">
-                                        <span class="text-[9px] font-bold uppercase text-slate-400 block">Kategori Masalah</span>
-                                        <span class="text-xs font-bold text-slate-900 dark:text-white truncate block">{{ report.ai_category }}</span>
+                                    <!-- Metrik 2: Kategori Masalah -->
+                                    <div class="bg-slate-50/70 dark:bg-slate-950/50 hover:bg-slate-100/70 dark:hover:bg-slate-800/50 border border-slate-200/80 dark:border-slate-800 rounded-xl p-3 transition space-y-1">
+                                        <span class="text-[10px] text-slate-500 dark:text-slate-400 block font-normal">Kategori Masalah</span>
+                                        <div class="text-xs font-semibold text-slate-800 dark:text-white truncate" :title="report.ai_category">
+                                            {{ report.ai_category }}
+                                        </div>
                                     </div>
 
-                                    <div class="bg-slate-50 dark:bg-slate-950 p-2.5 rounded-xl border border-slate-200/80 dark:border-slate-800">
-                                        <span class="text-[9px] font-bold uppercase text-slate-400 block">Urgensi Tindakan</span>
-                                        <span :class="[
-                                            'text-xs font-extrabold uppercase',
-                                            report.ai_urgency === 'TINGGI' || report.ai_urgency === 'KRITIS' ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'
-                                        ]">
-                                            {{ report.ai_urgency }}
-                                        </span>
+                                    <!-- Metrik 3: Urgensi Tindakan -->
+                                    <div class="bg-slate-50/70 dark:bg-slate-950/50 hover:bg-slate-100/70 dark:hover:bg-slate-800/50 border border-slate-200/80 dark:border-slate-800 rounded-xl p-3 transition space-y-1">
+                                        <span class="text-[10px] text-slate-500 dark:text-slate-400 block font-normal">Urgensi Tindakan</span>
+                                        <div>
+                                            <span :class="[
+                                                'px-2 py-0.5 rounded text-[10px] font-semibold inline-block',
+                                                report.ai_urgency === 'TINGGI' || report.ai_urgency === 'KRITIS'
+                                                    ? 'bg-rose-100 text-rose-700 border border-rose-200 dark:bg-rose-500/20 dark:text-rose-300 dark:border-rose-500/30'
+                                                    : 'bg-emerald-100 text-emerald-800 border border-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/30'
+                                            ]">
+                                                {{ report.ai_urgency }}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Metrik 4: Rekomendasi Poin KPI -->
+                                    <div class="bg-slate-50/70 dark:bg-slate-950/50 hover:bg-slate-100/70 dark:hover:bg-slate-800/50 border border-slate-200/80 dark:border-slate-800 rounded-xl p-3 transition space-y-1">
+                                        <span class="text-[10px] text-slate-500 dark:text-slate-400 block font-normal">Arahan Aksi KPI</span>
+                                        <div class="text-xs font-semibold">
+                                            <span v-if="report.ai_sentiment === 'POSITIF'" class="text-emerald-700 dark:text-emerald-400">
+                                                Reward (+ Poin)
+                                            </span>
+                                            <span v-else-if="isFacilityComplaint && report.ai_sentiment !== 'POSITIF'" class="text-blue-700 dark:text-blue-300">
+                                                Netral (0 Poin)
+                                            </span>
+                                            <span v-else-if="report.ai_sentiment === 'NEGATIF'" class="text-rose-600 dark:text-rose-400">
+                                                Evaluasi (- Poin)
+                                            </span>
+                                            <span v-else class="text-blue-700 dark:text-blue-300">
+                                                Netral (0 Poin)
+                                            </span>
+                                        </div>
                                     </div>
                                 </div>
 
-                                <div v-if="report.ai_recommendation" class="bg-emerald-50/80 dark:bg-emerald-950/40 p-3.5 rounded-xl border border-emerald-200/80 dark:border-emerald-900/60 space-y-1">
-                                    <span class="text-[9px] font-bold uppercase tracking-wide text-emerald-800 dark:text-emerald-300 block">
-                                        Rekomendasi Solusi AI:
-                                    </span>
-                                    <p class="text-xs text-slate-700 dark:text-slate-200 leading-relaxed font-medium">
+                                <!-- Box Rekomendasi Solusi & Arahan AI -->
+                                <div v-if="report.ai_recommendation" class="bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-200/80 dark:border-emerald-500/30 rounded-xl p-4 space-y-2">
+                                    <div class="flex items-center gap-1.5 text-emerald-800 dark:text-emerald-400 font-semibold text-[11px]">
+                                        <Sparkles class="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                        <span>Rekomendasi Solusi & Evaluasi:</span>
+                                    </div>
+                                    <p class="text-xs text-slate-700 dark:text-slate-200 leading-relaxed font-normal">
                                         {{ report.ai_recommendation }}
                                     </p>
+                                    <div v-if="report.ai_summary" class="pt-2 border-t border-emerald-200/80 dark:border-emerald-500/20 text-[11px] text-slate-500 dark:text-slate-400 font-normal">
+                                        <span class="font-medium text-emerald-900/80 dark:text-emerald-300">Ringkasan AI:</span> {{ report.ai_summary }}
+                                    </div>
                                 </div>
+                            </div>
+
+                            <!-- Bottom Bar / Footer Analisis AI -->
+                            <div class="px-4 py-2.5 bg-slate-50/80 dark:bg-slate-950/60 flex items-center gap-2">
+                                <ShieldCheck class="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                <p class="text-[10.5px] text-slate-500 dark:text-slate-400 italic leading-snug">
+                                    Diproses otomatis oleh <span class="font-semibold not-italic text-slate-700 dark:text-slate-300">{{ report.ai_provider || 'Groq AI (Llama-3)' }}</span> sebagai validasi bukti telaah aduan.
+                                </p>
                             </div>
                         </div>
 
                     </div>
 
-                    <!-- Right Column: Shift Staff Matching & KPI Point Action Form (5 cols) -->
-                    <div class="lg:col-span-5 space-y-4">
-                        
-                        <!-- Shift Staff Matching Card -->
-                        <div class="bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden divide-y divide-slate-100 dark:divide-slate-800">
+                    <!-- 2. Container: Shift Staff Matching Card -->
+                    <div class="bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden divide-y divide-slate-100 dark:divide-slate-800">
                             
                             <!-- Staff Matching Container Header -->
-                            <div class="p-5 bg-slate-50/60 dark:bg-slate-950/60 flex flex-wrap items-center justify-between gap-3">
+                            <div class="p-4 sm:p-5 bg-slate-50/60 dark:bg-slate-950/60 flex flex-wrap items-center justify-between gap-3">
                                 <h3 class="text-xs font-extrabold uppercase tracking-wider text-slate-900 dark:text-white">
                                     Pencocokan Staf Bertugas
                                 </h3>
-                                <span class="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
-                                    {{ report.shift_info }}
+                                <span class="px-2.5 py-1 rounded-lg text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+                                    <Clock class="h-3 w-3 text-slate-400" />
+                                    <span>{{ report.created_at_time || report.timestamp }}</span>
                                 </span>
                             </div>
 
                             <!-- Staff Matching Container Body -->
-                            <div class="p-5 space-y-3">
-                                <p class="text-xs text-slate-500 dark:text-slate-400">
-                                    Centang staf yang bertugas pada shift ini untuk mengaitkan catatan verifikasi & poin KPI:
+                            <div class="p-4 sm:p-5 space-y-3">
+                                <p v-if="isVerified" class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed font-normal">
+                                    Daftar staf unit yang telah ditautkan dan dievaluasi pada verifikasi laporan ini:
+                                </p>
+                                <p v-else class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed font-normal">
+                                    Centang staf yang bertugas saat aduan terjadi untuk verifikasi & evaluasi poin KPI (otomatis ditandai dari data Presensi Masuk):
                                 </p>
 
                                 <!-- Staff List Checkbox Grid -->
@@ -350,7 +457,8 @@ const finishVerification = () => {
                                         v-for="staff in staffList"
                                         :key="staff.id"
                                         :class="[
-                                            'flex items-center justify-between p-3 rounded-xl border cursor-pointer select-none transition',
+                                            'flex items-center justify-between p-3 rounded-xl border select-none transition',
+                                            isVerified ? 'cursor-default' : 'cursor-pointer',
                                             staff.selected 
                                                 ? 'bg-emerald-50/80 border-emerald-500 dark:bg-emerald-950/40 dark:border-emerald-700' 
                                                 : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 hover:border-slate-300'
@@ -360,98 +468,142 @@ const finishVerification = () => {
                                             <input
                                                 type="checkbox"
                                                 v-model="staff.selected"
-                                                class="rounded text-emerald-600 focus:ring-emerald-500 h-4 w-4 accent-emerald-600"
+                                                :disabled="isVerified"
+                                                class="rounded text-emerald-600 focus:ring-emerald-500 h-4 w-4 accent-emerald-600 disabled:cursor-not-allowed"
                                             />
                                             <div>
-                                                <div class="text-xs font-bold text-slate-900 dark:text-white">{{ staff.name }}</div>
-                                                <div class="text-[10px] text-slate-500 dark:text-slate-400 font-medium">{{ staff.role }} • NIP: {{ staff.nip }}</div>
+                                                <div class="flex items-center gap-1.5 flex-wrap">
+                                                    <span class="text-xs font-semibold text-slate-800 dark:text-slate-100">{{ staff.name }}</span>
+                                                    <span
+                                                        v-if="staff.attendance_type === 'ACTIVE_AT_REPORT'"
+                                                        class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800"
+                                                        title="Tercatat berdinas saat jam aduan diterima"
+                                                    >
+                                                        ✓ On-Duty saat Kejadian
+                                                    </span>
+                                                    <span
+                                                        v-else-if="staff.attendance_type === 'TODAY'"
+                                                        class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-800"
+                                                    >
+                                                        Hadir Hari Ini
+                                                    </span>
+                                                </div>
+                                                <div class="text-[10px] text-slate-500 dark:text-slate-400 font-normal mt-0.5">
+                                                    {{ staff.role }} • NIP: {{ staff.nip }}
+                                                    <span v-if="staff.clock_in_time" class="ml-1 text-slate-400">
+                                                        (Presensi: {{ staff.clock_in_time }})
+                                                    </span>
+                                                </div>
                                             </div>
                                         </div>
-                                        <span class="text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
-                                            {{ staff.total_points }} Poin
-                                        </span>
+                                        <div class="text-right flex-shrink-0">
+                                            <span class="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 block">
+                                                {{ staff.total_points }} Poin
+                                            </span>
+                                            <span v-if="staff.selected" class="text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
+                                                Terpilih
+                                            </span>
+                                        </div>
                                     </label>
                                 </div>
 
                                 <!-- If No Staff Registered in this Unit -->
-                                <div v-else class="py-6 text-center text-slate-400 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200/80 dark:border-slate-800 space-y-2">
-                                    <Users class="h-6 w-6 mx-auto opacity-40" />
-                                    <p class="text-xs font-bold text-slate-700 dark:text-slate-300">Belum ada staf terdaftar di unit {{ report.unit }}.</p>
-                                    <Link
-                                        :href="route('users.index')"
-                                        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-[11px] font-bold hover:bg-emerald-500"
-                                    >
-                                        <span>Buka Daftar Pengguna</span>
-                                        <ExternalLink class="h-3 w-3" />
-                                    </Link>
+                                <div v-else class="text-center py-6 border border-dashed border-slate-200 dark:border-slate-800 rounded-xl space-y-2">
+                                    <div class="h-9 w-9 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mx-auto">
+                                        <Users class="h-4 w-4" />
+                                    </div>
+                                    <p class="text-[11px] text-slate-400 dark:text-slate-500 font-normal">
+                                        Belum ada staf terdaftar di unit {{ report.unit }}.
+                                    </p>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- KPI Point Execution & Supervisor Notes Form -->
+                        <!-- 3. Container: KPI Point Execution & Supervisor Notes Form -->
                         <div class="bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden divide-y divide-slate-100 dark:divide-slate-800">
                             
                             <!-- KPI Form Container Header -->
-                            <div class="p-5 bg-slate-50/60 dark:bg-slate-950/60 flex flex-wrap items-center justify-between gap-3">
+                            <div class="p-4 sm:p-5 bg-slate-50/60 dark:bg-slate-950/60 flex items-center justify-between gap-3">
                                 <h3 class="text-xs font-extrabold uppercase tracking-wider text-slate-900 dark:text-white">
                                     Eksekusi Poin KPI & Berita Acara
                                 </h3>
-                                <span class="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-emerald-50 text-emerald-700 dark:bg-white/10 dark:text-white">
+                                <span v-if="isVerified" class="px-2.5 py-1 rounded-lg text-[10px] font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 flex items-center gap-1 shrink-0">
+                                    <Check class="h-3 w-3" />
+                                    <span>Telah Dieksekusi</span>
+                                </span>
+                                <span v-else class="px-2.5 py-1 rounded-lg text-[10px] font-semibold bg-emerald-50 text-emerald-700 dark:bg-white/10 dark:text-white shrink-0">
                                     Poin KPI
                                 </span>
                             </div>
 
                             <!-- KPI Form Container Body -->
-                            <div class="p-5 space-y-4">
+                            <div class="p-4 sm:p-5 space-y-4">
                                 <!-- Action Type Selector -->
                                 <div class="space-y-1.5">
-                                    <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Jenis Tindakan KPI:</label>
-                                    <div class="grid grid-cols-3 gap-2">
+                                    <label class="text-[11px] font-medium text-slate-400 dark:text-slate-500 block">Jenis Tindakan KPI:</label>
+                                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
                                          <button
                                             type="button"
-                                            @click="actionType = 'PEMOTONGAN'; if (pointValue === 0) pointValue = 5"
+                                            :disabled="isVerified"
+                                            @click="if (!isVerified) { actionType = 'PEMOTONGAN'; if (pointValue === 0) pointValue = 5; }"
                                             :class="[
-                                                'py-2.5 px-2 rounded-xl border text-[11px] font-extrabold flex items-center justify-center gap-1.5 transition cursor-pointer',
-                                                actionType === 'PEMOTONGAN' ? 'bg-rose-50 border-rose-500 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300' : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-500'
+                                                'py-2.5 sm:py-2 px-3 sm:px-2 rounded-xl border text-xs font-semibold flex items-center justify-center gap-2 sm:gap-1.5 transition outline-none focus:outline-none focus:ring-0 select-none',
+                                                isVerified ? 'cursor-not-allowed' : 'cursor-pointer active:scale-[0.98]',
+                                                actionType === 'PEMOTONGAN' 
+                                                    ? 'bg-rose-600 border-rose-600 text-white shadow-xs' 
+                                                    : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-900'
                                             ]"
                                         >
-                                            <TrendingDown class="h-3.5 w-3.5" />
-                                            <span>Potong (-)</span>
+                                            <TrendingDown :class="['h-4 w-4 sm:h-3.5 sm:w-3.5 shrink-0', actionType === 'PEMOTONGAN' ? 'text-white' : 'text-rose-500']" />
+                                            <span>Potong Poin (-)</span>
                                         </button>
 
                                         <button
                                             type="button"
-                                            @click="actionType = 'PENAMBAHAN'; if (pointValue === 0) pointValue = 5"
+                                            :disabled="isVerified"
+                                            @click="if (!isVerified) { actionType = 'PENAMBAHAN'; if (pointValue === 0) pointValue = 5; }"
                                             :class="[
-                                                'py-2.5 px-2 rounded-xl border text-[11px] font-extrabold flex items-center justify-center gap-1.5 transition cursor-pointer',
-                                                actionType === 'PENAMBAHAN' ? 'bg-emerald-50 border-emerald-500 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300' : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-500'
+                                                'py-2.5 sm:py-2 px-3 sm:px-2 rounded-xl border text-xs font-semibold flex items-center justify-center gap-2 sm:gap-1.5 transition outline-none focus:outline-none focus:ring-0 select-none',
+                                                isVerified ? 'cursor-not-allowed' : 'cursor-pointer active:scale-[0.98]',
+                                                actionType === 'PENAMBAHAN' 
+                                                    ? 'bg-emerald-600 border-emerald-600 text-white shadow-xs' 
+                                                    : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-900'
                                             ]"
                                         >
-                                            <TrendingUp class="h-3.5 w-3.5" />
-                                            <span>Tambah (+)</span>
+                                            <TrendingUp :class="['h-4 w-4 sm:h-3.5 sm:w-3.5 shrink-0', actionType === 'PENAMBAHAN' ? 'text-white' : 'text-emerald-500']" />
+                                            <span>Tambah Poin (+)</span>
                                         </button>
 
                                         <button
                                             type="button"
-                                            @click="actionType = 'NETRAL'; pointValue = 0"
+                                            :disabled="isVerified"
+                                            @click="if (!isVerified) { actionType = 'NETRAL'; pointValue = 0; }"
                                             :class="[
-                                                'py-2.5 px-2 rounded-xl border text-[11px] font-extrabold flex items-center justify-center gap-1.5 transition cursor-pointer',
-                                                actionType === 'NETRAL' ? 'bg-blue-50 border-blue-500 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300' : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-500'
+                                                'py-2.5 sm:py-2 px-3 sm:px-2 rounded-xl border text-xs font-semibold flex items-center justify-center gap-2 sm:gap-1.5 transition outline-none focus:outline-none focus:ring-0 select-none',
+                                                isVerified ? 'cursor-not-allowed' : 'cursor-pointer active:scale-[0.98]',
+                                                actionType === 'NETRAL' 
+                                                    ? 'bg-blue-600 border-blue-600 text-white shadow-xs' 
+                                                    : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-900'
                                             ]"
                                         >
-                                            <span>Netral (0)</span>
+                                            <ShieldCheck :class="['h-4 w-4 sm:h-3.5 sm:w-3.5 shrink-0', actionType === 'NETRAL' ? 'text-white' : 'text-blue-500']" />
+                                            <span>Netral (0 Poin)</span>
                                         </button>
                                     </div>
                                 </div>
 
                                 <!-- Point Value Input: Clean Stepper with Direct Typed Sign -->
                                 <div v-if="actionType !== 'NETRAL'" class="space-y-1.5">
-                                    <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Besaran Poin Per Staf Terpilih:</label>
-                                    <div class="flex items-center gap-2">
+                                    <label class="text-[11px] font-medium text-slate-400 dark:text-slate-500 block">Besaran Poin Per Staf Terpilih:</label>
+                                    <div class="flex items-center gap-2 sm:gap-3">
                                         <button
                                             type="button"
+                                            :disabled="isVerified"
                                             @click="decrementPoint"
-                                            class="h-10 w-10 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 flex items-center justify-center transition cursor-pointer shrink-0 font-bold"
+                                            :class="[
+                                                'h-11 w-11 sm:h-10 sm:w-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center transition shrink-0 font-bold',
+                                                isVerified ? 'opacity-40 cursor-not-allowed' : 'hover:bg-slate-200 dark:hover:bg-slate-700 active:scale-95 cursor-pointer'
+                                            ]"
                                         >
                                             <Minus class="h-4 w-4" />
                                         </button>
@@ -459,27 +611,35 @@ const finishVerification = () => {
                                         <div class="relative flex-1">
                                             <input
                                                 :value="actionType === 'PEMOTONGAN' ? `-${pointValue}` : `+${pointValue}`"
+                                                :disabled="isVerified"
+                                                inputmode="numeric"
                                                 @input="e => {
+                                                    if (isVerified) return;
                                                     const cleaned = e.target.value.replace(/[^0-9]/g, '');
                                                     pointValue = cleaned ? parseInt(cleaned) : 1;
                                                 }"
                                                 type="text"
                                                 :class="[
-                                                    'w-full h-10 text-center font-extrabold text-sm rounded-xl border bg-slate-50 dark:bg-slate-950 focus:outline-none transition',
+                                                    'w-full h-11 sm:h-10 text-center font-bold text-base sm:text-sm rounded-xl border bg-slate-50 dark:bg-slate-950 focus:outline-none transition px-12',
+                                                    isVerified ? 'cursor-not-allowed opacity-80' : '',
                                                     actionType === 'PEMOTONGAN' 
                                                         ? 'text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-900/50 focus:border-rose-500' 
                                                         : 'text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/50 focus:border-emerald-500'
                                                 ]"
                                             />
-                                            <span class="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 pointer-events-none">
+                                            <span class="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-400 pointer-events-none">
                                                 Poin
                                             </span>
                                         </div>
 
                                         <button
                                             type="button"
+                                            :disabled="isVerified"
                                             @click="incrementPoint"
-                                            class="h-10 w-10 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 flex items-center justify-center transition cursor-pointer shrink-0 font-bold"
+                                            :class="[
+                                                'h-11 w-11 sm:h-10 sm:w-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center transition shrink-0 font-bold',
+                                                isVerified ? 'opacity-40 cursor-not-allowed' : 'hover:bg-slate-200 dark:hover:bg-slate-700 active:scale-95 cursor-pointer'
+                                            ]"
                                         >
                                             <Plus class="h-4 w-4" />
                                         </button>
@@ -488,39 +648,53 @@ const finishVerification = () => {
 
                                 <!-- Info Callout for Netral Action (0 Poin) -->
                                 <div v-else class="p-3.5 rounded-xl bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-900/50 text-blue-800 dark:text-blue-300 text-xs leading-relaxed space-y-1">
-                                    <div class="font-extrabold flex items-center gap-1.5">
-                                        <CheckCircle2 class="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                                    <div class="font-semibold flex items-center gap-1.5">
+                                        <CheckCircle2 class="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0" />
                                         <span>Status Tindakan Netral (0 Poin KPI)</span>
                                     </div>
-                                    <p class="text-[11px] text-blue-700/90 dark:text-blue-300/90">
+                                    <p class="text-[11px] text-blue-700/90 dark:text-blue-300/90 font-normal">
                                         Laporan ini dikategorikan sebagai masukan fasilitas/operasional umum. <strong>Tidak ada saldo poin KPI staf yang dipotong maupun ditambah</strong>.
                                     </p>
                                 </div>
 
                                 <!-- Supervisor Notes -->
                                 <div class="space-y-1.5">
-                                    <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Catatan Berita Acara / Tindak Lanjut:</label>
+                                    <label class="text-[11px] font-medium text-slate-400 dark:text-slate-500 block">Catatan Berita Acara / Tindak Lanjut:</label>
                                     <textarea
                                         v-model="supervisorNotes"
+                                        :disabled="isVerified"
+                                        :readonly="isVerified"
                                         rows="3"
-                                        placeholder="Tuliskan klarifikasi shift, evaluasi, atau catatan apresiasi untuk staf..."
-                                        class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3 text-xs text-slate-800 dark:text-slate-200 leading-relaxed focus:outline-none focus:border-emerald-500"
+                                        placeholder="Tuliskan klarifikasi kejadian, evaluasi tindakan, atau catatan apresiasi untuk staf..."
+                                        :class="[
+                                            'w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3 text-xs sm:text-sm text-slate-800 dark:text-slate-200 leading-relaxed font-normal focus:outline-none transition',
+                                            isVerified ? 'cursor-not-allowed opacity-80' : 'focus:border-emerald-500'
+                                        ]"
                                     ></textarea>
                                 </div>
 
-                                <!-- Submit Button -->
+                                <!-- Verified State Banner or Submit Button -->
+                                <div v-if="isVerified" class="p-3.5 sm:p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 text-center space-y-1.5 select-none shadow-xs">
+                                    <div class="flex items-center justify-center gap-2 text-emerald-800 dark:text-emerald-300 font-bold text-xs sm:text-sm">
+                                        <CheckCircle2 class="h-4 w-4 sm:h-4.5 sm:w-4.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                        <span>Laporan Ini Telah Selesai Diverifikasi</span>
+                                    </div>
+                                    <p class="text-[11px] sm:text-xs text-emerald-700/90 dark:text-emerald-300/80 font-normal leading-relaxed">
+                                        Verifikasi dieksekusi pada <strong>{{ report.verified_at || '-' }}</strong><template v-if="report.verified_by"> oleh <strong>{{ report.verified_by }}</strong></template>. Saldo poin staf unit telah tercatat di logbook dan tidak dapat diubah kembali.
+                                    </p>
+                                </div>
+
                                 <button
+                                    v-else
                                     @click="submitVerification"
                                     :disabled="isSubmitting"
-                                    class="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition disabled:opacity-50 cursor-pointer"
+                                    class="w-full py-3.5 sm:py-3 bg-emerald-600 hover:bg-emerald-500 active:scale-[0.99] text-white rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 shadow-sm transition disabled:opacity-50 cursor-pointer"
                                 >
                                     <CheckCircle2 class="h-4 w-4" />
                                     <span>{{ isSubmitting ? 'Memproses Verifikasi...' : 'Simpan Verifikasi & Catat Logbook' }}</span>
                                 </button>
                             </div>
                         </div>
-
-                    </div>
 
                 </div>
             </template>

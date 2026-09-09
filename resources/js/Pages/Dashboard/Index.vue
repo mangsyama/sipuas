@@ -234,7 +234,7 @@ const redZoneBreakdown = computed(() => {
                         >
                             <div class="flex items-center justify-between text-xs">
                                 <div class="flex items-center gap-2">
-                                    <span class="font-mono font-bold text-emerald-600 dark:text-emerald-400">{{ feed.id }}</span>
+                                    <span class="font-sans font-bold text-emerald-600 dark:text-emerald-400">{{ feed.id }}</span>
                                     <span class="text-slate-400">• {{ feed.time }}</span>
                                 </div>
                                 <span

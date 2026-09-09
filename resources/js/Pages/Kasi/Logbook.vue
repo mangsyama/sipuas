@@ -107,12 +107,12 @@ const staffLogbooks = ref(props.staffLogbooks || []);
                                 class="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200/60 dark:border-slate-800 text-xs"
                             >
                                 <div class="flex items-center gap-3">
-                                    <span :class="['px-2 py-0.5 rounded font-mono font-bold text-[10px]', log.points > 0 ? 'bg-emerald-100 text-emerald-800 dark:bg-white/10 dark:text-white' : 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300']">
+                                    <span :class="['px-2 py-0.5 rounded font-bold text-[10px] font-sans', log.points > 0 ? 'bg-emerald-100 text-emerald-800 dark:bg-white/10 dark:text-white' : 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300']">
                                         {{ log.points > 0 ? '+' + log.points : log.points }} Poin
                                     </span>
                                     <span class="text-slate-700 dark:text-slate-200 font-medium">{{ log.note }}</span>
                                 </div>
-                                <span class="text-[11px] text-slate-400 font-mono">{{ log.date }}</span>
+                                <span class="text-[11px] text-slate-400 font-medium font-sans">{{ log.date }}</span>
                             </div>
                         </div>
                     </div>
