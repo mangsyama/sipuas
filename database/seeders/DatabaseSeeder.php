@@ -65,7 +65,10 @@ class DatabaseSeeder extends Seeder
         ];
 
         foreach ($rolesData as $role) {
-            Role::updateOrCreate(['id' => $role['id']], $role);
+            Role::updateOrCreate(
+                ['name' => $role['name']],
+                ['page_permissions' => $role['page_permissions']]
+            );
         }
 
         // 2. Master Ruangan Rumah Sakit (Sinkron dengan Basis Data Pesu Peluh)
@@ -74,9 +77,8 @@ class DatabaseSeeder extends Seeder
             if ($pesupeluhRooms->isNotEmpty()) {
                 foreach ($pesupeluhRooms as $pRoom) {
                     Room::updateOrCreate(
-                        ['id' => $pRoom->id],
+                        ['name' => $pRoom->name],
                         [
-                            'name' => $pRoom->name,
                             'building_name' => $pRoom->building_name ?? 'Gedung Utama',
                             'location_floor' => $pRoom->location_floor ?? 'Lantai 1',
                             'is_active' => true,
@@ -87,36 +89,36 @@ class DatabaseSeeder extends Seeder
         } catch (\Throwable $e) {
             // Fallback list of 27 standard hospital rooms
             $fallbackRooms = [
-                ['id' => 1, 'name' => 'UGD', 'building_name' => 'Gedung A', 'location_floor' => 'Lantai 1'],
-                ['id' => 2, 'name' => 'VK/PERINA', 'building_name' => 'Gedung A', 'location_floor' => 'Lantai 1'],
-                ['id' => 3, 'name' => 'FARMASI', 'building_name' => 'Gedung A', 'location_floor' => 'Lantai 1'],
-                ['id' => 4, 'name' => 'LABORATORIUM', 'building_name' => 'Gedung A', 'location_floor' => 'Lantai 1'],
-                ['id' => 5, 'name' => 'RADIOLOGI', 'building_name' => 'Gedung A', 'location_floor' => 'Lantai 1'],
-                ['id' => 6, 'name' => 'CLEANING SERVICEE', 'building_name' => 'Gedung A', 'location_floor' => 'Lantai 1'],
-                ['id' => 7, 'name' => 'POLI KLINIK', 'building_name' => 'Gedung A', 'location_floor' => 'Lantai 2'],
-                ['id' => 8, 'name' => 'FISIOTERAPI', 'building_name' => 'Gedung A', 'location_floor' => 'Lantai 2'],
-                ['id' => 9, 'name' => 'RAWAT INAP KASWUARI', 'building_name' => 'Gedung A', 'location_floor' => 'Lantai 3'],
-                ['id' => 10, 'name' => 'KAMAR BEDAH', 'building_name' => 'Gedung B', 'location_floor' => 'Lantai 1'],
-                ['id' => 11, 'name' => 'RAWAT INAP CENDRAWASIH', 'building_name' => 'Gedung B', 'location_floor' => 'Lantai 2'],
-                ['id' => 12, 'name' => 'RAWAT INAP MERPATI', 'building_name' => 'Gedung B', 'location_floor' => 'Lantai 3'],
-                ['id' => 13, 'name' => 'IPSRS', 'building_name' => 'Gedung B', 'location_floor' => 'Lantai 3'],
-                ['id' => 14, 'name' => 'KESLING', 'building_name' => 'Gedung B', 'location_floor' => 'Lantai 3'],
-                ['id' => 15, 'name' => 'RUANG KABID PENUNJANG', 'building_name' => 'Gedung C', 'location_floor' => 'Lantai 1'],
-                ['id' => 16, 'name' => 'LAUNDRY', 'building_name' => 'Gedung C', 'location_floor' => 'Lantai 1'],
-                ['id' => 17, 'name' => 'GIZI', 'building_name' => 'Gedung C', 'location_floor' => 'Lantai 1'],
-                ['id' => 18, 'name' => 'HCU', 'building_name' => 'Gedung C', 'location_floor' => 'Lantai 1'],
-                ['id' => 19, 'name' => 'CSSD', 'building_name' => 'Gedung C', 'location_floor' => 'Lantai 1'],
-                ['id' => 20, 'name' => 'ICU', 'building_name' => 'Gedung C', 'location_floor' => 'Lantai 2'],
-                ['id' => 21, 'name' => 'KEPEGAWAIAN/KEUANGAN', 'building_name' => 'Gedung C', 'location_floor' => 'Lantai 2'],
-                ['id' => 22, 'name' => 'RUANG ADMINISTRASI PELAYANAN', 'building_name' => 'Gedung C', 'location_floor' => 'Lantai 2'],
-                ['id' => 23, 'name' => 'RUANG DIREKTUR', 'building_name' => 'Gedung C', 'location_floor' => 'Lantai 2'],
-                ['id' => 24, 'name' => 'RUANG KABAG TU', 'building_name' => 'Gedung C', 'location_floor' => 'Lantai 2'],
-                ['id' => 25, 'name' => 'DALOP', 'building_name' => 'Gedung C', 'location_floor' => 'Lantai 2'],
-                ['id' => 26, 'name' => 'RUANG SUB BAGIAN KEUANGAN', 'building_name' => 'Gedung C', 'location_floor' => 'Lantai 2'],
-                ['id' => 27, 'name' => 'SECURITY', 'building_name' => 'Halaman Depan', 'location_floor' => '-'],
+                ['name' => 'UGD', 'building_name' => 'Gedung A', 'location_floor' => 'Lantai 1'],
+                ['name' => 'VK/PERINA', 'building_name' => 'Gedung A', 'location_floor' => 'Lantai 1'],
+                ['name' => 'FARMASI', 'building_name' => 'Gedung A', 'location_floor' => 'Lantai 1'],
+                ['name' => 'LABORATORIUM', 'building_name' => 'Gedung A', 'location_floor' => 'Lantai 1'],
+                ['name' => 'RADIOLOGI', 'building_name' => 'Gedung A', 'location_floor' => 'Lantai 1'],
+                ['name' => 'CLEANING SERVICEE', 'building_name' => 'Gedung A', 'location_floor' => 'Lantai 1'],
+                ['name' => 'POLI KLINIK', 'building_name' => 'Gedung A', 'location_floor' => 'Lantai 2'],
+                ['name' => 'FISIOTERAPI', 'building_name' => 'Gedung A', 'location_floor' => 'Lantai 2'],
+                ['name' => 'RAWAT INAP KASWUARI', 'building_name' => 'Gedung A', 'location_floor' => 'Lantai 3'],
+                ['name' => 'KAMAR BEDAH', 'building_name' => 'Gedung B', 'location_floor' => 'Lantai 1'],
+                ['name' => 'RAWAT INAP CENDRAWASIH', 'building_name' => 'Gedung B', 'location_floor' => 'Lantai 2'],
+                ['name' => 'RAWAT INAP MERPATI', 'building_name' => 'Gedung B', 'location_floor' => 'Lantai 3'],
+                ['name' => 'IPSRS', 'building_name' => 'Gedung B', 'location_floor' => 'Lantai 3'],
+                ['name' => 'KESLING', 'building_name' => 'Gedung B', 'location_floor' => 'Lantai 3'],
+                ['name' => 'RUANG KABID PENUNJANG', 'building_name' => 'Gedung C', 'location_floor' => 'Lantai 1'],
+                ['name' => 'LAUNDRY', 'building_name' => 'Gedung C', 'location_floor' => 'Lantai 1'],
+                ['name' => 'GIZI', 'building_name' => 'Gedung C', 'location_floor' => 'Lantai 1'],
+                ['name' => 'HCU', 'building_name' => 'Gedung C', 'location_floor' => 'Lantai 1'],
+                ['name' => 'CSSD', 'building_name' => 'Gedung C', 'location_floor' => 'Lantai 1'],
+                ['name' => 'ICU', 'building_name' => 'Gedung C', 'location_floor' => 'Lantai 2'],
+                ['name' => 'KEPEGAWAIAN/KEUANGAN', 'building_name' => 'Gedung C', 'location_floor' => 'Lantai 2'],
+                ['name' => 'RUANG ADMINISTRASI PELAYANAN', 'building_name' => 'Gedung C', 'location_floor' => 'Lantai 2'],
+                ['name' => 'RUANG DIREKTUR', 'building_name' => 'Gedung C', 'location_floor' => 'Lantai 2'],
+                ['name' => 'RUANG KABAG TU', 'building_name' => 'Gedung C', 'location_floor' => 'Lantai 2'],
+                ['name' => 'DALOP', 'building_name' => 'Gedung C', 'location_floor' => 'Lantai 2'],
+                ['name' => 'RUANG SUB BAGIAN KEUANGAN', 'building_name' => 'Gedung C', 'location_floor' => 'Lantai 2'],
+                ['name' => 'SECURITY', 'building_name' => 'Halaman Depan', 'location_floor' => '-'],
             ];
             foreach ($fallbackRooms as $r) {
-                Room::updateOrCreate(['id' => $r['id']], array_merge($r, ['is_active' => true]));
+                Room::updateOrCreate(['name' => $r['name']], array_merge($r, ['is_active' => true]));
             }
         }
 

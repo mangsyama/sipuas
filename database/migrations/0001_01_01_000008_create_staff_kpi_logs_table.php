@@ -15,7 +15,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('user_id')->constrained('users')->cascadeOnDelete();
             $table->foreignId('report_id')->nullable()->constrained('reports')->nullOnDelete();
-            $table->foreignId('verified_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('verified_by')->nullable()->constrained('users');
             $table->string('action_type', 30); // PENAMBAHAN, PEMOTONGAN, NETRAL
             $table->integer('points'); // e.g. 5 or -5
             $table->text('note')->nullable();
