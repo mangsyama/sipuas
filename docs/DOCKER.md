@@ -4,18 +4,17 @@ Dokumen ini berisi daftar perintah terminal Docker (*Cheat Sheet*) untuk server 
 
 ---
 
-## 🌐 1. Akses Sistem (Production HTTP Port 8081)
+## 🌐 1. Akses Sistem Production (Domain Resmi SSL HTTPS Port 443)
 
-Sistem SIPUAS di server production berjalan via **HTTP Port 8081** (tanpa SSL):
-* **Akses via IP Publik**: `http://103.19.230.110:8081`
-* **Akses via IP Internal**: `http://10.10.30.3:8081`
-* **Akses via Domain**: `http://sipuas.badungkab.go.id:8081`
+Sistem SIPUAS di server production berjalan persis seperti **Pesu Peluh** dengan konfigurasi SSL penuh pada **Port 443**:
+* **Akses via Domain Resmi (HTTPS)**: `https://sipuas.badungkab.go.id`
+* **Akses via IP Publik / Internal**: Diblokir otomatis oleh Nginx (`return 444;` tanpa respon / drop connection) untuk keamanan server (*security hardening*).
 
-### 🔒 Persiapan Jika Kelak Mengaktifkan SSL (HTTPS Port 443):
-Jika sertifikat resmi Kominfo untuk domain `sipuas.badungkab.go.id` sudah siap:
-1. Masukkan sertifikat (`all_in_one.crt` & `badungkab_go_id.key`) ke folder `ssl/`.
-2. Buka `docker-compose.yml`, aktifkan kembali `- "443:443"` dan volume mount `- ./ssl:/etc/nginx/ssl:ro`.
-3. Tambahkan server block `listen 443 ssl;` pada `nginx/sipuas.conf`.
+### 🔒 Sertifikat SSL Aktif (Kominfo Badung Wildcard):
+* Sertifikat: `/etc/nginx/ssl/all_in_one.crt`
+* Private Key: `/etc/nginx/ssl/badungkab_go_id.key`
+* Port Container: `443:443` (HTTPS SSL Standar Resmi)
+* WebSocket Reverb: Proxy otomatis via `/app` & `/apps` ke `reverb:8080` (WSS Secure)
 
 ---
 
