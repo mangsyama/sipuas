@@ -133,7 +133,7 @@ class UserManagementController extends Controller
             ];
         });
 
-        $units = Room::where('is_active', true)->orderBy('building_name')->orderBy('name')->get(['id', 'name', 'building_name', 'location_floor'])->map(function ($r) {
+        $units = Room::where('is_active', true)->orderBy('name')->get(['id', 'name', 'building_name', 'location_floor'])->map(function ($r) {
             return [
                 'id' => $r->id,
                 'code' => $r->location_info,
@@ -250,7 +250,7 @@ class UserManagementController extends Controller
      */
     public function edit(User $user): Response
     {
-        $rooms = Room::where('is_active', true)->orderBy('building_name')->orderBy('name')->get();
+        $rooms = Room::where('is_active', true)->orderBy('name')->get();
         $units = $rooms->map(fn ($r) => [
             'id' => $r->id,
             'code' => $r->location_info,

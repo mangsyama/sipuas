@@ -23,10 +23,16 @@ class AccountActivationController extends Controller
             return redirect()->route('login');
         }
 
+        // Jika akun sudah disetujui / aktif, langsung arahkan ke dalam sistem
+        if ($user->is_active) {
+            return $user->isStaff()
+                ? redirect()->route('staff.attendance')
+                : redirect()->route('dashboard');
+        }
+
         $user->load('room');
 
         $rooms = Room::where('is_active', true)
-            ->orderBy('building_name')
             ->orderBy('name')
             ->get(['id', 'name', 'building_name', 'location_floor']);
 

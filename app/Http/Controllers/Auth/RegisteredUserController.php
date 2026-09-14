@@ -25,7 +25,6 @@ class RegisteredUserController extends Controller
     {
         $units = Room::query()
             ->where('is_active', true)
-            ->orderBy('building_name')
             ->orderBy('name')
             ->get()
             ->map(fn ($r) => [

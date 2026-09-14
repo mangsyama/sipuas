@@ -111,12 +111,19 @@ Route::middleware('auth')->group(function () {
     Route::post('/users-approvals/{user}/approve', [\App\Http\Controllers\UserApprovalController::class, 'approve'])->name('users.approvals.approve');
     Route::delete('/users-approvals/{user}/reject', [\App\Http\Controllers\UserApprovalController::class, 'reject'])->name('users.approvals.reject');
 
-    // Master Data 2: Hospital Units / Ruangan Pelayanan
-    Route::get('/units', [\App\Http\Controllers\UnitManagementController::class, 'index'])->name('units.index');
-    Route::post('/units', [\App\Http\Controllers\UnitManagementController::class, 'store'])->name('units.store');
-    Route::put('/units/{unit}', [\App\Http\Controllers\UnitManagementController::class, 'update'])->name('units.update');
-    Route::delete('/units/{unit}', [\App\Http\Controllers\UnitManagementController::class, 'destroy'])->name('units.destroy');
-    Route::patch('/units/{unit}/toggle-status', [\App\Http\Controllers\UnitManagementController::class, 'toggleStatus'])->name('units.toggle-status');
+    // Master Data 2: Hospital Rooms / Ruangan Pelayanan
+    Route::get('/rooms', [\App\Http\Controllers\RoomManagementController::class, 'index'])->name('rooms.index');
+    Route::post('/rooms', [\App\Http\Controllers\RoomManagementController::class, 'store'])->name('rooms.store');
+    Route::put('/rooms/{room}', [\App\Http\Controllers\RoomManagementController::class, 'update'])->name('rooms.update');
+    Route::delete('/rooms/{room}', [\App\Http\Controllers\RoomManagementController::class, 'destroy'])->name('rooms.destroy');
+    Route::patch('/rooms/{room}/toggle-status', [\App\Http\Controllers\RoomManagementController::class, 'toggleStatus'])->name('rooms.toggle-status');
+
+    // Backward compatibility aliases for legacy /units endpoints
+    Route::get('/units', fn () => redirect()->route('rooms.index'))->name('units.index');
+    Route::post('/units', [\App\Http\Controllers\RoomManagementController::class, 'store'])->name('units.store');
+    Route::put('/units/{room}', [\App\Http\Controllers\RoomManagementController::class, 'update'])->name('units.update');
+    Route::delete('/units/{room}', [\App\Http\Controllers\RoomManagementController::class, 'destroy'])->name('units.destroy');
+    Route::patch('/units/{room}/toggle-status', [\App\Http\Controllers\RoomManagementController::class, 'toggleStatus'])->name('units.toggle-status');
 
     // Redirect legacy staff route to users
     Route::get('/staff', fn () => redirect()->route('users.index'))->name('staff.index');

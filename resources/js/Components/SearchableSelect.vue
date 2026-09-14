@@ -47,6 +47,10 @@ const props = defineProps({
         type: Boolean,
         default: true,
     },
+    maxHeight: {
+        type: String,
+        default: 'max-h-40 sm:max-h-48',
+    },
 });
 
 const emit = defineEmits(['update:modelValue', 'change']);
@@ -160,7 +164,7 @@ onUnmounted(() => {
             </div>
 
             <!-- Scrollable List -->
-            <div class="max-h-60 sm:max-h-72 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
+            <div :class="[maxHeight, 'overflow-y-auto space-y-1 pr-1 custom-scrollbar']">
                 <div
                     v-if="filteredOptions.length === 0"
                     class="p-3 text-center text-sm text-slate-400 dark:text-slate-500 font-medium whitespace-nowrap"

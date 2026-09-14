@@ -27,7 +27,7 @@ class Room extends Model
 
     public function getLocationInfoAttribute(): string
     {
-        $parts = array_filter([$this->building_name, $this->location_floor]);
+        $parts = array_filter([$this->building_name, $this->location_floor], fn($v) => !empty($v) && $v !== '-');
         return count($parts) > 0 ? implode(' • ', $parts) : '-';
     }
 

@@ -15,6 +15,8 @@ import {
     LogOut,
     Edit3,
     Link2,
+    RefreshCw,
+    X,
 } from '@lucide/vue';
 
 const props = defineProps({
@@ -35,6 +37,33 @@ const props = defineProps({
 const isEditing = ref(!props.user.has_requested);
 const showSuccessModal = ref(false);
 const statusMessage = ref('');
+const isChecking = ref(false);
+const checkNotice = ref('');
+const checkNoticeType = ref('info');
+
+const checkActivationStatus = () => {
+    if (isChecking.value) return;
+    isChecking.value = true;
+    checkNotice.value = '';
+
+    router.visit(route('activation.notice'), {
+        preserveScroll: true,
+        onSuccess: (page) => {
+            // Jika akun sudah aktif, backend secara otomatis me-redirect ke dashboard/presensi
+            if (!page.props.user?.is_active) {
+                checkNotice.value = 'Status akun Anda saat ini masih dalam proses peninjauan oleh Administrator atau Kepala Seksi. Silakan periksa kembali beberapa saat lagi.';
+                checkNoticeType.value = 'info';
+            }
+        },
+        onError: () => {
+            checkNotice.value = 'Gagal memeriksa status aktivasi. Pastikan koneksi internet Anda stabil lalu coba kembali.';
+            checkNoticeType.value = 'error';
+        },
+        onFinish: () => {
+            isChecking.value = false;
+        },
+    });
+};
 
 const scrollToTop = () => {
     window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
@@ -270,7 +299,7 @@ const submit = () => {
                                         Pengajuan Sedang Ditinjau
                                     </h3>
                                     <p class="text-xs text-amber-900/85 dark:text-amber-300/90 leading-relaxed">
-                                        Permohonan aktivasi Anda telah tersimpan dan menunggu persetujuan (approval). Setelah aktif, notifikasi otomatis dikirimkan ke WhatsApp Anda.
+                                        Permohonan aktivasi Anda telah tersimpan dan sedang menunggu persetujuan (approval) Administrator atau Kepala Seksi.
                                     </p>
                                 </div>
                             </div>
@@ -283,7 +312,7 @@ const submit = () => {
                                         Ruangan Pelayanan Dipilih
                                     </span>
                                     <span class="font-medium text-slate-800 dark:text-slate-100 block mt-0.5 text-sm leading-snug">
-                                        {{ user.unit_name }}
+                                        {{ user.room_name || user.unit_name }}
                                     </span>
                                 </div>
 
@@ -299,15 +328,46 @@ const submit = () => {
                             </div>
                         </div>
 
+                        <!-- Check Status Feedback Banner (Ketika User Klik Tombol Cek) -->
+                        <div
+                            v-if="checkNotice"
+                            class="p-3.5 rounded-xl border flex items-start gap-2.5 text-xs animate-spa-fade-in"
+                            :class="checkNoticeType === 'error' ? 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900/50' : 'bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-200 dark:border-emerald-900/50'"
+                        >
+                            <RefreshCw :class="['h-4 w-4 shrink-0 mt-0.5 text-emerald-600 dark:text-emerald-400', isChecking ? 'animate-spin' : '']" />
+                            <div class="flex-1">
+                                <p class="font-medium leading-relaxed">{{ checkNotice }}</p>
+                            </div>
+                            <button
+                                type="button"
+                                @click="checkNotice = ''"
+                                class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 shrink-0 cursor-pointer"
+                            >
+                                <X class="h-3.5 w-3.5" />
+                            </button>
+                        </div>
+
                         <!-- Action Buttons for Review State (Desktop) -->
-                        <div class="hidden sm:flex flex-col gap-2.5 pt-2">
+                        <div class="hidden sm:flex flex-col gap-2.5 pt-3">
+                            <!-- Tombol Utama: Cek Status Aktivasi Sekarang -->
+                            <button
+                                type="button"
+                                @click="checkActivationStatus"
+                                :disabled="isChecking"
+                                class="flex h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-emerald-600 font-semibold text-sm text-white transition-all duration-200 hover:bg-emerald-500 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                                <RefreshCw :class="['h-4 w-4', isChecking ? 'animate-spin' : '']" />
+                                <span>{{ isChecking ? 'Memeriksa Status Akun...' : 'Cek Status Aktivasi Sekarang' }}</span>
+                            </button>
+
+                            <!-- Tombol Sekunder: Ubah Ruangan / No. WA -->
                             <button
                                 type="button"
                                 @click="isEditing = true"
                                 class="flex h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold text-sm text-slate-700 dark:text-slate-200 transition hover:bg-slate-100 dark:hover:bg-slate-700"
                             >
                                 <Edit3 class="h-4 w-4" />
-                                <span>Ubah Ruangan / No. WhatsApp</span>
+                                <span>Ubah Ruangan / No. WA</span>
                             </button>
 
                             <!-- Tombol Keluar Diletakkan di Bawah Tombol Aksi -->
@@ -420,6 +480,18 @@ const submit = () => {
                 >
                     <!-- Review State Mobile Buttons -->
                     <div v-if="user.has_requested && !isEditing" class="flex flex-col gap-2 w-full">
+                        <!-- Tombol Utama: Cek Status Aktivasi Sekarang -->
+                        <button
+                            type="button"
+                            @click="checkActivationStatus"
+                            :disabled="isChecking"
+                            class="flex h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-emerald-600 font-semibold text-sm text-white transition-all duration-200 hover:bg-emerald-500 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                            <RefreshCw :class="['h-4 w-4', isChecking ? 'animate-spin' : '']" />
+                            <span>{{ isChecking ? 'Memeriksa Status...' : 'Cek Status Aktivasi Sekarang' }}</span>
+                        </button>
+
+                        <!-- Tombol Sekunder: Ubah Ruangan / No. WA -->
                         <button
                             type="button"
                             @click="isEditing = true"

@@ -50,4 +50,10 @@ return [
         'local_url'  => env('WA_LOCAL_URL', env('WA_GATEWAY_URL')),
     ],
 
+    'pesupeluh' => [
+        'api_url'            => env('PESUPELUH_API_URL', 'http://127.0.0.1:8000/api'),
+        'api_token'          => env('PESUPELUH_INTEGRATION_TOKEN', 'sipuas-pesupeluh-secret-token'),
+        'reporter_username'  => env('PESUPELUH_REPORTER_USERNAME', 'sipuas_masyarakat'),
+    ],
+
 ];

@@ -45,6 +45,11 @@ class HandleInertiaRequests extends Middleware
                 'page_permissions' => $permissions,
                 'pending_approvals_count' => $pendingApprovalsCount,
             ],
+            'flash' => [
+                'success' => fn () => $request->session()->get('success'),
+                'error' => fn () => $request->session()->get('error'),
+                'pesupeluh_ticket_number' => fn () => $request->session()->get('pesupeluh_ticket_number'),
+            ],
             'locale' => app()->getLocale(),
             'translations' => $this->getTranslations(),
         ];

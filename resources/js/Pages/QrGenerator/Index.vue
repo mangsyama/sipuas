@@ -13,7 +13,11 @@ import {
     Palette, 
     Building2, 
     CheckCircle2, 
-    Info 
+    Info,
+    UserCheck,
+    Printer,
+    Sparkles,
+    X
 } from '@lucide/vue';
 
 const props = defineProps({
@@ -26,6 +30,10 @@ const props = defineProps({
         default: () => []
     },
     units: {
+        type: Array,
+        default: () => []
+    },
+    staffUsers: {
         type: Array,
         default: () => []
     }
@@ -46,15 +54,27 @@ const roomList = computed(() => {
     return props.rooms.length > 0 ? props.rooms : props.units;
 });
 
-// Mode state: 'global' (all hospital) vs 'room' (specific room auto-selected)
-const targetMode = ref('global'); // 'global' | 'room'
+// Mode state: 'global' (all hospital) vs 'room' (specific room) vs 'doctor' (specific doctor/staff)
+const targetMode = ref('global'); // 'global' | 'room' | 'doctor'
 const selectedRoomId = ref('');
+const selectedStaffId = ref('');
+const doctorCustomName = ref('');
+const showStandeeModal = ref(false);
+
+// Filtered staff list by selected room (if room selected)
+const availableStaffList = computed(() => {
+    if (!props.staffUsers || props.staffUsers.length === 0) return [];
+    if (!selectedRoomId.value) return props.staffUsers;
+    const byRoom = props.staffUsers.filter(u => String(u.room_id) === String(selectedRoomId.value));
+    return byRoom.length > 0 ? byRoom : props.staffUsers;
+});
 
 // Form states
 const customPath = ref('/report');
 const qrColor = ref('#059669'); // Emerald 600 default
 const includeLogo = ref(false); // Default OFF sesuai permintaan
 const qrCanvasRef = ref(null);
+const standeeCanvasRef = ref(null);
 const isGenerating = ref(false);
 const copied = ref(false);
 
@@ -77,6 +97,19 @@ const pathMatchedRoom = computed(() => {
     return null;
 });
 
+// Matched target (doctor/staff name) from query parameter
+const pathMatchedTarget = computed(() => {
+    const path = customPath.value || '';
+    if (!path.includes('target=')) return doctorCustomName.value || '';
+    try {
+        const queryPart = path.split('?')[1] || '';
+        const params = new URLSearchParams(queryPart);
+        return params.get('target') || doctorCustomName.value || '';
+    } catch (e) {
+        return doctorCustomName.value || '';
+    }
+});
+
 // Final Target Full URL
 const fullTargetUrl = computed(() => {
     let path = customPath.value || '';
@@ -90,17 +123,70 @@ const fullTargetUrl = computed(() => {
 const applyGlobalMode = () => {
     targetMode.value = 'global';
     selectedRoomId.value = '';
+    selectedStaffId.value = '';
+    doctorCustomName.value = '';
     customPath.value = '/report';
 };
 
 // Apply Room Specific Preset
 const applyRoomMode = (roomId = '') => {
     targetMode.value = 'room';
+    selectedStaffId.value = '';
+    doctorCustomName.value = '';
     selectedRoomId.value = roomId ? String(roomId) : '';
     if (selectedRoomId.value) {
         customPath.value = `/report?room_id=${selectedRoomId.value}`;
     } else {
         customPath.value = '/report';
+    }
+};
+
+// Apply Doctor / Staff Specific Preset
+const applyDoctorMode = (roomId = '', doctorName = '') => {
+    targetMode.value = 'doctor';
+    if (roomId) selectedRoomId.value = String(roomId);
+    if (doctorName) doctorCustomName.value = doctorName;
+    updateDoctorPath();
+};
+
+const updateDoctorPath = () => {
+    const params = new URLSearchParams();
+    if (selectedRoomId.value) {
+        params.set('room_id', selectedRoomId.value);
+    }
+    if (doctorCustomName.value.trim()) {
+        params.set('target', doctorCustomName.value.trim());
+    }
+    params.set('type', 'review');
+    const qs = params.toString();
+    customPath.value = qs ? `/report?${qs}` : '/report';
+};
+
+const selectedStaffObj = computed(() => {
+    if (!selectedStaffId.value) return null;
+    return props.staffUsers.find(u => String(u.id) === String(selectedStaffId.value)) || null;
+});
+
+// Handle staff select change
+const handleStaffSelect = (staffVal) => {
+    let id = '';
+    if (staffVal && typeof staffVal === 'object') {
+        id = staffVal.id !== undefined ? String(staffVal.id) : '';
+    } else if (staffVal !== null && staffVal !== undefined && staffVal !== '') {
+        id = String(staffVal);
+    }
+    selectedStaffId.value = id;
+    if (!id) {
+        doctorCustomName.value = '';
+        selectedRoomId.value = '';
+        updateDoctorPath();
+        return;
+    }
+    const st = props.staffUsers.find(u => String(u.id) === id);
+    if (st) {
+        doctorCustomName.value = st.name;
+        selectedRoomId.value = st.room_id ? String(st.room_id) : '';
+        updateDoctorPath();
     }
 };
 
@@ -113,12 +199,22 @@ const handleRoomChange = (val) => {
         id = String(val);
     }
     selectedRoomId.value = id;
-    if (id && id !== '[object Object]') {
-        customPath.value = `/report?room_id=${id}`;
-    } else {
-        customPath.value = '/report';
+    if (targetMode.value === 'doctor') {
+        updateDoctorPath();
+    } else if (targetMode.value === 'room') {
+        if (id && id !== '[object Object]') {
+            customPath.value = `/report?room_id=${id}`;
+        } else {
+            customPath.value = '/report';
+        }
     }
 };
+
+watch(doctorCustomName, () => {
+    if (targetMode.value === 'doctor') {
+        updateDoctorPath();
+    }
+});
 
 watch(selectedRoomId, (newVal) => {
     let id = '';
@@ -133,12 +229,16 @@ watch(selectedRoomId, (newVal) => {
         } else {
             customPath.value = '/report';
         }
+    } else if (targetMode.value === 'doctor') {
+        updateDoctorPath();
     }
 });
 
 const resetConfig = () => {
     qrColor.value = '#059669';
     includeLogo.value = false;
+    selectedStaffId.value = '';
+    doctorCustomName.value = '';
     applyGlobalMode();
 };
 
@@ -220,11 +320,20 @@ const generateQR = async () => {
                 };
             });
         }
+
+        // Cache Data URL for Standee & Image Preview
+        qrDataUrl.value = canvas.toDataURL('image/png');
     } catch (err) {
         console.error('Gagal generate QR Code:', err);
     } finally {
         isGenerating.value = false;
     }
+};
+
+const qrDataUrl = ref('');
+
+const printStandee = () => {
+    window.print();
 };
 
 const downloadQR = () => {
@@ -323,15 +432,15 @@ onMounted(() => {
                             </p>
                         </div>
 
-                        <!-- 2 Pilihan Mode Bersih (Tanpa outline/ring aneh) -->
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <!-- 3 Pilihan Mode Bersih -->
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
                             <!-- Pilihan 1: Link Global RS -->
                             <div 
                                 @click="applyGlobalMode"
                                 :class="[
                                     'p-4 rounded-xl border transition-all cursor-pointer flex items-start gap-3.5 select-none',
                                     targetMode === 'global'
-                                        ? 'border-emerald-500 bg-emerald-50/40 dark:bg-emerald-950/20' 
+                                        ? 'border-emerald-500 bg-emerald-50/40 dark:bg-emerald-950/20 shadow-xs' 
                                         : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 hover:border-slate-300 dark:hover:border-slate-700'
                                 ]"
                             >
@@ -343,7 +452,7 @@ onMounted(() => {
                                 </div>
                                 <div class="min-w-0 flex-1">
                                     <div class="flex items-center justify-between gap-2">
-                                        <h4 class="text-xs font-extrabold text-slate-900 dark:text-white">Link Global (Semua Ruangan)</h4>
+                                        <h4 class="text-xs font-extrabold text-slate-900 dark:text-white">Link Global RS</h4>
                                         <div :class="[
                                             'w-4 h-4 rounded-full border flex items-center justify-center shrink-0',
                                             targetMode === 'global' ? 'border-emerald-500 bg-emerald-500' : 'border-slate-300 dark:border-slate-700'
@@ -352,7 +461,7 @@ onMounted(() => {
                                         </div>
                                     </div>
                                     <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
-                                        Pasien/keluarga bebas memilih lokasi ruangan sendiri di formulir laporan.
+                                        Laporan umum RS. Pasien bebas memilih ruangan tujuan sendiri di formulir.
                                     </p>
                                 </div>
                             </div>
@@ -363,7 +472,7 @@ onMounted(() => {
                                 :class="[
                                     'p-4 rounded-xl border transition-all cursor-pointer flex items-start gap-3.5 select-none',
                                     targetMode === 'room'
-                                        ? 'border-emerald-500 bg-emerald-50/40 dark:bg-emerald-950/20' 
+                                        ? 'border-emerald-500 bg-emerald-50/40 dark:bg-emerald-950/20 shadow-xs' 
                                         : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 hover:border-slate-300 dark:hover:border-slate-700'
                                 ]"
                             >
@@ -375,7 +484,7 @@ onMounted(() => {
                                 </div>
                                 <div class="min-w-0 flex-1">
                                     <div class="flex items-center justify-between gap-2">
-                                        <h4 class="text-xs font-extrabold text-slate-900 dark:text-white">Ruangan Spesifik (Auto-Select)</h4>
+                                        <h4 class="text-xs font-extrabold text-slate-900 dark:text-white">Ruangan Spesifik</h4>
                                         <div :class="[
                                             'w-4 h-4 rounded-full border flex items-center justify-center shrink-0',
                                             targetMode === 'room' ? 'border-emerald-500 bg-emerald-500' : 'border-slate-300 dark:border-slate-700'
@@ -384,13 +493,45 @@ onMounted(() => {
                                         </div>
                                     </div>
                                     <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
-                                        Pelapor <strong>langsung mengisi aduan</strong> untuk ruangan tersebut tanpa perlu memilih ruangan lagi.
+                                        Terhubung ke unit tertentu (IGD, Farmasi, Radiologi, Lab, dll).
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- Pilihan 3: Staf / Petugas Spesifik (Meja Pelayanan) -->
+                            <div 
+                                @click="applyDoctorMode(selectedRoomId, doctorCustomName)"
+                                :class="[
+                                    'p-4 rounded-xl border transition-all cursor-pointer flex items-start gap-3.5 select-none',
+                                    targetMode === 'doctor'
+                                        ? 'border-emerald-500 bg-emerald-50/40 dark:bg-emerald-950/20 shadow-xs' 
+                                        : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 hover:border-slate-300 dark:hover:border-slate-700'
+                                ]"
+                            >
+                                <div :class="[
+                                    'h-9 w-9 rounded-xl flex items-center justify-center shrink-0 transition',
+                                    targetMode === 'doctor' ? 'bg-emerald-600 text-white' : 'bg-slate-200 dark:bg-slate-800 text-slate-500'
+                                ]">
+                                    <UserCheck class="h-5 w-5" />
+                                </div>
+                                <div class="min-w-0 flex-1">
+                                    <div class="flex items-center justify-between gap-2">
+                                        <h4 class="text-xs font-extrabold text-slate-900 dark:text-white">Staf / Petugas Spesifik</h4>
+                                        <div :class="[
+                                            'w-4 h-4 rounded-full border flex items-center justify-center shrink-0',
+                                            targetMode === 'doctor' ? 'border-emerald-500 bg-emerald-500' : 'border-slate-300 dark:border-slate-700'
+                                        ]">
+                                            <div v-if="targetMode === 'doctor'" class="w-1.5 h-1.5 rounded-full bg-white"></div>
+                                        </div>
+                                    </div>
+                                    <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                                        Standee meja pelayanan staf. Pasien scan langsung memberikan apresiasi & ulasan staf.
                                     </p>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Dropdown Ruangan via SearchableSelect (Desain Persis Report/Create.vue, Tanpa Container) -->
+                        <!-- Dropdown Ruangan via SearchableSelect (Untuk Mode Ruangan) -->
                         <div v-if="targetMode === 'room'" class="space-y-1.5 animate-spa-fade-in">
                             <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300">
                                 Ruangan / Unit Pelayanan <span class="text-red-500">*</span>
@@ -410,9 +551,90 @@ onMounted(() => {
                             </div>
                         </div>
 
+                        <!-- Form Konfigurasi Khusus Mode Staf / Petugas (Ruangan Otomatis dari Staf) -->
+                        <div v-else-if="targetMode === 'doctor'" class="space-y-4 animate-spa-fade-in p-4 sm:p-5 rounded-2xl bg-slate-50/80 dark:bg-slate-950/60 border border-slate-200/80 dark:border-slate-800">
+                            <div class="flex items-center justify-between gap-2">
+                                <div class="flex items-center gap-2">
+                                    <Sparkles class="h-4 w-4 text-emerald-500" />
+                                    <h4 class="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                                        Pilih Staf / Petugas Pelayanan
+                                    </h4>
+                                </div>
+                                <span class="text-[10px] sm:text-[11px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1">
+                                    <CheckCircle2 class="h-3.5 w-3.5" />
+                                    Ruangan otomatis terelasi
+                                </span>
+                            </div>
+
+                            <!-- Pilih Staf via SearchableSelect -->
+                            <div class="space-y-1.5">
+                                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                                    Staf / Petugas yang Dituju <span class="text-red-500">*</span>
+                                </label>
+                                <div>
+                                    <SearchableSelect
+                                        v-model="selectedStaffId"
+                                        :options="staffUsers"
+                                        valueKey="id"
+                                        labelKey="name"
+                                        subtitleKey="room_info"
+                                        :absolute="false"
+                                        placeholder="-- Cari & Pilih Nama Staf / Petugas Pelayanan --"
+                                        searchPlaceholder="Cari nama staf atau NIP..."
+                                        @change="handleStaffSelect"
+                                    />
+                                </div>
+                                <p class="text-[11px] text-slate-400 dark:text-slate-500">
+                                    Cukup pilih staf yang ingin dibuatkan QR Meja. Ruangan unit otomatis mengikuti data penugasan staf.
+                                </p>
+                            </div>
+
+                            <!-- Auto-Linked Room Preview Card -->
+                            <div v-if="selectedStaffObj" class="p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-spa-fade-in shadow-2xs">
+                                <div class="flex items-center gap-3 min-w-0">
+                                    <div class="h-10 w-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/70 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/20">
+                                        <Building2 class="h-5 w-5" />
+                                    </div>
+                                    <div class="min-w-0">
+                                        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                                            Ruangan / Lokasi Tugas
+                                        </span>
+                                        <h5 class="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-white truncate">
+                                            {{ selectedStaffObj.room_name || 'Umum (Tanpa Ruangan Khusus)' }}
+                                        </h5>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-2 shrink-0">
+                                    <span class="text-[10px] font-extrabold px-3 py-1 rounded-full bg-emerald-100/70 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300/60 dark:border-emerald-800 flex items-center gap-1">
+                                        <CheckCircle2 class="h-3 w-3" />
+                                        Terhubung Otomatis
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Smart Status Alert Banner -->
                         <div 
-                            v-if="targetMode === 'room' && pathMatchedRoom" 
+                            v-if="targetMode === 'doctor' && (doctorCustomName || selectedStaffObj)" 
+                            class="p-3.5 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-200/80 dark:border-emerald-800/60 flex items-center gap-3 text-xs"
+                        >
+                            <CheckCircle2 class="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                            <p class="text-emerald-800 dark:text-emerald-300 leading-relaxed">
+                                <strong>QR Staf Pelayanan Terhubung:</strong> Pengunjung otomatis memberikan ulasan langsung untuk <strong>{{ selectedStaffObj?.name || doctorCustomName }}</strong>
+                                <span v-if="pathMatchedRoom || selectedStaffObj?.room_name"> di ruangan <strong>{{ selectedStaffObj?.room_name || pathMatchedRoom?.name }}</strong></span>.
+                            </p>
+                        </div>
+                        <div 
+                            v-else-if="targetMode === 'doctor' && !selectedStaffId" 
+                            class="p-3.5 rounded-xl bg-amber-50/70 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-800/60 flex items-center gap-3 text-xs"
+                        >
+                            <Info class="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                            <p class="text-amber-800 dark:text-amber-300 leading-relaxed">
+                                <strong>Pilih Staf:</strong> Silakan pilih staf/petugas pada daftar di atas. Ruangan otomatis terelasi dari profil staf.
+                            </p>
+                        </div>
+                        <div 
+                            v-else-if="targetMode === 'room' && pathMatchedRoom" 
                             class="p-3.5 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-200/80 dark:border-emerald-800/60 flex items-center gap-3 text-xs"
                         >
                             <CheckCircle2 class="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
@@ -561,15 +783,24 @@ onMounted(() => {
                                 </span>
                             </button>
 
-                            <!-- Single Action Button: Download PNG -->
-                            <div class="w-full">
+                            <!-- Action Buttons: Download PNG & Cetak Standee -->
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
                                 <button
                                     type="button"
                                     @click="downloadQR"
-                                    class="w-full h-11 bg-emerald-600 hover:bg-emerald-500 dark:bg-white dark:hover:bg-slate-200 text-white dark:text-slate-900 text-xs font-bold rounded-xl shadow-sm flex items-center justify-center gap-2 transition cursor-pointer border-0"
+                                    class="w-full h-11 bg-slate-900 hover:bg-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 text-white text-xs font-bold rounded-xl shadow-xs flex items-center justify-center gap-2 transition cursor-pointer border-0"
                                 >
                                     <Download class="h-4 w-4" />
                                     <span>Download Gambar QR (PNG)</span>
+                                </button>
+
+                                <button
+                                    type="button"
+                                    @click="showStandeeModal = true"
+                                    class="w-full h-11 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl shadow-sm flex items-center justify-center gap-2 transition cursor-pointer border-0"
+                                >
+                                    <Printer class="h-4 w-4" />
+                                    <span>Format Standee Akrilik Meja</span>
                                 </button>
                             </div>
                         </div>
@@ -579,5 +810,120 @@ onMounted(() => {
 
             </div>
         </div>
+
+        <!-- Standee Meja Akrilik Modal (Siap Cetak / Print Ready) -->
+        <div v-if="showStandeeModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs overflow-y-auto">
+            <div class="bg-white dark:bg-slate-900 rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-800 my-auto animate-spa-fade-in">
+                <!-- Modal Header -->
+                <div class="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
+                    <div class="flex items-center gap-2.5">
+                        <div class="h-9 w-9 rounded-xl bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 flex items-center justify-center">
+                            <Sparkles class="h-4 w-4" />
+                        </div>
+                        <div>
+                            <h3 class="text-sm font-extrabold text-slate-900 dark:text-white">Format Standee Akrilik Meja Staf</h3>
+                            <p class="text-[11px] text-slate-500 dark:text-slate-400">Ukuran standar akrilik meja (Tent Card / A6) siap dicetak</p>
+                        </div>
+                    </div>
+                    <button @click="showStandeeModal = false" class="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer">
+                        <X class="h-5 w-5" />
+                    </button>
+                </div>
+
+                <!-- Printable Standee Card Container -->
+                <div class="py-5 flex justify-center">
+                    <div 
+                        id="acrylic-standee-print-area"
+                        class="w-[280px] sm:w-[320px] rounded-2xl bg-white border-2 border-emerald-600 shadow-xl p-5 text-center text-slate-800 flex flex-col items-center select-none"
+                    >
+                        <!-- Hospital Header -->
+                        <div class="flex items-center gap-2 mb-2">
+                            <img src="/images/logo-sidebar.png" alt="SIPUAS" class="h-6 w-auto object-contain" />
+                            <span class="text-[11px] font-black uppercase tracking-wider text-emerald-800">SIPUAS RSUD</span>
+                        </div>
+
+                        <div class="w-full h-0.5 bg-gradient-to-r from-transparent via-emerald-400 to-transparent mb-3"></div>
+
+                        <!-- Main Call to Action -->
+                        <h4 class="text-sm sm:text-base font-black text-slate-900 uppercase tracking-tight leading-tight">
+                            Puas dengan Layanan Hari Ini?
+                        </h4>
+                        <p class="text-[10px] text-slate-500 mt-1 leading-snug px-1">
+                            Scan QR Code di bawah untuk memberikan ulasan & apresiasi Anda kepada:
+                        </p>
+
+                        <!-- Staff / Room Badge -->
+                        <div class="my-3 w-full py-2.5 px-3 rounded-xl bg-emerald-50 border border-emerald-200/80">
+                            <div class="text-xs font-black text-emerald-900 leading-tight">
+                                {{ doctorCustomName || pathMatchedTarget || pathMatchedRoom?.name || 'Staf Pelayanan Rumah Sakit' }}
+                            </div>
+                            <div v-if="pathMatchedRoom && (doctorCustomName || pathMatchedTarget)" class="text-[10px] font-bold text-emerald-700 mt-0.5">
+                                {{ pathMatchedRoom.name }}
+                            </div>
+                        </div>
+
+                        <!-- Big QR Code Container -->
+                        <div class="p-3 bg-white rounded-xl border border-slate-200 shadow-xs my-1 flex items-center justify-center">
+                            <img v-if="qrDataUrl" :src="qrDataUrl" alt="QR Code" class="w-40 h-40 object-contain" />
+                            <div v-else class="w-40 h-40 flex items-center justify-center">
+                                <RefreshCw class="h-6 w-6 text-emerald-600 animate-spin" />
+                            </div>
+                        </div>
+
+                        <div class="mt-2.5 flex items-center gap-1.5 text-[10px] font-extrabold text-emerald-700">
+                            <QrCode class="h-3.5 w-3.5" />
+                            <span>Scan dengan Kamera Smartphone</span>
+                        </div>
+
+                        <div class="w-full h-0.5 bg-gradient-to-r from-transparent via-slate-200 to-transparent my-3"></div>
+
+                        <p class="text-[9px] text-slate-400 leading-tight">
+                            Suara Anda sangat berharga untuk peningkatan mutu & kenyamanan pelayanan kami.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Modal Actions -->
+                <div class="flex items-center gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+                    <button
+                        type="button"
+                        @click="showStandeeModal = false"
+                        class="flex-1 h-11 rounded-xl border border-slate-300 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition cursor-pointer"
+                    >
+                        Tutup
+                    </button>
+                    <button
+                        type="button"
+                        @click="printStandee"
+                        class="flex-1 h-11 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md flex items-center justify-center gap-2 transition cursor-pointer"
+                    >
+                        <Printer class="h-4 w-4" />
+                        <span>Cetak Standee Sekarang</span>
+                    </button>
+                </div>
+            </div>
+        </div>
     </AuthenticatedLayout>
 </template>
+
+<style>
+@media print {
+    /* Hide everything in the page except the acrylic standee area */
+    body * {
+        visibility: hidden !important;
+    }
+    #acrylic-standee-print-area, #acrylic-standee-print-area * {
+        visibility: visible !important;
+    }
+    #acrylic-standee-print-area {
+        position: fixed !important;
+        left: 50% !important;
+        top: 50% !important;
+        transform: translate(-50%, -50%) !important;
+        width: 105mm !important;
+        margin: 0 !important;
+        box-shadow: none !important;
+        border: 2px solid #059669 !important;
+    }
+}
+</style>

@@ -34,6 +34,9 @@ class Report extends Model
         'supervisor_notes',
         'resolution_notes',
         'resolved_at',
+        'pesupeluh_ticket_id',
+        'pesupeluh_ticket_number',
+        'dispatched_to_pesupeluh_at',
     ];
 
     protected static function booted(): void
@@ -53,6 +56,7 @@ class Report extends Model
             'is_anonymous' => 'boolean',
             'verified_at' => 'datetime',
             'resolved_at' => 'datetime',
+            'dispatched_to_pesupeluh_at' => 'datetime',
             'created_at' => 'datetime',
             'updated_at' => 'datetime',
         ];

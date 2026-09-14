@@ -27,7 +27,6 @@ class ReportController extends Controller
     public function create(Request $request): Response
     {
         $rooms = Room::where('is_active', true)
-            ->orderBy('building_name')
             ->orderBy('name')
             ->get()
             ->map(fn ($r) => [
@@ -39,11 +38,33 @@ class ReportController extends Controller
             ]);
 
         $step = $request->query('step');
-        $selectedRoomId = $request->query('room_id', $request->query('room', $request->query('unit', '')));
+        $selectedRoomParam = $request->query('room_id', $request->query('room', $request->query('unit', '')));
+        $target = $request->query('target', $request->query('target_object', $request->query('doctor', '')));
+        $mode = $request->query('type', $request->query('mode', ''));
+
+        // Match room by ID or name
+        $selectedRoomId = '';
+        if (!empty($selectedRoomParam)) {
+            $matched = $rooms->first(function ($r) use ($selectedRoomParam) {
+                return (string) $r['id'] === (string) $selectedRoomParam 
+                    || strcasecmp($r['name'], $selectedRoomParam) === 0;
+            });
+            $selectedRoomId = $matched ? (string) $matched['id'] : (string) $selectedRoomParam;
+        }
+
+        // Dedicated staff review detection: only if explicit type=review or doctor param or target passed with room
+        $isStaffReview = ($mode === 'review') || $request->has('doctor') || (!empty($target) && $request->has('target'));
+
+        // If scanning doctor/staff QR with pre-filled target and room, auto advance to step 2 if step is not explicitly set
+        if ($step === null && !empty($selectedRoomId) && !empty($target) && $isStaffReview) {
+            $step = 2;
+        }
 
         return Inertia::render('Report/Create', [
             'roomId' => $selectedRoomId,
             'unitId' => $selectedRoomId, // Backward compatibility
+            'targetObject' => $target,
+            'reportMode' => $isStaffReview ? 'review' : $mode,
             'initialStep' => $step !== null ? (int) $step : null,
             'rooms' => $rooms,
             'units' => $rooms, // Backward compatibility

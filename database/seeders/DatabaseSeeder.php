@@ -2,14 +2,13 @@
 
 namespace Database\Seeders;
 
+use App\Models\AiSetting;
 use App\Models\Role;
 use App\Models\Room;
 use App\Models\User;
-use App\Models\AiSetting;
-use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
 use Carbon\Carbon;
+use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Hash;
 
 class DatabaseSeeder extends Seeder
 {
@@ -71,55 +70,197 @@ class DatabaseSeeder extends Seeder
             );
         }
 
-        // 2. Master Ruangan Rumah Sakit (Sinkron dengan Basis Data Pesu Peluh)
-        try {
-            $pesupeluhRooms = DB::connection('pesupeluh')->table('rooms')->whereNull('deleted_at')->get();
-            if ($pesupeluhRooms->isNotEmpty()) {
-                foreach ($pesupeluhRooms as $pRoom) {
-                    Room::updateOrCreate(
-                        ['name' => $pRoom->name],
-                        [
-                            'building_name' => $pRoom->building_name ?? 'Gedung Utama',
-                            'location_floor' => $pRoom->location_floor ?? 'Lantai 1',
-                            'is_active' => true,
-                        ]
-                    );
-                }
-            }
-        } catch (\Throwable $e) {
-            // Fallback list of 27 standard hospital rooms
-            $fallbackRooms = [
-                ['name' => 'UGD', 'building_name' => 'Gedung A', 'location_floor' => 'Lantai 1'],
-                ['name' => 'VK/PERINA', 'building_name' => 'Gedung A', 'location_floor' => 'Lantai 1'],
-                ['name' => 'FARMASI', 'building_name' => 'Gedung A', 'location_floor' => 'Lantai 1'],
-                ['name' => 'LABORATORIUM', 'building_name' => 'Gedung A', 'location_floor' => 'Lantai 1'],
-                ['name' => 'RADIOLOGI', 'building_name' => 'Gedung A', 'location_floor' => 'Lantai 1'],
-                ['name' => 'CLEANING SERVICEE', 'building_name' => 'Gedung A', 'location_floor' => 'Lantai 1'],
-                ['name' => 'POLI KLINIK', 'building_name' => 'Gedung A', 'location_floor' => 'Lantai 2'],
-                ['name' => 'FISIOTERAPI', 'building_name' => 'Gedung A', 'location_floor' => 'Lantai 2'],
-                ['name' => 'RAWAT INAP KASWUARI', 'building_name' => 'Gedung A', 'location_floor' => 'Lantai 3'],
-                ['name' => 'KAMAR BEDAH', 'building_name' => 'Gedung B', 'location_floor' => 'Lantai 1'],
-                ['name' => 'RAWAT INAP CENDRAWASIH', 'building_name' => 'Gedung B', 'location_floor' => 'Lantai 2'],
-                ['name' => 'RAWAT INAP MERPATI', 'building_name' => 'Gedung B', 'location_floor' => 'Lantai 3'],
-                ['name' => 'IPSRS', 'building_name' => 'Gedung B', 'location_floor' => 'Lantai 3'],
-                ['name' => 'KESLING', 'building_name' => 'Gedung B', 'location_floor' => 'Lantai 3'],
-                ['name' => 'RUANG KABID PENUNJANG', 'building_name' => 'Gedung C', 'location_floor' => 'Lantai 1'],
-                ['name' => 'LAUNDRY', 'building_name' => 'Gedung C', 'location_floor' => 'Lantai 1'],
-                ['name' => 'GIZI', 'building_name' => 'Gedung C', 'location_floor' => 'Lantai 1'],
-                ['name' => 'HCU', 'building_name' => 'Gedung C', 'location_floor' => 'Lantai 1'],
-                ['name' => 'CSSD', 'building_name' => 'Gedung C', 'location_floor' => 'Lantai 1'],
-                ['name' => 'ICU', 'building_name' => 'Gedung C', 'location_floor' => 'Lantai 2'],
-                ['name' => 'KEPEGAWAIAN/KEUANGAN', 'building_name' => 'Gedung C', 'location_floor' => 'Lantai 2'],
-                ['name' => 'RUANG ADMINISTRASI PELAYANAN', 'building_name' => 'Gedung C', 'location_floor' => 'Lantai 2'],
-                ['name' => 'RUANG DIREKTUR', 'building_name' => 'Gedung C', 'location_floor' => 'Lantai 2'],
-                ['name' => 'RUANG KABAG TU', 'building_name' => 'Gedung C', 'location_floor' => 'Lantai 2'],
-                ['name' => 'DALOP', 'building_name' => 'Gedung C', 'location_floor' => 'Lantai 2'],
-                ['name' => 'RUANG SUB BAGIAN KEUANGAN', 'building_name' => 'Gedung C', 'location_floor' => 'Lantai 2'],
-                ['name' => 'SECURITY', 'building_name' => 'Halaman Depan', 'location_floor' => '-'],
-            ];
-            foreach ($fallbackRooms as $r) {
-                Room::updateOrCreate(['name' => $r['name']], array_merge($r, ['is_active' => true]));
-            }
+        // 2. Master Ruangan Rumah Sakit Khusus Bidang Pelayanan Pasien (SIPUAS)
+        // Data gedung dan lantai diselaraskan dengan master data riil sistem PESU PELUH
+        // Ruangan yang belum ada padanannya di PESU PELUH diset '-' (strip)
+        $pelayananRooms = [
+            [
+                'name' => 'Area Publik & Ruang Tunggu Utama',
+                'building_name' => '-',
+                'location_floor' => '-',
+                'is_active' => true,
+            ],
+            [
+                'name' => 'Farmasi',
+                'building_name' => 'Gedung A',
+                'location_floor' => 'Lantai 1',
+                'is_active' => true,
+            ],
+            [
+                'name' => 'HCU (High Care Unit)',
+                'building_name' => 'Gedung C',
+                'location_floor' => 'Lantai 1',
+                'is_active' => true,
+            ],
+            [
+                'name' => 'ICU (Intensive Care Unit)',
+                'building_name' => 'Gedung C',
+                'location_floor' => 'Lantai 2',
+                'is_active' => true,
+            ],
+            [
+                'name' => 'IGD (Instalasi Gawat Darurat)',
+                'building_name' => 'Gedung A',
+                'location_floor' => 'Lantai 1',
+                'is_active' => true,
+            ],
+            [
+                'name' => 'Kamar Bedah (OK / IBS)',
+                'building_name' => 'Gedung B',
+                'location_floor' => 'Lantai 1',
+                'is_active' => true,
+            ],
+            [
+                'name' => 'Kamar Bersalin (VK)',
+                'building_name' => 'Gedung A',
+                'location_floor' => 'Lantai 1',
+                'is_active' => true,
+            ],
+            [
+                'name' => 'Laboratorium',
+                'building_name' => 'Gedung A',
+                'location_floor' => 'Lantai 1',
+                'is_active' => true,
+            ],
+            [
+                'name' => 'Loket Kasir & Pembayaran',
+                'building_name' => '-',
+                'location_floor' => '-',
+                'is_active' => true,
+            ],
+            [
+                'name' => 'Loket Pendaftaran & Registrasi',
+                'building_name' => '-',
+                'location_floor' => '-',
+                'is_active' => true,
+            ],
+            [
+                'name' => 'Perinatologi',
+                'building_name' => 'Gedung A',
+                'location_floor' => 'Lantai 1',
+                'is_active' => true,
+            ],
+            [
+                'name' => 'PICU / NICU',
+                'building_name' => '-',
+                'location_floor' => '-',
+                'is_active' => true,
+            ],
+            [
+                'name' => 'Poli Anak',
+                'building_name' => '-',
+                'location_floor' => '-',
+                'is_active' => true,
+            ],
+            [
+                'name' => 'Poli Bedah',
+                'building_name' => '-',
+                'location_floor' => '-',
+                'is_active' => true,
+            ],
+            [
+                'name' => 'Poli Fisioterapi & Rehab Medik',
+                'building_name' => 'Gedung A',
+                'location_floor' => 'Lantai 2',
+                'is_active' => true,
+            ],
+            [
+                'name' => 'Poli Gigi & Mulut',
+                'building_name' => '-',
+                'location_floor' => '-',
+                'is_active' => true,
+            ],
+            [
+                'name' => 'Poli Jantung & Pembuluh Darah',
+                'building_name' => '-',
+                'location_floor' => '-',
+                'is_active' => true,
+            ],
+            [
+                'name' => 'Poli Jiwa / Psikiatri',
+                'building_name' => '-',
+                'location_floor' => '-',
+                'is_active' => true,
+            ],
+            [
+                'name' => 'Poli Kebidanan & Kandungan (Obgyn)',
+                'building_name' => '-',
+                'location_floor' => '-',
+                'is_active' => true,
+            ],
+            [
+                'name' => 'Poli Kulit & Kelamin',
+                'building_name' => '-',
+                'location_floor' => '-',
+                'is_active' => true,
+            ],
+            [
+                'name' => 'Poli Mata',
+                'building_name' => '-',
+                'location_floor' => '-',
+                'is_active' => true,
+            ],
+            [
+                'name' => 'Poli Paru',
+                'building_name' => '-',
+                'location_floor' => '-',
+                'is_active' => true,
+            ],
+            [
+                'name' => 'Poli Penyakit Dalam',
+                'building_name' => '-',
+                'location_floor' => '-',
+                'is_active' => true,
+            ],
+            [
+                'name' => 'Poli Saraf / Neurologi',
+                'building_name' => '-',
+                'location_floor' => '-',
+                'is_active' => true,
+            ],
+            [
+                'name' => 'Poli THT',
+                'building_name' => '-',
+                'location_floor' => '-',
+                'is_active' => true,
+            ],
+            [
+                'name' => 'Poli Umum',
+                'building_name' => '-',
+                'location_floor' => '-',
+                'is_active' => true,
+            ],
+            [
+                'name' => 'Radiologi',
+                'building_name' => 'Gedung A',
+                'location_floor' => 'Lantai 1',
+                'is_active' => true,
+            ],
+            [
+                'name' => 'Rawat Inap Cendrawasih',
+                'building_name' => 'Gedung B',
+                'location_floor' => 'Lantai 2',
+                'is_active' => true,
+            ],
+            [
+                'name' => 'Rawat Inap Kasuari',
+                'building_name' => 'Gedung A',
+                'location_floor' => 'Lantai 3',
+                'is_active' => true,
+            ],
+            [
+                'name' => 'Rawat Inap Merpati',
+                'building_name' => 'Gedung B',
+                'location_floor' => 'Lantai 3',
+                'is_active' => true,
+            ],
+        ];
+
+        foreach ($pelayananRooms as $roomData) {
+            Room::updateOrCreate(
+                ['name' => $roomData['name']],
+                $roomData
+            );
         }
 
         // 3. Single Admin Account (Password: 12345678)

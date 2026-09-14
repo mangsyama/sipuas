@@ -234,7 +234,13 @@ const user = computed(() => page.props.auth?.user);
 const permissions = computed(() => page.props.auth?.page_permissions || []);
 
 const isAdmin = computed(() => user.value?.role_id === 1 || user.value?.role === 'ADMINISTRATOR');
-const hasAccess = (permKey) => isAdmin.value || permissions.value.includes(permKey);
+const hasAccess = (permKey) => {
+    if (isAdmin.value) return true;
+    if (permissions.value.includes(permKey)) return true;
+    if (permKey === 'rooms.index' && permissions.value.includes('units.index')) return true;
+    if (permKey === 'units.index' && permissions.value.includes('rooms.index')) return true;
+    return false;
+};
 
 const menuGroups = computed(() => {
     const isStaff = user.value?.role_id === 5 || user.value?.role === 'STAFF';
@@ -274,7 +280,7 @@ const menuGroups = computed(() => {
             items: [
                 { label: 'Persetujuan Pendaftar', routeName: 'users.approvals', permKey: 'users.approvals', icon: UserCheck },
                 { label: 'Daftar Pengguna', routeName: 'users.index', permKey: 'users.index', icon: Users },
-                { label: 'Daftar Ruangan', routeName: 'units.index', permKey: 'units.index', icon: MapPin }
+                { label: 'Daftar Ruangan', routeName: 'rooms.index', permKey: 'rooms.index', icon: MapPin }
             ]
         },
         {
@@ -591,7 +597,7 @@ const searchableItems = [
     { label: 'Layanan Penunjang (Managemen Layanan)', routeName: 'service-management.supporting-units', description: 'Pengelolaan data divisi dan unit penunjang' },
     { label: 'Persetujuan Registrasi', routeName: 'users.approvals', description: 'Persetujuan pendaftar pengguna baru' },
     { label: 'Daftar Pengguna', routeName: 'users.index', description: 'Kelola data pengguna sistem' },
-    { label: 'Daftar Ruangan', routeName: 'units.index', description: 'Pengelolaan data master ruangan dan lokasi RS' },
+    { label: 'Daftar Ruangan', routeName: 'rooms.index', description: 'Pengelolaan data master ruangan dan lokasi RS' },
     { label: 'Pengaturan Profil', routeName: 'settings.index', description: 'Ubah sandi, tema, dan profil' },
     { label: 'Sistem Desain - Ringkasan', routeName: 'design-system.index', description: 'Ringkasan panduan warna, tema dark mode, & tipografi' },
     { label: 'Sistem Desain - Tombol & Badge', routeName: 'design-system.buttons-badges', description: 'Koleksi komponen tombol, animasi loading, & badge status' },
@@ -635,7 +641,7 @@ const mobilePageTitles = [
     { routeName: 'service-management.supporting-units', label: 'Layanan Penunjang' },
     { routeName: 'users.approvals', label: 'Persetujuan Registrasi' },
     { routeName: 'users.index', label: 'Daftar Pengguna' },
-    { routeName: 'units.index', label: 'Daftar Ruangan' },
+    { routeName: 'rooms.index', label: 'Daftar Ruangan' },
     { routeName: 'users.show', label: 'Detail Pengguna' },
     { routeName: 'users.edit', label: 'Edit Pengguna' },
     { routeName: 'profile.edit', label: 'Profil Saya' },

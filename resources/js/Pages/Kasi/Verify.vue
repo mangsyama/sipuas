@@ -1,6 +1,7 @@
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import SearchableSelect from '@/Components/SearchableSelect.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { 
     UserCheck, 
@@ -27,7 +28,9 @@ import {
     Check,
     Calendar,
     Minus,
-    Plus
+    Plus,
+    Wrench,
+    RefreshCw
 } from '@lucide/vue';
 
 const props = defineProps({
@@ -37,9 +40,17 @@ const props = defineProps({
     },
     reportDetail: {
         type: Object,
-        default: null
+        default: () => null
     },
-    staffMembers: {
+    staffList: {
+        type: Array,
+        default: () => []
+    },
+    pesupeluhCategories: {
+        type: Array,
+        default: () => []
+    },
+    pesupeluhRooms: {
         type: Array,
         default: () => []
     }
@@ -51,19 +62,27 @@ const selectedImagePreview = ref(null);
 
 const report = computed(() => props.reportDetail);
 const isVerified = computed(() => report.value?.status === 'VERIFIED');
-const staffList = ref(props.staffMembers ? props.staffMembers.map(s => ({ ...s, selected: s.selected || false })) : []);
+const staffList = ref(props.staffList ? props.staffList.map(s => ({ ...s, selected: s.selected || false })) : []);
 
 const isFacilityComplaint = computed(() => {
-    const cat = (report.value?.ai_category || '').toLowerCase();
-    return cat.includes('sarana') || cat.includes('fasilitas') || cat.includes('prasarana');
+    const unit = (report.value?.unit || '').toLowerCase();
+    const isi = (report.value?.isi_laporan || '').toLowerCase();
+    const obj = (report.value?.target_object || '').toLowerCase();
+    const facilityKeywords = [
+        'ac', 'rusak', 'toilet', 'wc', 'kran', 'lampu', 'pintu', 'air', 'bocor', 
+        'lift', 'sarpras', 'fasilitas', 'kebersihan', 'mati lampu', 'wastafel'
+    ];
+    return facilityKeywords.some(k => unit.includes(k) || isi.includes(k) || obj.includes(k));
 });
 
 const defaultActionType = computed(() => {
-    if (report.value?.verified_action_type) {
-        return report.value.verified_action_type;
+    if (report.value?.verified_points !== null && report.value?.verified_points !== undefined) {
+        if (report.value.verified_points > 0) return 'PENAMBAHAN';
+        if (report.value.verified_points < 0) return 'PEMOTONGAN';
+        return 'NETRAL';
     }
-    // Jika keluhan sarana/fasilitas fisik dan bukan apresiasi, otomatis default ke NETRAL (0 Poin)
-    if (isFacilityComplaint.value && report.value?.ai_sentiment !== 'POSITIF') {
+    // Jika laporan terkait sarpras/fasilitas, arahkan default ke NETRAL
+    if (isFacilityComplaint.value) {
         return 'NETRAL';
     }
     if (report.value?.ai_sentiment === 'POSITIF') {
@@ -83,6 +102,163 @@ const pointValue = ref(
 );
 const supervisorNotes = ref(report.value?.supervisor_notes || '');
 
+// PESU PELUH Disposisi Integration
+const alreadyDispatchedToPesupeluh = computed(() => !!report.value?.pesupeluh_ticket_number);
+const pesupeluhTicketNumber = ref(report.value?.pesupeluh_ticket_number || null);
+
+watch(() => props.reportDetail?.pesupeluh_ticket_number, (val) => {
+    if (val) {
+        pesupeluhTicketNumber.value = val;
+    }
+}, { immediate: true });
+
+// Disposisi ke PESU PELUH HANYA aktif untuk tindakan NETRAL (karena sarpras/fasilitas tanpa KPI poin staf)
+const forwardToPesupeluh = ref(!alreadyDispatchedToPesupeluh.value && actionType.value === 'NETRAL');
+const isDispatchedToPesupeluh = computed(() => {
+    return !!pesupeluhTicketNumber.value || !!props.reportDetail?.pesupeluh_ticket_number || (forwardToPesupeluh.value && actionType.value === 'NETRAL') || alreadyDispatchedToPesupeluh.value;
+});
+
+// Ketika jenis tindakan diubah: jika bukan NETRAL maka otomatis matikan disposisi PESU PELUH
+watch(actionType, (newAction) => {
+    if (newAction !== 'NETRAL') {
+        forwardToPesupeluh.value = false;
+    } else if (!alreadyDispatchedToPesupeluh.value) {
+        forwardToPesupeluh.value = true;
+    }
+});
+
+// Smart category match
+const getInitialCategoryId = () => {
+    if (!props.pesupeluhCategories || props.pesupeluhCategories.length === 0) return null;
+    const text = ((report.value?.isi_laporan || '') + ' ' + (report.value?.target_object || '')).toLowerCase();
+    
+    // 1. Perlengkapan Kantor & Mebel (kursi, meja, antrian, tempat duduk, ac, furnitur, mebel, lemari)
+    if (text.includes('kursi') || text.includes('antri') || text.includes('meja') || text.includes('duduk') || text.includes('furnitur') || text.includes('mebel') || text.includes('lemari') || text.includes('ac') || text.includes('dingin') || text.includes('panas') || text.includes('kipas')) {
+        const cat = props.pesupeluhCategories.find(c => {
+            const cn = c.name.toLowerCase();
+            return cn.includes('kantor') || cn.includes('perlengkapan') || cn.includes('mebel') || cn.includes('ac');
+        });
+        if (cat) return cat.id;
+    }
+
+    // 2. Sanitasi / Saniter / Plumbing (air, toilet, wc, kran, wastafel, bocor pipa)
+    if (text.includes('air') || text.includes('toilet') || text.includes('wc') || text.includes('kran') || text.includes('keran') || text.includes('bocor') || text.includes('wastafel') || text.includes('pipa') || text.includes('saniter')) {
+        const cat = props.pesupeluhCategories.find(c => {
+            const cn = c.name.toLowerCase();
+            return cn.includes('saniter') || cn.includes('sanitasi') || cn.includes('air') || cn.includes('plumbing') || cn.includes('toilet');
+        });
+        if (cat) return cat.id;
+    }
+
+    // 3. Mekanikal Elektrikal / Listrik (lampu, listrik, mati lampu, saklar, stopkontak, kabel)
+    if (text.includes('lampu') || text.includes('listrik') || text.includes('mati lampu') || text.includes('saklar') || text.includes('stopkontak') || text.includes('kabel')) {
+        const cat = props.pesupeluhCategories.find(c => {
+            const cn = c.name.toLowerCase();
+            return cn.includes('elektrik') || cn.includes('listrik') || cn.includes('mekanikal');
+        });
+        if (cat) return cat.id;
+    }
+
+    // 4. Fisik Gedung (pintu, atap, plafon, lantai, dinding, jendela, keramik)
+    if (text.includes('pintu') || text.includes('atap') || text.includes('plafon') || text.includes('lantai') || text.includes('dinding') || text.includes('jendela') || text.includes('keramik')) {
+        const cat = props.pesupeluhCategories.find(c => {
+            const cn = c.name.toLowerCase();
+            return cn.includes('fisik') || cn.includes('gedung') || cn.includes('bangunan');
+        });
+        if (cat) return cat.id;
+    }
+
+    return props.pesupeluhCategories[0]?.id || null;
+};
+
+const pesupeluhCategoryId = ref(getInitialCategoryId());
+const pesupeluhPriority = ref(report.value?.ai_urgency === 'TINGGI' || report.value?.priority === 'HIGH' ? 'URGENT' : 'ROUTINE');
+
+// Smart initial room matching
+const getInitialRoomId = () => {
+    if (!props.pesupeluhRooms || props.pesupeluhRooms.length === 0) return null;
+    const reportRoomName = report.value?.unit || '';
+    if (!reportRoomName) return props.pesupeluhRooms[0]?.id || null;
+
+    const lowerReport = reportRoomName.toLowerCase();
+
+    // 1. Exact match (jika kelak ada ruangan spesifik seperti 'Loket Pendaftaran & Registrasi' di PESU PELUH, langsung tepat terpilih di sini)
+    const exact = props.pesupeluhRooms.find(r => r.name.toLowerCase() === lowerReport);
+    if (exact) return exact.id;
+
+    // 2. Direct Substring Match
+    const directSub = props.pesupeluhRooms.find(r => {
+        const pr = r.name.toLowerCase();
+        return (pr.length >= 3 && lowerReport.includes(pr)) || (lowerReport.length >= 3 && pr.includes(lowerReport));
+    });
+    if (directSub) return directSub.id;
+
+    // 3. Alias / Synonym Mapping cerdas untuk ruangan front-office & administrasi:
+    if (lowerReport.includes('pendaftaran') || lowerReport.includes('registrasi') || lowerReport.includes('antrian') || lowerReport.includes('antri')) {
+        const pendaftaranRoom = props.pesupeluhRooms.find(r => r.name.toLowerCase().includes('pendaftaran') || r.name.toLowerCase().includes('registrasi'));
+        if (pendaftaranRoom) return pendaftaranRoom.id;
+
+        const adminPelayananRoom = props.pesupeluhRooms.find(r => r.name.toLowerCase().includes('administrasi pelayanan') || r.name.toLowerCase().includes('administrasi'));
+        if (adminPelayananRoom) return adminPelayananRoom.id;
+    }
+
+    if (lowerReport.includes('kasir') || lowerReport.includes('pembayaran') || lowerReport.includes('keuangan')) {
+        const kasirRoom = props.pesupeluhRooms.find(r => r.name.toLowerCase().includes('kasir') || r.name.toLowerCase().includes('pembayaran'));
+        if (kasirRoom) return kasirRoom.id;
+
+        const keuanganRoom = props.pesupeluhRooms.find(r => r.name.toLowerCase().includes('keuangan'));
+        if (keuanganRoom) return keuanganRoom.id;
+    }
+
+    if (lowerReport.includes('igd') || lowerReport.includes('gawat darurat') || lowerReport.includes('emergency')) {
+        const ugd = props.pesupeluhRooms.find(r => r.name.toLowerCase().includes('ugd') || r.name.toLowerCase().includes('igd'));
+        if (ugd) return ugd.id;
+    }
+
+    // 4. Keyword fuzzy match (misal 'Rawat Inap Kasuari' -> 'RAWAT INAP KASWUARI')
+    const clean = lowerReport.replace(/[^a-z0-9\s]/g, ' ');
+    const stopWords = ['ruang', 'ruangan', 'rawat', 'inap', 'gedung', 'lantai', 'kelas', 'unit', 'area', 'loket', 'instalasi'];
+    const words = clean.split(' ').filter(w => w.length >= 3 && !stopWords.includes(w));
+
+    for (const w of words) {
+        const found = props.pesupeluhRooms.find(r => {
+            const prClean = r.name.toLowerCase();
+            if (prClean.includes(w) || w.includes(prClean)) return true;
+            if ((w.includes('kasu') || w.includes('kasw')) && (prClean.includes('kasu') || prClean.includes('kasw'))) return true;
+            return false;
+        });
+        if (found) return found.id;
+    }
+
+    return props.pesupeluhRooms[0]?.id || null;
+};
+
+const pesupeluhRoomId = ref(getInitialRoomId());
+
+// Options formatting for SearchableSelect
+const pesupeluhRoomOptions = computed(() => {
+    return (props.pesupeluhRooms || []).map(r => ({
+        id: r.id,
+        name: r.display_label || r.name,
+    }));
+});
+
+const pesupeluhCategoryOptions = computed(() => {
+    return (props.pesupeluhCategories || []).map(c => {
+        let label = c.display_label || c.name || '';
+        label = label.replace(/\[IPSRS\]\s*/gi, '').trim();
+        return {
+            id: c.id,
+            name: label,
+        };
+    });
+});
+
+const pesupeluhPriorityOptions = [
+    { id: 'ROUTINE', name: 'Standar / Rutin (ROUTINE)' },
+    { id: 'URGENT', name: 'Mendesak / Cepat (URGENT)' },
+];
+
 const incrementPoint = () => {
     if (isVerified.value) return;
     if (pointValue.value < 100) {
@@ -98,28 +274,44 @@ const decrementPoint = () => {
 };
 
 const submitVerification = () => {
-    if (isVerified.value) return;
-    isSubmitting.value = true;
+    if (isVerified.value || isSubmitting.value) return;
+    
     const selectedIds = staffList.value.filter(s => s.selected).map(s => s.id);
     
     if (actionType.value !== 'NETRAL' && selectedIds.length === 0 && staffList.value.length > 0) {
         alert('Mohon pilih setidaknya 1 staf yang bertugas saat kejadian untuk mengaitkan poin KPI.');
-        isSubmitting.value = false;
         return;
     }
+
+    isSubmitting.value = true;
 
     router.post(route('kasi.verify.process', { id: report.value.id }), {
         selected_staff_ids: selectedIds,
         action_type: actionType.value,
         points: actionType.value === 'NETRAL' ? 0 : pointValue.value,
-        supervisor_notes: supervisorNotes.value
+        supervisor_notes: supervisorNotes.value,
+        forward_to_pesupeluh: actionType.value === 'NETRAL' ? forwardToPesupeluh.value : false,
+        pesupeluh_category_id: pesupeluhCategoryId.value,
+        pesupeluh_room_id: pesupeluhRoomId.value,
+        pesupeluh_priority: pesupeluhPriority.value,
     }, {
-        onSuccess: () => {
+        onSuccess: (page) => {
             isSubmitting.value = false;
+            const flashed = page?.props?.flash?.pesupeluh_ticket_number 
+                         || page?.props?.reportDetail?.pesupeluh_ticket_number 
+                         || props.reportDetail?.pesupeluh_ticket_number;
+            if (flashed) {
+                pesupeluhTicketNumber.value = flashed;
+            }
             showSuccessModal.value = true;
         },
         onError: () => {
             isSubmitting.value = false;
+        },
+        onFinish: () => {
+            if (!showSuccessModal.value) {
+                isSubmitting.value = false;
+            }
         }
     });
 };
@@ -657,6 +849,136 @@ const finishVerification = () => {
                                     </p>
                                 </div>
 
+                                <!-- Panel Disposisi PESU PELUH (Layanan Penunjang & Sarpras) - Hanya Aktif untuk Laporan NETRAL -->
+                                <div 
+                                    v-if="actionType === 'NETRAL' || alreadyDispatchedToPesupeluh"
+                                    :class="[
+                                        'rounded-xl border transition p-4 space-y-3',
+                                        alreadyDispatchedToPesupeluh || forwardToPesupeluh 
+                                            ? 'bg-emerald-50/60 dark:bg-emerald-950/25 border-emerald-300/80 dark:border-emerald-800/60' 
+                                            : 'bg-slate-50/70 dark:bg-slate-950/40 border-slate-200 dark:border-slate-800'
+                                    ]"
+                                >
+                                    <div class="flex items-start justify-between gap-3">
+                                        <div class="flex items-center gap-2.5">
+                                            <div class="h-8 w-8 rounded-lg flex items-center justify-center bg-emerald-600 text-white shrink-0 shadow-xs">
+                                                <Wrench class="h-4 w-4" />
+                                            </div>
+                                            <div>
+                                                <h4 class="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5 flex-wrap">
+                                                    <span>Disposisi ke PESU PELUH (Unit Penunjang / IPSRS)</span>
+                                                    <span v-if="alreadyDispatchedToPesupeluh" class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                                                        TERKIRIM
+                                                    </span>
+                                                </h4>
+                                                <p class="text-[11px] text-slate-500 dark:text-slate-400">
+                                                    Teruskan aduan kerusakan fisik/fasilitas ke teknisi penunjang rumah sakit.
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <!-- Toggle Switch (disabled if already verified or already dispatched) -->
+                                        <div v-if="!alreadyDispatchedToPesupeluh && !isVerified" class="flex items-center shrink-0">
+                                            <label class="relative inline-flex items-center cursor-pointer">
+                                                <input type="checkbox" v-model="forwardToPesupeluh" class="sr-only peer" />
+                                                <div class="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <!-- Status If Already Dispatched -->
+                                    <div v-if="alreadyDispatchedToPesupeluh" class="p-3 bg-white dark:bg-slate-900 rounded-lg border border-emerald-200 dark:border-emerald-900/50 flex flex-wrap items-center justify-between gap-2 text-xs">
+                                        <div class="flex items-center gap-2">
+                                            <CheckCircle2 class="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                            <span class="text-slate-700 dark:text-slate-200 font-medium">
+                                                Tiket berhasil diteruskan dengan Nomor: <strong class="font-bold text-emerald-700 dark:text-emerald-400">{{ report.pesupeluh_ticket_number }}</strong>
+                                            </span>
+                                        </div>
+                                        <span class="text-[10px] text-slate-400">{{ report.dispatched_to_pesupeluh_at || '' }}</span>
+                                    </div>
+
+                                    <!-- Form Settings when forwardToPesupeluh is active -->
+                                    <div v-else-if="forwardToPesupeluh" class="space-y-3 pt-2 border-t border-emerald-200/60 dark:border-emerald-900/40">
+                                        
+                                        <!-- Pilihan Target Ruangan di PESU PELUH via SearchableSelect -->
+                                        <div class="space-y-1.5">
+                                            <div class="flex items-center justify-between gap-2">
+                                                <label class="text-[10.5px] font-semibold text-slate-700 dark:text-slate-300 block">
+                                                    Target Ruangan di PESU PELUH:
+                                                </label>
+                                                <span class="text-[10px] text-slate-400">
+                                                    Asal Aduan: <strong class="text-slate-600 dark:text-slate-300">{{ report.unit }}</strong>
+                                                </span>
+                                            </div>
+                                            <SearchableSelect
+                                                v-model="pesupeluhRoomId"
+                                                :options="pesupeluhRoomOptions"
+                                                valueKey="id"
+                                                labelKey="name"
+                                                :disabled="isVerified"
+                                                maxHeight="max-h-40 sm:max-h-44"
+                                                placeholder="-- Pilih Target Ruangan di PESU PELUH --"
+                                                searchPlaceholder="Cari nama ruangan atau gedung..."
+                                            />
+                                        </div>
+
+                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                            <!-- Pilihan Kategori di Pesu Peluh via SearchableSelect -->
+                                            <div class="space-y-1.5">
+                                                <label class="text-[10.5px] font-semibold text-slate-700 dark:text-slate-300 block">
+                                                    Kategori Penunjang (PESU PELUH):
+                                                </label>
+                                                <SearchableSelect
+                                                    v-model="pesupeluhCategoryId"
+                                                    :options="pesupeluhCategoryOptions"
+                                                    valueKey="id"
+                                                    labelKey="name"
+                                                    :disabled="isVerified"
+                                                    maxHeight="max-h-40 sm:max-h-44"
+                                                    placeholder="-- Pilih Kategori Penunjang --"
+                                                    searchPlaceholder="Cari kategori masalah..."
+                                                />
+                                            </div>
+
+                                            <!-- Prioritas Penunjang via SearchableSelect -->
+                                            <div class="space-y-1.5">
+                                                <label class="text-[10.5px] font-semibold text-slate-700 dark:text-slate-300 block">
+                                                    Urgensi Perbaikan Penunjang:
+                                                </label>
+                                                <SearchableSelect
+                                                    v-model="pesupeluhPriority"
+                                                    :options="pesupeluhPriorityOptions"
+                                                    valueKey="id"
+                                                    labelKey="name"
+                                                    :searchable="false"
+                                                    :disabled="isVerified"
+                                                    maxHeight="max-h-32"
+                                                    placeholder="Pilih Urgensi..."
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <!-- Info Data yang Diteruskan -->
+                                        <div class="bg-emerald-100/60 dark:bg-emerald-950/35 p-2.5 rounded-lg border border-emerald-200 dark:border-emerald-900/40 flex items-start gap-2 text-[11px] text-emerald-900 dark:text-emerald-200">
+                                            <Sparkles class="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                                            <div class="space-y-1 leading-relaxed">
+                                                <p>
+                                                    <strong>Identitas Pelapor di PESU PELUH:</strong>
+                                                    <span class="font-bold underline ml-1">
+                                                        {{ report.is_anonymous ? 'Masyarakat / Pasien (Anonim via SIPUAS)' : `${report.reporter_name} (Publik via SIPUAS)` }}
+                                                    </span>
+                                                    <span v-if="!report.is_anonymous && report.reporter_phone" class="text-[10px] ml-1">
+                                                        (HP: {{ report.reporter_phone }})
+                                                    </span>
+                                                </p>
+                                                <p class="text-[10.5px] text-emerald-800/90 dark:text-emerald-300/80">
+                                                    Teknisi penunjang dapat langsung melihat nama pelapor, nomor telepon warga<template v-if="report.attachments && report.attachments.length > 0">, serta <strong>{{ report.attachments.length }} lampiran foto bukti</strong></template> langsung di aplikasi PESU PELUH.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <!-- Supervisor Notes -->
                                 <div class="space-y-1.5">
                                     <label class="text-[11px] font-medium text-slate-400 dark:text-slate-500 block">Catatan Berita Acara / Tindak Lanjut:</label>
@@ -686,12 +1008,26 @@ const finishVerification = () => {
 
                                 <button
                                     v-else
+                                    type="button"
                                     @click="submitVerification"
-                                    :disabled="isSubmitting"
-                                    class="w-full py-3.5 sm:py-3 bg-emerald-600 hover:bg-emerald-500 active:scale-[0.99] text-white rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 shadow-sm transition disabled:opacity-50 cursor-pointer"
+                                    :disabled="isSubmitting || isVerified"
+                                    :class="[
+                                        'w-full py-3.5 sm:py-3 text-white rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 shadow-sm transition disabled:opacity-50 cursor-pointer bg-emerald-600 hover:bg-emerald-500 active:scale-[0.99] shadow-emerald-500/20',
+                                        (isSubmitting || isVerified) ? 'opacity-60 cursor-not-allowed pointer-events-none' : ''
+                                    ]"
                                 >
-                                    <CheckCircle2 class="h-4 w-4" />
-                                    <span>{{ isSubmitting ? 'Memproses Verifikasi...' : 'Simpan Verifikasi & Catat Logbook' }}</span>
+                                    <RefreshCw v-if="isSubmitting" class="h-4 w-4 animate-spin" />
+                                    <Send v-else-if="forwardToPesupeluh && !alreadyDispatchedToPesupeluh" class="h-4 w-4" />
+                                    <CheckCircle2 v-else class="h-4 w-4" />
+                                    <span>
+                                        {{ 
+                                            isSubmitting 
+                                                ? 'Memproses Verifikasi & Disposisi...' 
+                                                : (forwardToPesupeluh && !alreadyDispatchedToPesupeluh 
+                                                    ? 'Simpan Verifikasi & Teruskan ke PESU PELUH' 
+                                                    : 'Simpan Verifikasi & Catat Logbook') 
+                                        }}
+                                    </span>
                                 </button>
                             </div>
                         </div>
@@ -718,27 +1054,78 @@ const finishVerification = () => {
             </div>
         </div>
 
-        <!-- Success Verification Modal -->
-        <div v-if="showSuccessModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm">
-            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl text-center space-y-4">
-                <div class="h-16 w-16 bg-emerald-100 text-emerald-600 dark:bg-white/10 dark:text-white rounded-full flex items-center justify-center mx-auto">
-                    <CheckCircle2 class="h-8 w-8" />
+        <!-- Success Verification Modal (Styled as Standard Swal Alert) -->
+        <Teleport to="body">
+            <Transition
+                enter-active-class="transition ease-out duration-200"
+                enter-from-class="opacity-0"
+                enter-to-class="opacity-100"
+                leave-active-class="transition ease-in duration-150"
+                leave-from-class="opacity-100"
+                leave-to-class="opacity-0"
+            >
+                <div v-if="showSuccessModal" class="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+                    <!-- Backdrop overlay -->
+                    <div @click="finishVerification" class="fixed inset-0 bg-black/40 backdrop-blur-xs transition-opacity"></div>
+
+                    <!-- Modal Card -->
+                    <div class="relative bg-white/95 dark:bg-slate-900/95 border border-slate-100 dark:border-slate-800 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden p-7 flex flex-col items-center text-center transform transition-all duration-200 scale-100 backdrop-blur-md">
+                        <!-- Status Icon -->
+                        <div class="h-20 w-20 rounded-full flex items-center justify-center mb-5 flex-shrink-0 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-500">
+                            <CheckCircle2 class="h-10 w-10" />
+                        </div>
+
+                        <!-- Info Content -->
+                        <h3 class="text-base font-extrabold text-slate-900 dark:text-white leading-tight px-2">
+                            {{ isDispatchedToPesupeluh ? 'Verifikasi & Disposisi Berhasil Disimpan!' : 'Verifikasi Berhasil Disimpan!' }}
+                        </h3>
+
+                        <p class="text-sm text-slate-500 dark:text-slate-400 mt-3 leading-relaxed px-1">
+                            <template v-if="isDispatchedToPesupeluh">
+                                Status laporan telah diperbarui menjadi <strong class="font-semibold text-slate-700 dark:text-slate-200">TERVERIFIKASI</strong> dan logbook unit telah dicatat. Laporan aduan fasilitas ini juga telah <strong class="text-emerald-600 dark:text-emerald-400 font-semibold">berhasil didisposisikan ke PESU PELUH</strong> untuk penanganan teknisi sarana.
+                            </template>
+                            <template v-else>
+                                Status laporan telah diperbarui menjadi <strong class="font-semibold text-slate-700 dark:text-slate-200">TERVERIFIKASI</strong> dan logbook unit telah dicatat.
+                            </template>
+                        </p>
+
+                        <!-- Callout Info Tiket PESU PELUH jika diteruskan -->
+                        <div v-if="isDispatchedToPesupeluh" class="mt-4 p-4 bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-300/80 dark:border-emerald-800/80 rounded-xl text-left w-full space-y-2">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-2 text-xs font-bold text-emerald-800 dark:text-emerald-300">
+                                    <div class="h-6 w-6 rounded-lg bg-emerald-600 text-white flex items-center justify-center shadow-xs">
+                                        <Wrench class="h-3.5 w-3.5" />
+                                    </div>
+                                    <span>Disposisi ke PESU PELUH Berhasil</span>
+                                </div>
+                                <span class="px-2 py-0.5 rounded text-[10px] font-extrabold bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                                    TERKIRIM
+                                </span>
+                            </div>
+                            <div class="p-2.5 bg-white dark:bg-slate-900 rounded-lg border border-emerald-200/80 dark:border-emerald-900/60 flex items-center justify-between gap-2">
+                                <span class="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Nomor Tiket PESU PELUH:</span>
+                                <span class="text-xs font-extrabold text-emerald-600 dark:text-emerald-400 tracking-wide font-mono">
+                                    {{ pesupeluhTicketNumber || props.reportDetail?.pesupeluh_ticket_number || 'Sedang Diproses' }}
+                                </span>
+                            </div>
+                            <p class="text-[11px] text-emerald-800/90 dark:text-emerald-300/90 leading-relaxed font-medium">
+                                📌 Keterangan: Data keluhan fasilitas, foto bukti, dan lokasi ruangan telah otomatis terdisposisi ke tim teknisi pemeliharaan sarana (IPSRS).
+                            </p>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="flex items-center gap-3 w-full mt-6">
+                            <button
+                                type="button"
+                                @click="finishVerification"
+                                class="flex-1 h-11 text-sm font-bold rounded-xl text-white shadow-sm transition duration-150 focus:outline-none bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] cursor-pointer"
+                            >
+                                Kembali ke Feed Aduan Kasi
+                            </button>
+                        </div>
+                    </div>
                 </div>
-                <div class="space-y-1">
-                    <h3 class="text-xl font-bold text-slate-900 dark:text-white">Verifikasi Berhasil Disimpan!</h3>
-                    <p class="text-xs text-slate-500 dark:text-slate-400">
-                        Status laporan telah diperbarui menjadi <strong>TERVERIFIKASI</strong> dan poin KPI staf telah dicatat dalam Digital Logbook Unit.
-                    </p>
-                </div>
-                <div class="pt-2">
-                    <button
-                        @click="finishVerification"
-                        class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold cursor-pointer"
-                    >
-                        Kembali ke Feed Aduan Kasi
-                    </button>
-                </div>
-            </div>
-        </div>
+            </Transition>
+        </Teleport>
     </AuthenticatedLayout>
 </template>

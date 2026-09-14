@@ -52,7 +52,8 @@ const props = defineProps({
 });
 
 const allRooms = computed(() => {
-    return props.rooms && props.rooms.length > 0 ? props.rooms : props.units;
+    const raw = props.rooms && props.rooms.length > 0 ? props.rooms : props.units;
+    return [...raw].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 });
 
 const searchQuery = ref(props.filters.search || '');
@@ -184,7 +185,7 @@ const openEditModal = (room) => {
 
 const submitForm = () => {
     if (isEditing.value) {
-        form.put(route('units.update', { unit: editingRoomId.value }), {
+        form.put(route('rooms.update', { room: editingRoomId.value }), {
             preserveScroll: true,
             onSuccess: () => {
                 showModal.value = false;
@@ -192,7 +193,7 @@ const submitForm = () => {
             }
         });
     } else {
-        form.post(route('units.store'), {
+        form.post(route('rooms.store'), {
             preserveScroll: true,
             onSuccess: () => {
                 showModal.value = false;
@@ -203,7 +204,7 @@ const submitForm = () => {
 };
 
 const toggleRoomStatus = (room) => {
-    router.patch(route('units.toggle-status', { unit: room.id }), {}, {
+    router.patch(route('rooms.toggle-status', { room: room.id }), {}, {
         preserveScroll: true
     });
 };
@@ -215,7 +216,7 @@ const confirmDelete = (room) => {
 
 const executeDelete = () => {
     if (!selectedRoomForDelete.value) return;
-    router.delete(route('units.destroy', { unit: selectedRoomForDelete.value.id }), {
+    router.delete(route('rooms.destroy', { room: selectedRoomForDelete.value.id }), {
         preserveScroll: true,
         onSuccess: () => {
             showDeleteModal.value = false;

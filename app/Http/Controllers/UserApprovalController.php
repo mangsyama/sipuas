@@ -63,7 +63,7 @@ class UserApprovalController extends Controller
             ];
         });
 
-        $units = Room::where('is_active', true)->orderBy('building_name')->orderBy('name')->get(['id', 'name', 'building_name', 'location_floor'])->map(function ($r) {
+        $units = Room::where('is_active', true)->orderBy('name')->get(['id', 'name', 'building_name', 'location_floor'])->map(function ($r) {
             return [
                 'id' => $r->id,
                 'code' => $r->location_info,
@@ -96,7 +96,7 @@ class UserApprovalController extends Controller
     public function show(User $user): Response
     {
         $user->load('room');
-        $units = Room::where('is_active', true)->orderBy('building_name')->orderBy('name')->get(['id', 'name', 'building_name', 'location_floor'])->map(function ($r) {
+        $units = Room::where('is_active', true)->orderBy('name')->get(['id', 'name', 'building_name', 'location_floor'])->map(function ($r) {
             return [
                 'id' => $r->id,
                 'code' => $r->location_info,

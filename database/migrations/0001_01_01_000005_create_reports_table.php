@@ -35,6 +35,9 @@ return new class extends Migration
             $table->text('supervisor_notes')->nullable();
             $table->text('resolution_notes')->nullable();
             $table->timestampTz('resolved_at')->nullable();
+            $table->unsignedBigInteger('pesupeluh_ticket_id')->nullable();
+            $table->string('pesupeluh_ticket_number', 50)->nullable();
+            $table->timestampTz('dispatched_to_pesupeluh_at')->nullable();
             $table->timestampsTz();
         });
     }

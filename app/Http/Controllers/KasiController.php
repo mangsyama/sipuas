@@ -210,13 +210,22 @@ class KasiController extends Controller
             'verified_by' => $report->verifier ? $report->verifier->name : null,
             'verified_action_type' => $verifiedActionType,
             'verified_points' => $verifiedPoints,
+            'pesupeluh_ticket_id' => $report->pesupeluh_ticket_id,
+            'pesupeluh_ticket_number' => $report->pesupeluh_ticket_number,
+            'dispatched_to_pesupeluh_at' => $report->dispatched_to_pesupeluh_at ? $report->dispatched_to_pesupeluh_at->format('d M Y, H:i') . ' WITA' : null,
             'attachments' => $attachments,
         ] : null;
+
+        $pesupeluhService = app(\App\Services\PesupeluhService::class);
+        $pesupeluhCategories = $pesupeluhService->getCategories();
+        $pesupeluhRooms = $pesupeluhService->getRooms();
 
         return Inertia::render('Kasi/Verify', [
             'id' => $report ? $report->ticket_number : ($id ?? ''),
             'reportDetail' => $reportDetail,
             'staffMembers' => $staffList,
+            'pesupeluhCategories' => $pesupeluhCategories,
+            'pesupeluhRooms' => $pesupeluhRooms,
         ]);
     }
 
@@ -238,6 +247,10 @@ class KasiController extends Controller
             'action_type' => 'required|string|in:PENAMBAHAN,PEMOTONGAN,NETRAL',
             'points' => 'required|integer',
             'supervisor_notes' => 'nullable|string',
+            'forward_to_pesupeluh' => 'nullable|boolean',
+            'pesupeluh_category_id' => 'nullable|integer',
+            'pesupeluh_room_id' => 'nullable|integer',
+            'pesupeluh_priority' => 'nullable|string|in:ROUTINE,URGENT',
         ]);
 
         $report = Report::where('ticket_number', $id)->orWhere('id', $id)->firstOrFail();
@@ -256,6 +269,22 @@ class KasiController extends Controller
             'verified_at' => Carbon::now(),
             'supervisor_notes' => $validated['supervisor_notes'],
         ]);
+
+        // Disposisi ke Sistem Penunjang (PESU PELUH) jika diaktifkan dan tindakan NETRAL
+        $pesupeluhTicketNumber = null;
+        if ($validated['action_type'] === 'NETRAL' && !empty($validated['forward_to_pesupeluh']) && !empty($validated['pesupeluh_category_id'])) {
+            $pesupeluhService = app(\App\Services\PesupeluhService::class);
+            $dispatchResult = $pesupeluhService->dispatchReport($report, [
+                'category_id' => $validated['pesupeluh_category_id'],
+                'pesupeluh_room_id' => $validated['pesupeluh_room_id'] ?? null,
+                'priority' => $validated['pesupeluh_priority'] ?? 'ROUTINE',
+                'supervisor_notes' => $validated['supervisor_notes'],
+            ], $request->user());
+
+            if (!empty($dispatchResult['ticket_number'])) {
+                $pesupeluhTicketNumber = $dispatchResult['ticket_number'];
+            }
+        }
 
         // Sync report staff & update staff KPI logs directly on User model
         $selectedStaffIds = $validated['selected_staff_ids'] ?? [];
@@ -290,7 +319,18 @@ class KasiController extends Controller
             ]);
         }
 
-        return redirect()->route('kasi.dashboard');
+        if ($request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'pesupeluh_ticket_number' => $pesupeluhTicketNumber,
+                'message' => 'Laporan berhasil diverifikasi.' . ($pesupeluhTicketNumber ? " Diteruskan ke PESU PELUH dengan No. Tiket: {$pesupeluhTicketNumber}" : ''),
+            ]);
+        }
+
+        return redirect()->back()->with([
+            'success' => 'Laporan berhasil diverifikasi.',
+            'pesupeluh_ticket_number' => $pesupeluhTicketNumber,
+        ]);
     }
 
     /**

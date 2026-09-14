@@ -19,7 +19,6 @@ import {
     RefreshCw,
     Paperclip,
     UploadCloud,
-    UserCheck,
     Shield,
     X,
     User,
@@ -36,6 +35,18 @@ import {
 
 const props = defineProps({
     unitId: {
+        type: [String, Number],
+        default: ''
+    },
+    roomId: {
+        type: [String, Number],
+        default: ''
+    },
+    targetObject: {
+        type: String,
+        default: ''
+    },
+    reportMode: {
         type: String,
         default: ''
     },
@@ -45,17 +56,53 @@ const props = defineProps({
     },
     units: {
         type: Array,
-        default: () => [
-            { id: 'FARMASI', name: 'Instalasi Farmasi' },
-            { id: 'IGD', name: 'Instalasi Gawat Darurat (IGD)' },
-            { id: 'POLIKLINIK', name: 'Poliklinik Rawat Jalan' },
-            { id: 'RAWAT_INAP', name: 'Ruang Rawat Inap' },
-            { id: 'LABORATORIUM', name: 'Laboratorium Utama' },
-            { id: 'RADIOLOGI', name: 'Instalasi Radiologi' },
-            { id: 'KASIR', name: 'Kasir & Pendaftaran' },
-            { id: 'IPSRS', name: 'Pemeliharaan Sarpras (IPSRS)' }
-        ]
+        default: () => []
+    },
+    rooms: {
+        type: Array,
+        default: () => []
     }
+});
+
+const allAvailableUnits = computed(() => {
+    let list = [];
+    if (props.rooms && props.rooms.length > 0) list = [...props.rooms];
+    else if (props.units && props.units.length > 0) list = [...props.units];
+    
+    return list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+});
+
+// Resolve initial target and room from props or client URL search params
+const getInitialParam = (key) => {
+    if (typeof window !== 'undefined') {
+        const urlParams = new URLSearchParams(window.location.search);
+        return urlParams.get(key) || '';
+    }
+    return '';
+};
+
+const resolvedRoomId = computed(() => {
+    const raw = String(props.roomId || props.unitId || getInitialParam('room_id') || getInitialParam('room') || getInitialParam('unit') || '');
+    if (!raw) return '';
+    const match = allAvailableUnits.value.find(u => String(u.id) === raw || String(u.name).toLowerCase() === raw.toLowerCase());
+    return match ? String(match.id) : raw;
+});
+
+const resolvedTarget = computed(() => {
+    return String(props.targetObject || getInitialParam('target') || getInitialParam('target_object') || getInitialParam('doctor') || '');
+});
+
+const isStaffReview = computed(() => {
+    if (props.reportMode === 'review') return true;
+    if (typeof window !== 'undefined') {
+        const urlParams = new URLSearchParams(window.location.search);
+        const type = urlParams.get('type') || urlParams.get('mode');
+        if (type === 'review' || urlParams.has('doctor')) return true;
+        if (urlParams.has('target') && (urlParams.has('room_id') || urlParams.has('room') || urlParams.has('unit'))) {
+            return true;
+        }
+    }
+    return false;
 });
 
 const determineInitialStep = () => {
@@ -67,8 +114,16 @@ const determineInitialStep = () => {
         if (urlParams.has('step')) {
             return Number(urlParams.get('step'));
         }
+        const hasTarget = urlParams.has('target') || urlParams.has('target_object') || urlParams.has('doctor');
+        const hasRoom = urlParams.has('room_id') || urlParams.has('room') || urlParams.has('unit');
+        if (hasTarget && hasRoom) {
+            return 2;
+        }
     }
-    return props.unitId ? 1 : 0;
+    if (resolvedTarget.value && resolvedRoomId.value && isStaffReview.value) {
+        return 2;
+    }
+    return resolvedRoomId.value ? 1 : 0;
 };
 
 const currentStep = ref(determineInitialStep());
@@ -98,7 +153,7 @@ onUnmounted(() => {
 });
 
 const selectedUnitObj = computed(() => {
-    return props.units.find(u => u.id === form.value.unit_id);
+    return allAvailableUnits.value.find(u => String(u.id) === String(form.value.unit_id));
 });
 
 const fileInput = ref(null);
@@ -113,8 +168,8 @@ const scrollToTop = () => {
 };
 
 const form = ref({
-    unit_id: props.unitId || '',
-    target_object: '',
+    unit_id: resolvedRoomId.value || '',
+    target_object: resolvedTarget.value || '',
     isi_laporan: '',
     uploaded_files: [],
     reporter_name: '',
@@ -282,7 +337,7 @@ const goToStep3 = () => {
 };
 
 const goToStep0 = () => {
-    if (isTransitioning.value) return;
+    if (isStaffReview.value || isTransitioning.value) return;
     isTransitioning.value = true;
     currentStep.value = 0;
     scrollToTop();
@@ -292,7 +347,7 @@ const goToStep0 = () => {
 };
 
 const goToStep1 = () => {
-    if (isTransitioning.value) return;
+    if (isStaffReview.value || isTransitioning.value) return;
     isTransitioning.value = true;
     currentStep.value = 1;
     scrollToTop();
@@ -597,16 +652,16 @@ const copyReceipt = () => {
                                 </span>
                             </div>
                             <h2 class="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">Pilih Lokasi & Subjek</h2>
-                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Pilih unit pelayanan rumah sakit dan objek yang ingin dilaporkan.</p>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Pilih ruangan pelayanan rumah sakit dan objek yang ingin dilaporkan.</p>
                         </div>
 
-                        <!-- Pilih Unit Pelayanan via SearchableSelect -->
+                        <!-- Pilih Ruangan Pelayanan via SearchableSelect -->
                         <div class="space-y-1.5">
-                            <InputLabel for="unit_id" value="Ruangan / Unit Pelayanan *" />
+                            <InputLabel for="unit_id" value="Ruangan Pelayanan *" />
                             <div>
                                 <SearchableSelect
                                     v-model="form.unit_id"
-                                    :options="units"
+                                    :options="allAvailableUnits"
                                     valueKey="id"
                                     labelKey="name"
                                     subtitleKey="code"
@@ -653,30 +708,42 @@ const copyReceipt = () => {
 
                     <!-- STEP 2: Tulis Detail Masukan & Upload Bukti -->
                     <div v-else-if="currentStep === 2" class="space-y-4 animate-spa-fade-in">
-                        <div class="bg-slate-50 dark:bg-slate-950 p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-800 mb-5 text-center">
+                        <div class="bg-slate-50 dark:bg-slate-950 p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-800 mb-4 text-center">
                             <div class="flex items-center justify-center gap-2 mb-1.5">
                                 <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 dark:border-emerald-500/30">
                                     <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
                                     Langkah 2 dari 4
                                 </span>
                             </div>
-                            <h2 class="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">Detail & Bukti Foto</h2>
-                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                                Unit: <strong class="text-emerald-600 dark:text-emerald-400 font-extrabold">{{ selectedUnitObj?.name }}</strong>
-                                <span v-if="form.target_object"> • Target: <strong class="text-emerald-600 dark:text-emerald-400 font-extrabold">{{ form.target_object }}</strong></span>
-                            </p>
+                            <h2 class="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+                                {{ isStaffReview ? 'Ulasan & Apresiasi Pelayanan' : 'Detail & Bukti Foto' }}
+                            </h2>
+                            <div class="text-xs text-slate-500 dark:text-slate-400 mt-1 space-y-0.5 leading-normal">
+                                <div>
+                                    Ruangan: <strong class="text-slate-700 dark:text-slate-300 font-bold">{{ selectedUnitObj?.name || 'Ruangan Pelayanan' }}</strong>
+                                </div>
+                                <div v-if="isStaffReview && form.target_object">
+                                    Target: <strong class="text-slate-700 dark:text-slate-300 font-bold">{{ form.target_object }}</strong>
+                                </div>
+                                <div v-else-if="form.target_object">
+                                    Sasaran: <strong class="text-slate-700 dark:text-slate-300 font-bold">{{ form.target_object }}</strong>
+                                </div>
+                            </div>
                         </div>
 
                         <!-- Detail Teks Laporan -->
                         <div class="space-y-1.5">
-                            <InputLabel for="isi_laporan" value="Isi Pujian / Masukan / Keluhan *" />
+                            <InputLabel 
+                                for="isi_laporan" 
+                                :value="isStaffReview ? 'Ceritakan Pengalaman / Apresiasi Anda *' : 'Isi Pujian / Masukan / Keluhan *'" 
+                            />
                             <textarea
                                 id="isi_laporan"
                                 v-model="form.isi_laporan"
                                 rows="4"
                                 maxlength="3000"
                                 required
-                                placeholder="Tuliskan pengalaman pelayanan, apresiasi pujian, atau kendala keluhan Anda di sini secara rinci..."
+                                :placeholder="isStaffReview ? `Tuliskan pengalaman pelayanan, kepuasan, atau masukan Anda untuk ${form.target_object} secara rinci...` : 'Tuliskan pengalaman pelayanan, apresiasi pujian, atau kendala keluhan Anda di sini secara rinci...'"
                                 class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 p-4 text-xs sm:text-sm focus:border-emerald-500 dark:focus:border-emerald-400 focus:bg-white dark:focus:bg-slate-950 focus:outline-none focus:ring-0 focus:shadow-none transition duration-150 leading-relaxed"
                             ></textarea>
                             <div 
@@ -818,6 +885,7 @@ const copyReceipt = () => {
                         <!-- Desktop Step 2 Actions (Inside Card) -->
                         <div class="hidden sm:flex items-center gap-3 pt-5">
                             <button
+                                v-if="!isStaffReview"
                                 type="button"
                                 @click.stop.prevent="goToStep1"
                                 :disabled="isTransitioning"
@@ -1011,6 +1079,7 @@ const copyReceipt = () => {
                             <ArrowRight class="h-4 w-4" />
                         </button>
                         <button
+                            v-if="!isStaffReview"
                             type="button"
                             @click.stop.prevent="goToStep1"
                             :disabled="isTransitioning"

@@ -7,7 +7,7 @@ use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
-class UnitManagementController extends Controller
+class RoomManagementController extends Controller
 {
     /**
      * Display a listing of the hospital rooms.
@@ -35,7 +35,7 @@ class UnitManagementController extends Controller
             $query->where('is_active', $request->query('status') === '1');
         }
 
-        $rooms = $query->orderBy('building_name')->orderBy('name')->get();
+        $rooms = $query->orderBy('name')->get();
 
         // Calculate Stats
         $stats = [
