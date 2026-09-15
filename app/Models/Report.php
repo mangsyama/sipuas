@@ -37,6 +37,7 @@ class Report extends Model
         'pesupeluh_ticket_id',
         'pesupeluh_ticket_number',
         'dispatched_to_pesupeluh_at',
+        'created_at',
     ];
 
     protected static function booted(): void

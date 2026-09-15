@@ -1,156 +1,228 @@
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
+import { ref, computed } from 'vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 import { 
     FileText, 
     AlertCircle, 
     CheckCircle2, 
     Clock, 
     Sparkles, 
-    UserCheck, 
-    Search, 
-    ArrowUpRight,
-    Building2,
-    ShieldCheck,
-    History,
-    Table as TableIcon,
-    LayoutList,
-    User,
-    Smile,
-    Frown,
+    LayoutDashboard, 
+    Smile, 
+    Frown, 
     Meh,
-    Calendar,
-    MapPin,
-    Phone,
-    ArrowRight,
+    BarChart3,
+    TrendingUp,
+    ArrowUpRight,
+    Layers,
     Inbox,
-    ChevronDown,
-    ChevronLeft,
-    ChevronRight
+    ThumbsUp,
+    ThumbsDown,
+    MessageSquare,
+    ArrowRight,
+    RotateCcw
 } from '@lucide/vue';
+import TrendAreaChart from '@/Components/Charts/TrendAreaChart.vue';
+import SentimentDonutChart from '@/Components/Charts/SentimentDonutChart.vue';
+import CategoryBarChart from '@/Components/Charts/CategoryBarChart.vue';
 
 const props = defineProps({
-    initialReports: {
+    unitStats: {
+        type: Object,
+        default: () => ({
+            total: 0,
+            pending: 0,
+            verified: 0,
+            positive: 0,
+            negative: 0,
+            neutral: 0,
+            satisfaction_index: '100%',
+            avg_response_hours: '-',
+            unit_name: 'Ruangan Pelayanan'
+        })
+    },
+    unitTrend: {
+        type: Object,
+        default: () => ({ labels: [], incoming: [], verified: [] })
+    },
+    categoryChart: {
+        type: Object,
+        default: () => ({ labels: [], positive: [], negative: [] })
+    },
+    topCategories: {
         type: Array,
-        default: null
+        default: () => []
+    },
+    recentReports: {
+        type: Array,
+        default: () => []
+    },
+    rooms: {
+        type: Array,
+        default: () => []
+    },
+    filters: {
+        type: Object,
+        default: () => ({ period: 'all', period_label: 'Semua Periode', room_id: null })
     }
 });
 
-const activeTab = ref('ALL');
-const searchQuery = ref('');
+const selectedPeriod = ref(props.filters.period || 'all');
+const selectedRoomId = ref(props.filters.room_id || '');
 
-// Auto-select 'FEED' (Kartu) on mobile responsive screens (< 768px)
-const isMobileView = () => typeof window !== 'undefined' && window.innerWidth < 768;
-const viewMode = ref(isMobileView() ? 'FEED' : 'TABLE');
+const periods = [
+    { key: 'all', label: 'Semua' },
+    { key: 'today', label: 'Hari Ini' },
+    { key: '7d', label: '7 Hari' },
+    { key: '30d', label: '30 Hari' },
+    { key: 'this_month', label: 'Bulan Ini' },
+];
 
-const reports = ref(props.initialReports || []);
-
-// Pagination State
-const currentPage = ref(1);
-const perPage = ref(10);
-
-const filteredReports = computed(() => {
-    return reports.value.filter(r => {
-        const matchesTab = activeTab.value === 'ALL' || 
-            (activeTab.value === 'PENDING' && r.status === 'PENDING') ||
-            (activeTab.value === 'VERIFIED' && r.status === 'VERIFIED');
-        const q = searchQuery.value.toLowerCase().trim();
-        const matchesSearch = !q || 
-            r.isi_laporan.toLowerCase().includes(q) ||
-            r.id.toLowerCase().includes(q) ||
-            (r.target_object && r.target_object.toLowerCase().includes(q)) ||
-            (r.reporter_name && r.reporter_name.toLowerCase().includes(q));
-        return matchesTab && matchesSearch;
+const applyPeriodFilter = (pKey) => {
+    selectedPeriod.value = pKey;
+    router.get(route('kasi.dashboard'), {
+        period: pKey,
+        room_id: selectedRoomId.value || undefined
+    }, {
+        preserveState: true,
+        replace: true
     });
-});
-
-// Reset pagination when filters change
-watch([searchQuery, activeTab], () => {
-    currentPage.value = 1;
-});
-
-const totalPages = computed(() => {
-    return Math.ceil(filteredReports.value.length / perPage.value) || 1;
-});
-
-const paginatedReports = computed(() => {
-    const start = (currentPage.value - 1) * perPage.value;
-    return filteredReports.value.slice(start, start + perPage.value);
-});
-
-const startItemIndex = computed(() => {
-    if (filteredReports.value.length === 0) return 0;
-    return (currentPage.value - 1) * perPage.value + 1;
-});
-
-const endItemIndex = computed(() => {
-    return Math.min(currentPage.value * perPage.value, filteredReports.value.length);
-});
-
-const goToPage = (page) => {
-    if (page >= 1 && page <= totalPages.value) {
-        currentPage.value = page;
-    }
 };
 
-const handleResize = () => {
-    if (isMobileView()) {
-        viewMode.value = 'FEED';
-    }
+const applyRoomFilter = () => {
+    router.get(route('kasi.dashboard'), {
+        period: selectedPeriod.value,
+        room_id: selectedRoomId.value || undefined
+    }, {
+        preserveState: true,
+        replace: true
+    });
 };
 
-onMounted(() => {
-    if (isMobileView()) {
-        viewMode.value = 'FEED';
-    }
-    window.addEventListener('resize', handleResize);
-});
+const resetFilter = () => {
+    selectedPeriod.value = 'all';
+    selectedRoomId.value = '';
+    router.get(route('kasi.dashboard'), {}, {
+        preserveState: true,
+        replace: true
+    });
+};
 
-onUnmounted(() => {
-    if (typeof window !== 'undefined') {
-        window.removeEventListener('resize', handleResize);
+// Trend datasets for Chart.js
+const unitTrendDatasets = computed(() => [
+    {
+        label: 'Aduan Masuk',
+        data: props.unitTrend.incoming || [],
+        borderColor: '#059669',
+        backgroundColor: 'rgba(16, 185, 129, 0.15)',
+        fill: true,
+        tension: 0.35,
+    },
+    {
+        label: 'Telah Diverifikasi',
+        data: props.unitTrend.verified || [],
+        borderColor: '#0284c7',
+        backgroundColor: 'rgba(2, 132, 199, 0.12)',
+        fill: true,
+        tension: 0.35,
     }
-});
+]);
 
-const stats = computed(() => {
-    const total = reports.value.length;
-    const pending = reports.value.filter(r => r.status === 'PENDING').length;
-    const verified = reports.value.filter(r => r.status === 'VERIFIED').length;
-    return { total, pending, verified };
+const sentimentPercentages = computed(() => {
+    const total = props.unitStats.total || 0;
+    if (total === 0) return [0, 0, 0];
+    return [
+        Math.round(((props.unitStats.positive || 0) / total) * 100),
+        Math.round(((props.unitStats.negative || 0) / total) * 100),
+        Math.round(((props.unitStats.neutral || 0) / total) * 100)
+    ];
 });
 </script>
 
 <template>
-    <Head title="Feed Aduan Unit" />
+    <Head title="Dashboard Kasi" />
 
     <AuthenticatedLayout>
         <div class="py-4 px-4 sm:px-4 lg:px-4 animate-spa-fade-in space-y-4">
-            <!-- Header Panel -->
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 p-6 rounded-2xl shadow-sm">
-                <div class="flex items-center gap-3">
-                    <div class="hidden sm:flex h-12 w-12 rounded-xl flex-shrink-0 items-center justify-center bg-emerald-50 dark:bg-white/10 text-emerald-600 dark:text-white">
-                        <FileText class="h-6 w-6" />
+            <!-- Header Panel (Asli Utuh tanpa tombol) -->
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-slate-900 border border-white dark:border-slate-800 p-6 rounded-2xl shadow-sm">
+                <div class="flex items-center gap-3.5">
+                    <div class="h-12 w-12 rounded-xl flex-shrink-0 items-center justify-center bg-emerald-50 dark:bg-white/10 text-emerald-600 dark:text-white flex">
+                        <LayoutDashboard class="h-6 w-6" />
                     </div>
                     <div class="space-y-0.5">
-                        <h2 class="text-xl font-extrabold text-slate-900 dark:text-white leading-tight">
-                            Feed Aduan Masuk Unit
-                        </h2>
+                        <div class="flex items-center gap-2.5 flex-wrap">
+                            <h2 class="text-xl font-extrabold text-slate-900 dark:text-white leading-tight">
+                                Dashboard
+                            </h2>
+                            <span v-if="unitStats.unit_name" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60">
+                                {{ unitStats.unit_name }}
+                            </span>
+                        </div>
                         <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 max-w-2xl leading-relaxed">
-                            Verifikasi aduan staf bertugas dan kelola saldo mutasi poin KPI unit secara transparan.
+                            Monitoring mutu layanan, kepuasan pasien, dan verifikasi aduan ruangan.
                         </p>
                     </div>
                 </div>
             </div>
 
-            <!-- Top Stats Grid (Sesuai Desain & Ukuran Dashboard Utama) -->
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <!-- Filter Toolbar (Sleek Executive Filter Bar) -->
+            <div class="bg-white dark:bg-slate-900 border border-white dark:border-slate-800 px-4 py-3 sm:px-5 sm:py-3.5 rounded-2xl shadow-sm flex flex-wrap items-center justify-between gap-3">
+                <!-- Left: Clean Segmented Period Tabs (No scroll bug, medium font) -->
+                <div class="inline-flex items-center p-1 bg-slate-100 dark:bg-slate-800/90 rounded-xl border border-slate-200/60 dark:border-slate-700/60 gap-1">
+                    <button
+                        v-for="p in periods"
+                        :key="p.key"
+                        type="button"
+                        @click="applyPeriodFilter(p.key)"
+                        :class="[
+                            'px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 cursor-pointer whitespace-nowrap',
+                            selectedPeriod === p.key
+                                ? 'bg-emerald-600 text-white shadow-sm font-semibold'
+                                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/80 dark:hover:bg-slate-700/80'
+                        ]"
+                    >
+                        {{ p.label }}
+                    </button>
+                </div>
+
+                <!-- Right: Room Selector & Reset Action -->
+                <div class="flex items-center gap-2.5">
+                    <!-- Elevated Room Selector (Matching height, font-medium, no shadow, native browser arrow) -->
+                    <div v-if="rooms && rooms.length > 0">
+                        <select
+                            v-model="selectedRoomId"
+                            @change="applyRoomFilter"
+                            class="h-[38px] px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800/90 border border-slate-200/60 dark:border-slate-700/60 text-slate-700 dark:text-slate-200 text-xs font-medium focus:ring-2 focus:ring-emerald-500 cursor-pointer shadow-none"
+                        >
+                            <option value="">Semua Ruangan RS</option>
+                            <option v-for="r in rooms" :key="r.id" :value="r.id">{{ r.name }}</option>
+                        </select>
+                    </div>
+
+                    <!-- Reset Action Button (Matching height, font-medium) -->
+                    <button
+                        v-if="selectedPeriod !== 'all' || selectedRoomId"
+                        @click="resetFilter"
+                        type="button"
+                        class="h-[38px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 bg-slate-100 hover:bg-rose-50 dark:bg-slate-800/90 dark:hover:bg-rose-950/40 border border-slate-200/60 dark:border-slate-700/60 transition cursor-pointer shadow-none"
+                        title="Reset filter ke Semua Periode"
+                    >
+                        <RotateCcw class="h-3.5 w-3.5" />
+                        <span>Reset</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Top 4 KPI Metrics Grid -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <!-- Card 1: Total Aduan Unit -->
-                <div class="bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 rounded-2xl p-5 shadow-sm flex items-center justify-between">
+                <div class="bg-white dark:bg-slate-900 border border-white dark:border-slate-800 rounded-2xl p-5 shadow-sm flex items-center justify-between">
                     <div class="space-y-1">
-                        <span class="text-xs font-bold uppercase tracking-wider text-slate-400 block">Total Aduan Unit</span>
-                        <div class="text-3xl font-extrabold text-slate-900 dark:text-white leading-tight">{{ stats.total }}</div>
-                        <span class="text-[11px] text-slate-400 block">Seluruh laporan masuk di unit ini</span>
+                        <span class="text-xs font-bold uppercase tracking-wider text-slate-400 block">Total Suara Masuk</span>
+                        <div class="text-3xl font-black text-slate-900 dark:text-white leading-tight">{{ unitStats.total }}</div>
+                        <span class="text-[11px] text-slate-400 block">{{ unitStats.verified }} telah selesai ditindaklanjuti</span>
                     </div>
                     <div class="h-12 w-12 rounded-xl flex items-center justify-center flex-shrink-0 bg-emerald-50 dark:bg-white/10">
                         <FileText class="h-6 w-6 text-emerald-600 dark:text-white" />
@@ -158,359 +230,214 @@ const stats = computed(() => {
                 </div>
 
                 <!-- Card 2: Perlu Verifikasi -->
-                <div class="bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 rounded-2xl p-5 shadow-sm flex items-center justify-between">
+                <div class="bg-white dark:bg-slate-900 border border-white dark:border-slate-800 rounded-2xl p-5 shadow-sm flex items-center justify-between">
                     <div class="space-y-1">
-                        <span class="text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 block">Perlu Verifikasi</span>
-                        <div class="text-3xl font-extrabold text-amber-600 dark:text-amber-400 leading-tight">{{ stats.pending }}</div>
-                        <span class="text-[11px] text-slate-400 block">Menunggu verifikasi petugas</span>
+                        <span class="text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 block">Menunggu Verifikasi</span>
+                        <div class="text-3xl font-black text-amber-600 dark:text-amber-400 leading-tight">{{ unitStats.pending }}</div>
+                        <span class="text-[11px] text-slate-400 block">Antrean perlu verifikasi shift</span>
                     </div>
                     <div class="h-12 w-12 rounded-xl flex items-center justify-center flex-shrink-0 bg-amber-50 dark:bg-amber-950/40">
                         <AlertCircle class="h-6 w-6 text-amber-600 dark:text-amber-400" />
                     </div>
                 </div>
 
-                <!-- Card 3: Telah Divalidasi -->
-                <div class="bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 rounded-2xl p-5 shadow-sm flex items-center justify-between">
+                <!-- Card 3: Kecepatan Respons -->
+                <div class="bg-white dark:bg-slate-900 border border-white dark:border-slate-800 rounded-2xl p-5 shadow-sm flex items-center justify-between">
                     <div class="space-y-1">
-                        <span class="text-xs font-bold uppercase tracking-wider text-slate-400 block">Telah Divalidasi</span>
-                        <div class="text-3xl font-extrabold text-slate-900 dark:text-white leading-tight">{{ stats.verified }}</div>
-                        <span class="text-[11px] text-slate-400 block">Poin KPI staf telah di-update</span>
+                        <span class="text-xs font-bold uppercase tracking-wider text-slate-400 block">Rata-Rata Respons</span>
+                        <div class="text-3xl font-black text-slate-900 dark:text-white leading-tight">
+                            {{ unitStats.avg_response_hours }}
+                        </div>
+                        <span class="text-[11px] text-slate-400 block">Kecepatan verifikasi tindak lanjut</span>
+                    </div>
+                    <div class="h-12 w-12 rounded-xl flex items-center justify-center flex-shrink-0 bg-blue-50 dark:bg-blue-950/40">
+                        <Clock class="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                    </div>
+                </div>
+
+                <!-- Card 4: Indeks Kepuasan Pasien Ruangan -->
+                <div class="bg-white dark:bg-slate-900 border border-white dark:border-slate-800 rounded-2xl p-5 shadow-sm flex items-center justify-between">
+                    <div class="space-y-1">
+                        <span class="text-xs font-bold uppercase tracking-wider text-slate-400 block">Indeks Kepuasan Ruangan</span>
+                        <div class="text-3xl font-black text-emerald-600 dark:text-emerald-400 leading-tight">
+                            {{ unitStats.satisfaction_index }}
+                        </div>
+                        <span class="text-[11px] text-slate-400 block">{{ unitStats.positive }} Apresiasi pujian diterima</span>
                     </div>
                     <div class="h-12 w-12 rounded-xl flex items-center justify-center flex-shrink-0 bg-emerald-50 dark:bg-emerald-950/40">
-                        <CheckCircle2 class="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
+                        <TrendingUp class="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
                     </div>
                 </div>
             </div>
 
-            <!-- Unified Table Card Wrapper (Sesuai Referensi Pesupeluh) -->
-            <div class="bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800/60 rounded-2xl shadow-sm overflow-hidden mb-4">
-                <!-- Search & Custom Tab Controls (Combined Header) -->
-                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 border-b border-slate-100 dark:border-slate-800/60">
-                    <!-- Left: Search Box -->
-                    <div class="relative w-full sm:w-80 xl:w-96">
-                        <Search class="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                        <input
-                            v-model="searchQuery"
-                            type="text"
-                            placeholder="Cari tiket, pelapor, atau uraian..."
-                            class="w-full h-10 pl-10 pr-4 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all duration-150 shadow-none"
+            <!-- Unit Executive Analytics Suite (Charts) -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                <!-- Trend Chart for Ruangan (8 cols) -->
+                <div class="lg:col-span-8 bg-white dark:bg-slate-900 border border-white dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-4">
+                    <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+                        <div class="flex items-center gap-2.5">
+                            <div class="h-8 w-8 rounded-lg flex items-center justify-center bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 shrink-0">
+                                <TrendingUp class="h-4 w-4" />
+                            </div>
+                            <div>
+                                <h3 class="text-sm font-extrabold uppercase tracking-wider text-slate-900 dark:text-white leading-tight">
+                                    Tren Aktivitas Suara Pasien & Verifikasi Ruangan
+                                </h3>
+                                <p class="text-[11px] text-slate-400 font-medium">
+                                    Volume masukan masuk vs verifikasi terselesaikan
+                                </p>
+                            </div>
+                        </div>
+                        <span class="hidden sm:inline-flex px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                            {{ filters.period_label }}
+                        </span>
+                    </div>
+
+                    <div class="pt-2">
+                        <TrendAreaChart
+                            :labels="unitTrend.labels"
+                            :datasets="unitTrendDatasets"
+                            :height="240"
                         />
                     </div>
+                </div>
 
-                    <!-- Right Controls: Status Filter Dropdown & View Mode Switcher -->
-                    <div class="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
-                        <!-- Status Filter Dropdown -->
-                        <div class="relative flex-1 sm:flex-initial">
-                            <select
-                                v-model="activeTab"
-                                class="w-full sm:w-auto h-10 pl-3.5 pr-9 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer shadow-none appearance-none transition-all duration-150"
-                            >
-                                <option value="ALL">Semua Feed</option>
-                                <option value="PENDING">Perlu Verifikasi</option>
-                                <option value="VERIFIED">Selesai</option>
-                            </select>
-                            <ChevronDown class="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+                <!-- Sentiment for Ruangan (4 cols) -->
+                <div class="lg:col-span-4 bg-white dark:bg-slate-900 border border-white dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-4 flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center gap-2.5 pb-3 border-b border-slate-100 dark:border-slate-800 mb-3">
+                            <div class="h-8 w-8 rounded-lg flex items-center justify-center bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 shrink-0">
+                                <Smile class="h-4 w-4" />
+                            </div>
+                            <div>
+                                <h3 class="text-sm font-extrabold uppercase tracking-wider text-slate-900 dark:text-white leading-tight">
+                                    Rasio Sentimen Pasien
+                                </h3>
+                                <p class="text-[11px] text-slate-400 font-medium">
+                                    Tingkat kepuasan & apresiasi di ruangan ini
+                                </p>
+                            </div>
                         </div>
 
-                        <!-- Segmented View Mode Switcher (Aligned to h-10) -->
-                        <div class="h-10 flex items-center bg-slate-100/80 dark:bg-slate-950/45 p-1 rounded-xl shrink-0 border border-slate-200/60 dark:border-slate-800/40">
-                            <button
-                                type="button"
-                                @click="viewMode = 'TABLE'"
-                                title="Tampilan Tabel Standar"
-                                :class="[
-                                    'h-full flex items-center gap-1.5 px-3.5 rounded-lg text-xs transition cursor-pointer',
-                                    viewMode === 'TABLE' 
-                                        ? 'bg-white dark:bg-slate-800 text-emerald-600 dark:text-white shadow-sm font-semibold' 
-                                        : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 font-medium'
-                                ]"
-                            >
-                                <TableIcon class="h-3.5 w-3.5" />
-                                <span class="hidden sm:inline">Tabel</span>
-                            </button>
-                            <button
-                                type="button"
-                                @click="viewMode = 'FEED'"
-                                title="Tampilan Kartu"
-                                :class="[
-                                    'h-full flex items-center gap-1.5 px-3.5 rounded-lg text-xs transition cursor-pointer',
-                                    viewMode === 'FEED' 
-                                        ? 'bg-white dark:bg-slate-800 text-emerald-600 dark:text-white shadow-sm font-semibold' 
-                                        : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 font-medium'
-                                ]"
-                            >
-                                <LayoutList class="h-3.5 w-3.5" />
-                                <span class="hidden sm:inline">Kartu</span>
-                            </button>
+                        <SentimentDonutChart
+                            :labels="['Positif', 'Negatif', 'Netral']"
+                            :data="[unitStats.positive, unitStats.negative, unitStats.neutral]"
+                            :percentages="sentimentPercentages"
+                            :center-text="unitStats.satisfaction_index"
+                            center-subtext="Kepuasan"
+                            :height="170"
+                        />
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bottom Row: Category Distribution Chart & Compact Recent Activity Table -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                <!-- Col 1: Category Distribution Chart (6 cols) -->
+                <div class="lg:col-span-6 bg-white dark:bg-slate-900 border border-white dark:border-slate-800 rounded-2xl p-6 shadow-sm flex flex-col justify-between space-y-4">
+                    <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+                        <div class="flex items-center gap-2.5">
+                            <div class="h-8 w-8 rounded-lg flex items-center justify-center bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 shrink-0">
+                                <BarChart3 class="h-4 w-4" />
+                            </div>
+                            <div>
+                                <h3 class="text-sm font-extrabold uppercase tracking-wider text-slate-900 dark:text-white leading-tight">
+                                    Sebaran Topik Masalah & Apresiasi
+                                </h3>
+                                <p class="text-[11px] text-slate-400 font-medium">
+                                    Pujian, Keluhan & Saran per Kategori
+                                </p>
+                            </div>
                         </div>
+                        <span class="text-xs text-slate-400 font-medium">Top Kategori</span>
+                    </div>
+
+                    <div v-if="!categoryChart.labels || categoryChart.labels.length === 0" class="h-[260px] flex flex-col items-center justify-center text-center text-xs text-slate-400 space-y-2">
+                        <Layers class="h-8 w-8 text-slate-300 dark:text-slate-700" />
+                        <p>Belum ada data kategori masukan pada ruangan ini.</p>
+                    </div>
+                    <div v-else class="pt-1">
+                        <CategoryBarChart
+                            :labels="categoryChart.labels"
+                            :positive="categoryChart.positive"
+                            :negative="categoryChart.negative"
+                            :neutral="categoryChart.neutral"
+                            :height="260"
+                        />
                     </div>
                 </div>
 
-                <!-- TIPE 1: VIEW TABEL NORMAL (REFERENSI PESUPELUH) -->
-                <div v-if="viewMode === 'TABLE'" class="overflow-x-auto">
-                    <table class="w-full text-left border-collapse">
-                        <thead>
-                            <tr class="border-b border-slate-100 dark:border-slate-800 bg-slate-50/55 dark:bg-slate-950/20 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">
-                                <th class="px-4 py-4 text-center w-12">NO</th>
-                                <th class="px-6 py-4">NO. TIKET / WAKTU</th>
-                                <th class="px-6 py-4">PELAPOR</th>
-                                <th class="px-6 py-4">SASARAN / RUANGAN</th>
-                                <th class="px-6 py-4 min-w-[280px]">PENJELASAN MASALAH</th>
-                                <th class="px-6 py-4 text-center">SENTIMEN AI</th>
-                                <th class="px-6 py-4 text-center">STATUS</th>
-                                <th class="px-6 py-4 text-center">AKSI</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-slate-100 dark:divide-slate-800/60 text-sm text-slate-800 dark:text-slate-300">
-                            <tr 
-                                v-for="(item, idx) in paginatedReports" 
-                                :key="item.id" 
-                                class="hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-colors duration-150"
-                            >
-                                <!-- NO -->
-                                <td class="px-4 py-4 whitespace-nowrap text-center text-xs font-semibold text-slate-400 dark:text-slate-500">
-                                    {{ (currentPage - 1) * perPage + idx + 1 }}
-                                </td>
+                <!-- Col 2: Compact Recent Activity Table (6 cols) -->
+                <div class="lg:col-span-6 bg-white dark:bg-slate-900 border border-white dark:border-slate-800 rounded-2xl p-6 shadow-sm flex flex-col justify-between space-y-4">
+                    <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+                        <div class="flex items-center gap-2.5">
+                            <div class="h-8 w-8 rounded-lg flex items-center justify-center bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 shrink-0">
+                                <Inbox class="h-4 w-4" />
+                            </div>
+                            <div>
+                                <h3 class="text-sm font-extrabold uppercase tracking-wider text-slate-900 dark:text-white leading-tight">
+                                    Aktivitas Masukan Terkini
+                                </h3>
+                                <p class="text-[11px] text-slate-400 font-medium">
+                                    5 suara pasien terbaru di ruangan ini
+                                </p>
+                            </div>
+                        </div>
+                        <Link
+                            :href="route('kasi.feed')"
+                            class="text-xs text-emerald-600 dark:text-emerald-400 font-bold hover:underline flex items-center gap-1"
+                        >
+                            <span>Buka Antrean</span>
+                            <ArrowUpRight class="h-3.5 w-3.5" />
+                        </Link>
+                    </div>
 
-                                <!-- NO. TIKET / WAKTU (No. Tiket & Tanggal Jam WITA) -->
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <div class="font-bold text-slate-900 dark:text-white text-xs">{{ item.id }}</div>
-                                    <div class="text-[11px] text-slate-500 dark:text-slate-400 mt-1 font-medium">
-                                        {{ item.created_at_full || (item.created_at + ' WITA') }}
-                                    </div>
-                                </td>
-
-                                <!-- PELAPOR (Nama & No. HP dengan Icon) -->
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <div class="font-bold text-slate-900 dark:text-white text-xs">
-                                        {{ item.reporter_name || 'Anonim' }}
-                                    </div>
-                                    <div class="text-[11px] text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1.5 font-medium">
-                                        <Phone class="h-3 w-3 text-slate-400 shrink-0" />
-                                        <span>{{ item.reporter_phone || '-' }}</span>
-                                    </div>
-                                </td>
-
-                                <!-- SASARAN / RUANGAN -->
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <div class="font-bold text-slate-900 dark:text-white text-xs">
-                                        {{ item.target_object || '-' }}
-                                    </div>
-                                    <div class="text-[11px] text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1.5 font-medium">
-                                        <MapPin class="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                                        <span>{{ item.unit || '-' }}</span>
-                                    </div>
-                                </td>
-
-                                <!-- PENJELASAN MASALAH (Kategori ter-highlight di atas, Teks aduan di bawah) -->
-                                <td class="px-6 py-4 text-xs">
-                                    <div class="mb-2">
-                                        <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/70 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/60">
-                                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                                            {{ item.ai_category || 'Pelayanan' }}
-                                        </span>
-                                    </div>
-                                    <p class="text-slate-700 dark:text-slate-300 font-medium leading-relaxed break-words max-w-lg">
+                    <!-- Compact Fixed Height Table Container -->
+                    <div v-if="recentReports.length === 0" class="h-[260px] flex flex-col items-center justify-center text-center text-xs text-slate-400 space-y-2">
+                        <Inbox class="h-8 w-8 text-slate-300 dark:text-slate-700" />
+                        <p>Belum ada laporan masuk pada ruangan ini.</p>
+                    </div>
+                    <div v-else class="h-[260px] overflow-y-auto pr-1 divide-y divide-slate-100 dark:divide-slate-800/80">
+                        <div
+                            v-for="item in recentReports"
+                            :key="item.id"
+                            class="py-2.5 px-3 rounded-xl hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition flex items-center justify-between gap-3 group"
+                        >
+                            <div class="flex items-center gap-3 min-w-0">
+                                <div class="shrink-0 space-y-0.5">
+                                    <span class="text-xs font-bold text-slate-800 dark:text-slate-200 block tracking-tight">
+                                        #{{ item.id }}
+                                    </span>
+                                    <span class="text-[10px] text-slate-400 block">
+                                        {{ item.created_at_human }}
+                                    </span>
+                                </div>
+                                <div class="min-w-0">
+                                    <p class="text-xs text-slate-800 dark:text-slate-200 truncate font-medium max-w-[240px] sm:max-w-[320px]" :title="item.isi_laporan">
                                         "{{ item.isi_laporan }}"
                                     </p>
-                                </td>
-
-                                <!-- SENTIMEN AI -->
-                                <td class="px-6 py-4 whitespace-nowrap text-center">
-                                    <span :class="[
-                                        'w-24 py-1.5 rounded-xl text-xs font-bold inline-flex items-center justify-center gap-1.5 border uppercase',
-                                        item.ai_sentiment === 'NEGATIF' ? 'bg-rose-50 text-rose-700 border-rose-200/80 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-900/50' :
-                                        (item.ai_sentiment === 'POSITIF' ? 'bg-emerald-50 text-emerald-700 border-emerald-200/80 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-900/50' : 'bg-blue-50 text-blue-700 border-blue-200/80 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-900/50')
-                                    ]">
-                                        <Frown v-if="item.ai_sentiment === 'NEGATIF'" class="h-3.5 w-3.5 shrink-0" />
-                                        <Smile v-else-if="item.ai_sentiment === 'POSITIF'" class="h-3.5 w-3.5 shrink-0" />
-                                        <Meh v-else class="h-3.5 w-3.5 shrink-0" />
-                                        <span>{{ item.ai_sentiment || '-' }}</span>
-                                    </span>
-                                </td>
-
-                                <!-- STATUS -->
-                                <td class="px-6 py-4 whitespace-nowrap text-center">
-                                    <span v-if="item.status === 'PENDING'" class="min-w-[135px] px-3.5 py-2 rounded-xl text-xs font-bold inline-flex items-center justify-center gap-1.5 border bg-amber-50 text-amber-700 border-amber-200/80 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-900/50">
-                                        <AlertCircle class="h-3.5 w-3.5 shrink-0" />
-                                        <span>Perlu Verifikasi</span>
-                                    </span>
-                                    <span v-else class="min-w-[135px] px-3.5 py-2 rounded-xl text-xs font-bold inline-flex items-center justify-center gap-1.5 border bg-emerald-50 text-emerald-700 border-emerald-200/80 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-900/50" :title="item.verified_by ? `Divalidasi oleh ${item.verified_by}` : ''">
-                                        <CheckCircle2 class="h-3.5 w-3.5 shrink-0" />
-                                        <span>Terverifikasi</span>
-                                    </span>
-                                </td>
-
-                                <!-- AKSI -->
-                                <td class="px-6 py-4 whitespace-nowrap text-center">
-                                    <div class="flex items-center justify-center">
-                                        <Link
-                                            :href="route('kasi.verify', { id: item.id })"
-                                            :class="[
-                                                'w-28 py-2 rounded-xl text-xs font-bold inline-flex items-center justify-center gap-1.5 transition-all duration-150 border',
-                                                item.status === 'PENDING'
-                                                    ? 'bg-emerald-600 hover:bg-emerald-500 dark:bg-white dark:hover:bg-slate-200 text-white dark:text-slate-900 border-transparent shadow-sm'
-                                                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700'
-                                            ]"
-                                        >
-                                            <span>{{ item.status === 'PENDING' ? 'Verifikasi' : 'Detail' }}</span><ArrowUpRight class="h-3.5 w-3.5 flex-shrink-0" />
-                                        </Link>
+                                    <div class="flex items-center gap-1.5 text-[10px] text-slate-400 mt-0.5 truncate">
+                                        <span class="font-medium text-slate-500 dark:text-slate-400">{{ item.ai_category }}</span>
+                                        <span>•</span>
+                                        <span class="truncate">{{ item.target_object }}</span>
                                     </div>
-                                </td>
-                            </tr>
+                                </div>
+                            </div>
 
-                            <!-- Empty State -->
-                            <tr v-if="filteredReports.length === 0">
-                                <td colspan="8" class="px-6 py-16 text-center">
-                                    <div class="flex flex-col items-center gap-3 text-slate-400">
-                                        <FileText class="h-12 w-12 text-slate-200 dark:text-slate-700" />
-                                        <span class="text-sm font-medium">Tidak ada data tiket di antrean ini</span>
-                                    </div>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-
-                <!-- TIPE 2: VIEW KARTU / FEED (PERSIS FORMAT UNITHEADINDEX PESUPELUH DI SEMUA UKURAN LAYAR) -->
-                <div v-else class="p-4 sm:p-5 bg-slate-50/30 dark:bg-slate-950/10 border-t border-slate-100 dark:border-slate-800/60">
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div
-                            v-for="item in paginatedReports"
-                            :key="'feed-card-' + item.id"
-                            class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3 transition-all duration-150 flex flex-col justify-between"
-                        >
-                            <!-- Header: No Tiket di kiri, Status di kanan -->
-                            <div class="flex items-center justify-between gap-2">
-                                <span class="font-extrabold text-xs text-slate-900 dark:text-white">{{ item.id }}</span>
-                                <span
-                                    :class="[
-                                        'px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase border shrink-0',
-                                        item.status === 'PENDING'
-                                            ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800'
-                                            : 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-white/10 dark:text-white dark:border-white/20'
-                                    ]"
-                                >
-                                    {{ item.status === 'PENDING' ? 'Perlu Verifikasi' : 'Terverifikasi' }}
+                            <div class="flex items-center gap-2 shrink-0">
+                                <span v-if="item.ai_sentiment === 'POSITIF'" class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                                    <ThumbsUp class="h-2.5 w-2.5" />
+                                    Pujian
+                                </span>
+                                <span v-else-if="item.ai_sentiment === 'NEGATIF'" class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300">
+                                    <ThumbsDown class="h-2.5 w-2.5" />
+                                    Keluhan
+                                </span>
+                                <span v-else class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                                    <MessageSquare class="h-2.5 w-2.5" />
+                                    Saran
                                 </span>
                             </div>
-
-                            <!-- Teks Aduan Singkat -->
-                            <p class="text-xs text-slate-600 dark:text-slate-400 line-clamp-2 leading-relaxed">
-                                "{{ item.isi_laporan }}"
-                            </p>
-
-                            <!-- Key-Value Info Box Sesuai Pesupeluh -->
-                            <div class="text-[11px] space-y-1.5 bg-slate-50 dark:bg-slate-950/40 p-3 rounded-xl border border-slate-100 dark:border-slate-800/50">
-                                <div class="flex justify-between items-center gap-2">
-                                    <span class="font-medium text-slate-400 dark:text-slate-500 shrink-0">Pelapor:</span>
-                                    <span class="font-bold text-slate-800 dark:text-slate-200 text-right truncate">
-                                        {{ item.reporter_name || 'Anonim' }}
-                                        <span v-if="item.reporter_phone" class="text-slate-400 font-normal text-[10px]">
-                                            ({{ item.reporter_phone }})
-                                        </span>
-                                    </span>
-                                </div>
-                                <div class="flex justify-between items-center gap-2">
-                                    <span class="font-medium text-slate-400 dark:text-slate-500 shrink-0">Sasaran:</span>
-                                    <span class="font-bold text-slate-800 dark:text-slate-200 text-right truncate">{{ item.target_object || '-' }}</span>
-                                </div>
-                                <div class="flex justify-between items-center gap-2">
-                                    <span class="font-medium text-slate-400 dark:text-slate-500 shrink-0">Ruangan:</span>
-                                    <span class="font-semibold text-slate-800 dark:text-slate-200 text-right truncate">{{ item.unit || '-' }}</span>
-                                </div>
-                                <div class="flex justify-between items-center gap-2">
-                                    <span class="font-medium text-slate-400 dark:text-slate-500 shrink-0">Kategori:</span>
-                                    <span class="font-bold text-emerald-700 dark:text-emerald-400 text-right truncate">{{ item.ai_category || 'Pelayanan' }}</span>
-                                </div>
-                                <div class="flex justify-between items-center gap-2">
-                                    <span class="font-medium text-slate-400 dark:text-slate-500 shrink-0">Sentimen:</span>
-                                    <span :class="[
-                                        'px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase border inline-flex items-center gap-1',
-                                        item.ai_sentiment === 'NEGATIF' ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/60 dark:text-rose-400 dark:border-rose-800' :
-                                        (item.ai_sentiment === 'POSITIF' ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-white/10 dark:text-white dark:border-white/20' : 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800')
-                                    ]">
-                                        <Frown v-if="item.ai_sentiment === 'NEGATIF'" class="h-2.5 w-2.5 shrink-0" />
-                                        <Smile v-else-if="item.ai_sentiment === 'POSITIF'" class="h-2.5 w-2.5 shrink-0" />
-                                        <Meh v-else class="h-2.5 w-2.5 shrink-0" />
-                                        <span>{{ item.ai_sentiment || '-' }}</span>
-                                    </span>
-                                </div>
-                                <div class="flex justify-between items-center gap-2">
-                                    <span class="font-medium text-slate-400 dark:text-slate-500 shrink-0">Tanggal:</span>
-                                    <span class="font-medium text-slate-700 dark:text-slate-300 text-right">{{ item.created_at_full || (item.created_at + ' WITA') }}</span>
-                                </div>
-                            </div>
-
-                            <!-- Tombol Aksi Membentang Penuh Sesuai Pesupeluh -->
-                            <div class="flex items-center gap-2 pt-0 mt-auto">
-                                <Link
-                                    :href="route('kasi.verify', { id: item.id })"
-                                    :class="[
-                                        'flex-1 py-2.5 rounded-xl text-xs font-bold text-center flex items-center justify-center gap-1.5 transition-all duration-150 border',
-                                        item.status === 'PENDING'
-                                            ? 'bg-emerald-600 hover:bg-emerald-500 dark:bg-white dark:hover:bg-slate-200 text-white dark:text-slate-900 font-extrabold border-transparent shadow-sm'
-                                            : 'bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700'
-                                    ]"
-                                >
-                                    <span>{{ item.status === 'PENDING' ? 'Verifikasi Aduan' : 'Lihat Detail' }}</span>
-                                    <ArrowUpRight class="h-3.5 w-3.5 flex-shrink-0" />
-                                </Link>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Empty State -->
-                    <div v-if="filteredReports.length === 0" class="py-16 text-center text-slate-400">
-                        <div class="flex flex-col items-center gap-3">
-                            <FileText class="h-12 w-12 text-slate-200 dark:text-slate-700" />
-                            <span class="text-sm font-medium">Tidak ada data tiket di antrean ini</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Table Footer / Interactive Pagination -->
-                <div class="px-6 py-4 border-t border-slate-100 dark:border-slate-800/60 bg-slate-50/50 dark:bg-slate-900/50 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-                    <!-- Left: Per-Page Selector -->
-                    <div class="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
-                        <span class="text-[11px] font-medium">Tampilkan</span>
-                        <select
-                            v-model="perPage"
-                            @change="currentPage = 1"
-                            class="h-7 py-0 pl-2 pr-6 text-[11px] font-normal rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-emerald-500 cursor-pointer transition"
-                        >
-                            <option :value="5">5</option>
-                            <option :value="10">10</option>
-                            <option :value="25">25</option>
-                            <option :value="50">50</option>
-                        </select>
-                        <span class="text-[11px] font-medium">data</span>
-                    </div>
-
-                    <!-- Right: Compact Range & Navigation Buttons -->
-                    <div class="flex items-center gap-3">
-                        <span class="text-[11px] font-medium text-slate-500 dark:text-slate-400">
-                            {{ startItemIndex }}–{{ endItemIndex }} dari {{ filteredReports.length }}
-                        </span>
-                        <div class="flex items-center gap-1">
-                            <button
-                                type="button"
-                                @click="goToPage(currentPage - 1)"
-                                :disabled="currentPage === 1"
-                                class="h-7 w-7 rounded-lg flex items-center justify-center border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition duration-150 cursor-pointer"
-                                aria-label="Halaman sebelumnya"
-                            >
-                                <ChevronLeft class="h-3.5 w-3.5" />
-                            </button>
-                            <button
-                                type="button"
-                                @click="goToPage(currentPage + 1)"
-                                :disabled="currentPage === totalPages"
-                                class="h-7 w-7 rounded-lg flex items-center justify-center border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition duration-150 cursor-pointer"
-                                aria-label="Halaman berikutnya"
-                            >
-                                <ChevronRight class="h-3.5 w-3.5" />
-                            </button>
                         </div>
                     </div>
                 </div>

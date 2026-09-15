@@ -70,18 +70,25 @@ Aplikasi SIPUAS telah memiliki fondasi utama yang sudah berjalan:
 
 ---
 
-### ⏱️ Prioritas 4: Kalkulasi Real Data SLA & Filter Periode Dinamis di Dashboard Kabid
-* **Status Saat Ini:**
-  Di `KabidController.php`, metrik *Rata-rata Respon Kasi* masih menggunakan simulasi angka acak (`mt_rand(12, 35) / 10 . ' Jam'`). Selain itu, data yang ditampilkan mencakup seluruh data tanpa filter waktu dinamis.
-* **Mengapa Fitur Ini Penting:**
-  Pimpinan membutuhkan angka akurat untuk mengukur kepatuhan Service Level Agreement (SLA) masing-masing Kepala Seksi (target respons < 24 jam).
-* **Rincian yang Perlu Dibuat:**
-  1. **Kalkulasi Data Riil**:
-     - Menghitung selisih jam riil antara `reports.created_at` dengan `reports.verified_at`.
-     - Rata-rata durasi respons per unit kerja.
-  2. **Filter Periode Dinamis**:
-     - Filter cepat: *Hari Ini*, *7 Hari Terakhir*, *30 Hari Terakhir*, *Bulan Ini*, atau *Rentang Tanggal Khusus (Custom Date Range)*.
-     - Grafik tren aduan per tanggal/minggu menyesuaikan filter yang dipilih.
+### ⏱️ Prioritas 4: Kalkulasi Real Data SLA, Filter Periode Dinamis, & Dashboard Manajemen Modern (Kabid & Kasi) — [SELESAI ✅]
+* **Status:** Sudah Terimplementasi Lengkap & Terintegrasi pada Modul Kabid (`/executive/dashboard`, `/executive/kasi-responsiveness`) dan Modul Kasi (`/kasi/dashboard`).
+* **Fitur yang Tersedia:**
+  - **Kalkulasi Data Riil SLA (Service Level Agreement)**:
+    - Menghitung durasi selisih jam/menit riil antara waktu aduan masuk (`created_at`) dan diverifikasi (`verified_at`).
+    - Menghapus simulasi `mt_rand` pada `KabidController.php`.
+    - Persentase kepatuhan SLA (< 24 jam) rumah sakit dan masing-masing unit kerja secara akurat.
+  - **Filter Periode Dinamis & Unit Terintegrasi**:
+    - Filter cepat: *Hari Ini (`today`)*, *7 Hari Terakhir (`7d`)*, *30 Hari Terakhir (`30d`)*, *Bulan Ini (`this_month`)*, *Tahun Ini (`this_year`)*, *Semua*, serta *Rentang Tanggal Khusus (Custom Date Range Modal)*.
+    - Sinkronisasi realtime ke seluruh indikator metrik kartu, tabel akuntabilitas, dan visualisasi grafik.
+  - **Suite Visualisasi Grafik Manajemen Eksekutif (Chart.js)**:
+    - **Grafik Tren Garis/Area (TrendAreaChart)**: Volume suara pasien masuk vs laporan selesai diverifikasi harian/berkala dengan kurva halus & gradasi warna modern.
+    - **Grafik Donut Sentimen Pasien (SentimentDonutChart)**: Proporsi sentimen Positif, Negatif, dan Netral beserta label indeks kepuasan di tengah.
+    - **Grafik Batang Kategori Masalah (CategoryBarChart)**: Perbandingan keluhan vs pujian per kategori masalah rumah sakit (Sikap Staf, Waktu Tunggu, Sarana, dll).
+    - **Peta Zona Risiko Unit (Red Zone Matrix)**: Peringkat ruangan berisiko komplain tinggi dengan status badge (Merah/Kuning/Hijau) dan waktu respons riil.
+  - **Dashboard Manajemen Kasi yang Ditingkatkan**:
+    - Panel analitik unit kerja (Grafik tren 7 hari unit & donut sentimen ruangan).
+    - Peringatan dini (*Urgent SLA Alert Banner*) jika ada tiket pending melebihi 24 jam.
+    - Indikator SLA Timer pada setiap tiket di antrean tabel dan mode kartu.
 
 ---
 

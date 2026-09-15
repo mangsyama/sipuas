@@ -13,22 +13,232 @@ use Carbon\Carbon;
 use Inertia\Inertia;
 use Inertia\Response;
 
+use App\Models\Room;
+use Carbon\CarbonPeriod;
+
 class KasiController extends Controller
 {
     /**
-     * Display Kasi Feed of Reports for their unit.
+     * Display dedicated Kasi Unit Management Dashboard.
      */
     public function dashboard(Request $request): Response
     {
         $user = $request->user();
-        
-        $query = Report::with(['room', 'unit', 'verifier']);
         $userRoomId = $user ? ($user->room_id ?? $user->unit_id) : null;
-        if ($userRoomId && !$user->isSuperAdmin()) {
-            $query->where('room_id', $userRoomId);
+        $isElevated = $user && ($user->isSuperAdmin() || $user->isDirektur() || $user->isKabid());
+
+        // Selected Room Filter
+        $roomId = $request->input('room_id');
+        if (!$isElevated || empty($roomId)) {
+            $effectiveRoomId = $userRoomId;
+        } else {
+            $effectiveRoomId = $roomId;
         }
 
-        $reports = $query->latest()->get()->map(function ($r) {
+        // Parse Period Filter
+        $period = $request->input('period', 'all');
+        $now = Carbon::now();
+        $startDate = null;
+        $endDate = null;
+        $periodLabel = 'Semua Periode';
+
+        switch ($period) {
+            case 'today':
+                $startDate = $now->copy()->startOfDay();
+                $endDate = $now->copy()->endOfDay();
+                $periodLabel = 'Hari Ini';
+                break;
+            case '7d':
+                $startDate = $now->copy()->subDays(6)->startOfDay();
+                $endDate = $now->copy()->endOfDay();
+                $periodLabel = '7 Hari Terakhir';
+                break;
+            case 'this_month':
+                $startDate = $now->copy()->startOfMonth();
+                $endDate = $now->copy()->endOfMonth();
+                $periodLabel = 'Bulan Ini (' . $now->translatedFormat('F Y') . ')';
+                break;
+            case '30d':
+                $startDate = $now->copy()->subDays(29)->startOfDay();
+                $endDate = $now->copy()->endOfDay();
+                $periodLabel = '30 Hari Terakhir';
+                break;
+            case 'all':
+            default:
+                $period = 'all';
+                $startDate = null;
+                $endDate = null;
+                $periodLabel = 'Semua Periode';
+                break;
+        }
+
+        // Base Query
+        $baseQuery = Report::query();
+        if ($effectiveRoomId) {
+            $baseQuery->where('room_id', $effectiveRoomId);
+        }
+        if ($startDate && $endDate) {
+            $baseQuery->whereBetween('created_at', [$startDate, $endDate]);
+        }
+
+        // Unit Stats Calculation
+        $totalUnitReports = (clone $baseQuery)->count();
+        $pendingCount = (clone $baseQuery)->where('status', 'PENDING')->count();
+        $verifiedCount = (clone $baseQuery)->whereIn('status', ['VERIFIED', 'RESOLVED'])->count();
+        $positiveCount = (clone $baseQuery)->where('ai_sentiment', 'POSITIF')->count();
+        $negativeCount = (clone $baseQuery)->where('ai_sentiment', 'NEGATIF')->count();
+        $neutralCount = (clone $baseQuery)->where('ai_sentiment', 'NETRAL')->count();
+
+        // Real Average Response Duration Calculation for this unit
+        $verifiedReports = (clone $baseQuery)
+            ->whereIn('status', ['VERIFIED', 'RESOLVED'])
+            ->whereNotNull('verified_at')
+            ->get(['created_at', 'verified_at']);
+
+        if ($verifiedReports->count() > 0) {
+            $totalMinutes = $verifiedReports->reduce(function ($carry, $r) {
+                $diff = max(0, Carbon::parse($r->created_at)->diffInMinutes(Carbon::parse($r->verified_at)));
+                return $carry + $diff;
+            }, 0);
+
+            $avgMins = round($totalMinutes / $verifiedReports->count());
+            $avgFormatted = $avgMins < 60 ? $avgMins . ' Menit' : round($avgMins / 60, 1) . ' Jam';
+        } else {
+            $avgFormatted = $verifiedCount > 0 ? '< 1 Jam' : '-';
+        }
+
+        $satisfactionIndex = $totalUnitReports > 0 ? round(($positiveCount / $totalUnitReports) * 100, 1) . '%' : '100%';
+
+        // Unit Trend Data for Chart (last 7 days or selected period)
+        $trendPeriodStart = $startDate ?: $now->copy()->subDays(6)->startOfDay();
+        $trendPeriodEnd = $endDate ?: $now->copy()->endOfDay();
+        $trendLabels = [];
+        $trendIncoming = [];
+        $trendVerified = [];
+
+        $periodRange = CarbonPeriod::create($trendPeriodStart, '1 day', $trendPeriodEnd);
+        foreach ($periodRange as $d) {
+            $trendLabels[] = $d->translatedFormat('d M');
+            $inQ = Report::whereBetween('created_at', [$d->copy()->startOfDay(), $d->copy()->endOfDay()]);
+            $verQ = Report::whereBetween('verified_at', [$d->copy()->startOfDay(), $d->copy()->endOfDay()])
+                ->whereIn('status', ['VERIFIED', 'RESOLVED']);
+            if ($effectiveRoomId) {
+                $inQ->where('room_id', $effectiveRoomId);
+                $verQ->where('room_id', $effectiveRoomId);
+            }
+            $trendIncoming[] = $inQ->count();
+            $trendVerified[] = $verQ->count();
+        }
+
+        // Top Unit Categories
+        $topCategories = (clone $baseQuery)
+            ->whereNotNull('ai_category')
+            ->where('ai_category', '!=', '')
+            ->selectRaw('ai_category, count(*) as count,
+                SUM(CASE WHEN ai_sentiment = "POSITIF" THEN 1 ELSE 0 END) as positive_count,
+                SUM(CASE WHEN ai_sentiment = "NEGATIF" THEN 1 ELSE 0 END) as negative_count,
+                SUM(CASE WHEN ai_sentiment = "NETRAL" THEN 1 ELSE 0 END) as neutral_count')
+            ->groupBy('ai_category')
+            ->orderByDesc('count')
+            ->limit(5)
+            ->get()
+            ->map(function ($item) use ($totalUnitReports) {
+                $percentage = $totalUnitReports > 0 ? round(($item->count / $totalUnitReports) * 100, 1) : 0;
+                return [
+                    'name' => $item->ai_category,
+                    'count' => (int) $item->count,
+                    'percentage' => $percentage,
+                    'positive' => (int) $item->positive_count,
+                    'negative' => (int) $item->negative_count,
+                    'neutral' => (int) $item->neutral_count,
+                ];
+            });
+
+        // Recent 5 Reports for preview in Dashboard
+        $recentReports = (clone $baseQuery)->with(['room', 'verifier'])
+            ->latest('created_at')
+            ->take(5)
+            ->get()
+            ->map(fn($r) => [
+                'id' => $r->ticket_number,
+                'created_at_human' => $r->created_at ? $r->created_at->diffForHumans() : '-',
+                'created_at_formatted' => $r->created_at ? $r->created_at->translatedFormat('d M, H:i') : '-',
+                'reporter_name' => $r->is_anonymous ? 'Pasien Anonim' : ($r->reporter_name ?: 'Pasien / Keluarga'),
+                'target_object' => $r->target_object ?: 'Pelayanan Ruangan',
+                'isi_laporan' => $r->isi_laporan,
+                'ai_sentiment' => $r->ai_sentiment,
+                'ai_category' => $r->ai_category ?? 'Pelayanan Umum',
+                'status' => $r->status,
+                'unit' => $r->room ? $r->room->name : 'Ruangan Pelayanan',
+            ]);
+
+        // Current Unit Info
+        $currentRoom = $effectiveRoomId ? Room::find($effectiveRoomId) : null;
+        $rooms = $isElevated ? Room::where('is_active', true)->select(['id', 'name'])->orderBy('name')->get() : [];
+
+        // Category Chart Data for horizontal bar chart
+        $catLabels = $topCategories->pluck('name')->toArray();
+        $catPositive = $topCategories->pluck('positive')->toArray();
+        $catNegative = $topCategories->pluck('negative')->toArray();
+        $catNeutral = $topCategories->pluck('neutral')->toArray();
+
+        return Inertia::render('Kasi/Dashboard', [
+            'unitStats' => [
+                'total' => $totalUnitReports,
+                'pending' => $pendingCount,
+                'verified' => $verifiedCount,
+                'positive' => $positiveCount,
+                'negative' => $negativeCount,
+                'neutral' => $neutralCount,
+                'satisfaction_index' => $satisfactionIndex,
+                'avg_response_hours' => $avgFormatted,
+                'unit_name' => $currentRoom ? $currentRoom->name : 'Seluruh Ruangan RS',
+            ],
+            'unitTrend' => [
+                'labels' => $trendLabels,
+                'incoming' => $trendIncoming,
+                'verified' => $trendVerified,
+            ],
+            'categoryChart' => [
+                'labels' => $catLabels,
+                'positive' => $catPositive,
+                'negative' => $catNegative,
+                'neutral' => $catNeutral,
+            ],
+            'topCategories' => $topCategories,
+            'recentReports' => $recentReports,
+            'rooms' => $rooms,
+            'filters' => [
+                'period' => $period,
+                'period_label' => $periodLabel,
+                'room_id' => $effectiveRoomId,
+            ],
+        ]);
+    }
+
+    /**
+     * Display dedicated Aduan & Verifikasi Queue / Feed.
+     */
+    public function feed(Request $request): Response
+    {
+        $user = $request->user();
+        $userRoomId = $user ? ($user->room_id ?? $user->unit_id) : null;
+        $isElevated = $user && ($user->isSuperAdmin() || $user->isDirektur() || $user->isKabid());
+
+        // Selected Room Filter
+        $roomId = $request->input('room_id');
+        if (!$isElevated || empty($roomId)) {
+            $effectiveRoomId = $userRoomId;
+        } else {
+            $effectiveRoomId = $roomId;
+        }
+
+        $query = Report::with(['room', 'unit', 'verifier']);
+        if ($effectiveRoomId) {
+            $query->where('room_id', $effectiveRoomId);
+        }
+
+        $reports = $query->latest('created_at')->get()->map(function ($r) {
             return [
                 'id' => $r->ticket_number,
                 'created_at' => $r->created_at ? $r->created_at->format('d M Y, H:i') : '-',
@@ -37,6 +247,7 @@ class KasiController extends Controller
                 'created_at_time' => $r->created_at ? $r->created_at->format('H:i') . ' WITA' : '-',
                 'created_at_date' => $r->created_at ? $r->created_at->translatedFormat('d F Y') : '-',
                 'unit' => $r->room ? $r->room->name : ($r->unit ? $r->unit->name : 'Unit Umum'),
+                'room_id' => $r->room_id,
                 'target_object' => $r->target_object,
                 'shift_info' => $r->created_at ? $r->created_at->format('H:i') . ' WITA' : 'Waktu Aduan',
                 'reporter_name' => $r->is_anonymous ? 'Anonim' : ($r->reporter_name ?: 'Anonim'),
@@ -50,8 +261,25 @@ class KasiController extends Controller
             ];
         });
 
-        return Inertia::render('Kasi/Dashboard', [
-            'initialReports' => $reports,
+        $totalReports = $reports->count();
+        $pendingReports = $reports->where('status', 'PENDING')->count();
+        $verifiedReports = $reports->whereIn('status', ['VERIFIED', 'RESOLVED'])->count();
+
+        $currentRoom = $effectiveRoomId ? Room::find($effectiveRoomId) : null;
+        $rooms = $isElevated ? Room::where('is_active', true)->select(['id', 'name'])->orderBy('name')->get() : [];
+
+        return Inertia::render('Kasi/Feed', [
+            'initialReports' => $reports->values()->all(),
+            'stats' => [
+                'total' => $totalReports,
+                'pending' => $pendingReports,
+                'verified' => $verifiedReports,
+                'unit_name' => $currentRoom ? $currentRoom->name : 'Seluruh Ruangan RS',
+            ],
+            'rooms' => $rooms,
+            'filters' => [
+                'room_id' => $effectiveRoomId,
+            ],
         ]);
     }
 
@@ -237,7 +465,7 @@ class KasiController extends Controller
         $report = Report::where('ticket_number', $id)->orWhere('id', $id)->firstOrFail();
 
         if ($report->status === 'VERIFIED') {
-            return redirect()->route('kasi.dashboard');
+            return redirect()->route('kasi.feed');
         }
 
         $isNeutral = $request->input('action_type') === 'NETRAL';

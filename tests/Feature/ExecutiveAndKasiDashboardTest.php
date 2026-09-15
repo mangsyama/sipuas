@@ -1,0 +1,162 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\Report;
+use App\Models\Role;
+use App\Models\Room;
+use App\Models\User;
+use Carbon\Carbon;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
+
+class ExecutiveAndKasiDashboardTest extends TestCase
+{
+    use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->seed(\Database\Seeders\DatabaseSeeder::class);
+    }
+
+    public function test_kabid_dashboard_renders_with_real_sla_and_charts(): void
+    {
+        $admin = User::factory()->create([
+            'role_id' => Role::KEPALA_BIDANG,
+            'is_active' => true,
+        ]);
+
+        $room = Room::first();
+
+        // Create sample report verified in 2 hours (120 mins)
+        $now = Carbon::now();
+        $rep1 = Report::create([
+            'ticket_number' => 'LP-TEST-001',
+            'room_id' => $room->id,
+            'isi_laporan' => 'Perawat sangat ramah dan sigap melayani.',
+            'ai_sentiment' => 'POSITIF',
+            'ai_category' => 'Sikap & Keramahan Staf',
+            'status' => 'VERIFIED',
+            'verified_by' => $admin->id,
+        ]);
+        $rep1->created_at = $now->copy()->subHours(5);
+        $rep1->verified_at = $now->copy()->subHours(3);
+        $rep1->saveQuietly();
+
+        // Create pending complaint
+        $rep2 = Report::create([
+            'ticket_number' => 'LP-TEST-002',
+            'room_id' => $room->id,
+            'isi_laporan' => 'Waktu tunggu obat di apotek cukup lama.',
+            'ai_sentiment' => 'NEGATIF',
+            'ai_category' => 'Waktu Tunggu & Antrean',
+            'status' => 'PENDING',
+        ]);
+        $rep2->created_at = $now->copy()->subHours(1);
+        $rep2->saveQuietly();
+
+        $response = $this->actingAs($admin)->get(route('executive.dashboard', ['period' => 'today']));
+        $response->assertOk();
+        $response->assertInertia(fn ($page) => 
+            $page->component('Kabid/Dashboard')
+                ->has('executiveStats')
+                ->where('executiveStats.total_rs_reports', 2)
+                ->where('executiveStats.positive_count', 1)
+                ->where('executiveStats.negative_count', 1)
+                ->where('executiveStats.avg_kasi_response_hours', '2 Jam')
+                ->where('executiveStats.completion_rate', 50)
+                ->has('trendChart')
+                ->has('categoryChart')
+                ->has('sentimentChart')
+                ->has('redZoneUnits')
+                ->has('rooms')
+                ->has('filters')
+        );
+    }
+
+    public function test_kasi_responsiveness_page_renders_with_real_sla_metrics(): void
+    {
+        $admin = User::factory()->create([
+            'role_id' => Role::ADMINISTRATOR,
+            'is_active' => true,
+        ]);
+
+        $response = $this->actingAs($admin)->get(route('executive.kasi-responsiveness', ['period' => '30d']));
+        $response->assertOk();
+        $response->assertInertia(fn ($page) => 
+            $page->component('Kabid/KasiResponsiveness')
+                ->has('kasiData')
+                ->has('summary')
+                ->has('rooms')
+                ->has('filters')
+        );
+    }
+
+    public function test_kasi_dashboard_renders_with_unit_sla_and_analytics(): void
+    {
+        $room = Room::first();
+
+        $kasi = User::factory()->create([
+            'role_id' => Role::KEPALA_SEKSI,
+            'room_id' => $room->id,
+            'is_active' => true,
+        ]);
+
+        $now = Carbon::now();
+        $rep3 = Report::create([
+            'ticket_number' => 'LP-TEST-003',
+            'room_id' => $room->id,
+            'isi_laporan' => 'AC kamar rawat inap tidak dingin sejak kemarin malam.',
+            'ai_sentiment' => 'NEGATIF',
+            'ai_category' => 'Sarana & Fasilitas',
+            'status' => 'PENDING',
+        ]);
+        $rep3->created_at = $now->copy()->subHours(26);
+        $rep3->saveQuietly();
+
+        $response = $this->actingAs($kasi)->get(route('kasi.dashboard'));
+        $response->assertOk();
+        $response->assertInertia(fn ($page) => 
+            $page->component('Kasi/Dashboard')
+                ->has('unitStats')
+                ->where('unitStats.pending', 1)
+                ->where('unitStats.total', 1)
+                ->has('unitTrend')
+                ->has('topCategories')
+                ->has('recentReports')
+                ->has('filters')
+        );
+    }
+
+    public function test_kasi_feed_renders_with_reports_queue_and_actions(): void
+    {
+        $room = Room::first();
+
+        $kasi = User::factory()->create([
+            'role_id' => Role::KEPALA_SEKSI,
+            'room_id' => $room->id,
+            'is_active' => true,
+        ]);
+
+        $rep = Report::create([
+            'ticket_number' => 'LP-TEST-004',
+            'room_id' => $room->id,
+            'isi_laporan' => 'Pelayanan cepat dan penjelasan dokter sangat jelas.',
+            'ai_sentiment' => 'POSITIF',
+            'ai_category' => 'Sikap & Keramahan Staf',
+            'status' => 'PENDING',
+        ]);
+
+        $response = $this->actingAs($kasi)->get(route('kasi.feed'));
+        $response->assertOk();
+        $response->assertInertia(fn ($page) => 
+            $page->component('Kasi/Feed')
+                ->has('initialReports')
+                ->has('stats')
+                ->where('stats.total', 1)
+                ->where('stats.pending', 1)
+                ->has('filters')
+        );
+    }
+}

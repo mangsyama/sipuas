@@ -34,6 +34,7 @@ Route::middleware('auth')->group(function () {
 
     // Modul Kepala Seksi (Kasi) — PRD System
     Route::get('/kasi/dashboard', [KasiController::class, 'dashboard'])->name('kasi.dashboard');
+    Route::get('/kasi/feed', [KasiController::class, 'feed'])->name('kasi.feed');
     Route::get('/kasi/verify/{id?}', [KasiController::class, 'verify'])->name('kasi.verify');
     Route::post('/kasi/verify/{id}/process', [KasiController::class, 'processVerification'])->name('kasi.verify.process');
     Route::get('/kasi/logbook', [KasiController::class, 'logbook'])->name('kasi.logbook');

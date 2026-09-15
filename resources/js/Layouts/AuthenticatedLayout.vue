@@ -192,7 +192,8 @@ const isChildActive = (children) => {
 
 const isItemActive = (child) => {
     if (route().current(child.routeName)) return true;
-    if (child.routeName === 'kasi.dashboard' && (route().current('kasi.dashboard') || route().current('kasi.verify'))) return true;
+    if (child.routeName === 'kasi.feed' && (route().current('kasi.feed') || route().current('kasi.verify'))) return true;
+    if (child.routeName === 'kasi.dashboard' && route().current('kasi.dashboard')) return true;
     if (child.routeName === 'users.approvals' && route().current('users.approvals.show')) return true;
     if (child.routeName === 'users.index' && (route().current('users.edit') || route().current('users.show'))) return true;
     if (child.routeName === 'reports-management.index' && route().current('reports-management.show')) return true;
@@ -206,7 +207,10 @@ const isRouteActive = (item) => {
     if (item.routeName && route().current(item.routeName)) {
         return true;
     }
-    if (item.routeName === 'kasi.dashboard' && route().current('kasi.verify')) {
+    if (item.routeName === 'kasi.feed' && route().current('kasi.verify')) {
+        return true;
+    }
+    if (item.routeName === 'kasi.dashboard' && route().current('kasi.dashboard')) {
         return true;
     }
     if (item.routeName === 'users.approvals' && route().current('users.approvals.show')) {
@@ -262,7 +266,8 @@ const menuGroups = computed(() => {
         {
             title: 'Modul Kasi',
             items: [
-                { label: 'Aduan & Verifikasi', routeName: 'kasi.dashboard', permKey: 'kasi.dashboard', icon: FileText },
+                { label: 'Dashboard Kasi', routeName: 'kasi.dashboard', permKey: 'kasi.dashboard', icon: LayoutDashboard },
+                { label: 'Aduan & Verifikasi', routeName: 'kasi.feed', permKey: 'kasi.dashboard', icon: FileText },
                 { label: 'Digital Logbook Staf', routeName: 'kasi.logbook', permKey: 'kasi.logbook', icon: History }
             ]
         },
@@ -604,10 +609,11 @@ const searchableItems = [
     { label: 'Sistem Desain - Formulir & Input', routeName: 'design-system.forms', description: 'Koleksi komponen input form, select, checkbox, & upload file' },
     { label: 'Sistem Desain - Modal & Alert', routeName: 'design-system.modals-alerts', description: 'Koleksi modal popup transisi & notifikasi SweetAlert2' },
     { label: 'Sistem Desain - Tabel & Pagination', routeName: 'design-system.tables', description: 'Desain layout tabel data, pagination, & state data kosong' },
-    { label: 'Feed Aduan Unit', routeName: 'kasi.dashboard', description: 'Monitoring feed aduan masuk dan verifikasi shift staf' },
-    { label: 'Digital Logbook Staf', routeName: 'kasi.logbook', description: 'Rekap kinerja dan poin KPI staf unit' },
+    { label: 'Dashboard Kasi', routeName: 'kasi.dashboard', description: 'Monitoring kinerja mutu, kepuasan, dan analitik ruangan' },
+    { label: 'Aduan & Verifikasi Ruangan', routeName: 'kasi.feed', description: 'Monitoring feed aduan masuk dan verifikasi shift staf' },
+    { label: 'Digital Logbook Staf', routeName: 'kasi.logbook', description: 'Rekap kinerja dan poin KPI staf ruangan' },
     { label: 'Command Center RS', routeName: 'executive.dashboard', description: 'Dashboard eksekutif, analisis sentimen AI, & pantauan zona merah' },
-    { label: 'Responsivitas Kasi', routeName: 'executive.kasi-responsiveness', description: 'Laporan kecepatan respon & akuntabilitas supervisor unit' },
+    { label: 'Responsivitas Kasi', routeName: 'executive.kasi-responsiveness', description: 'Laporan kecepatan respon & akuntabilitas supervisor ruangan' },
     { label: 'Leaderboard Kinerja Staf', routeName: 'executive.leaderboard', description: 'Peringkat apresiasi pujian & evaluasi staf RS' },
     { label: 'Notifikasi Saya', routeName: 'notifications.index', description: 'Semua riwayat notifikasi sistem dan tugas' },
     { label: 'Presensi', routeName: 'staff.attendance', description: 'Pencatatan waktu presensi staf pelayanan' },
@@ -618,8 +624,9 @@ const mobilePageTitles = [
     { routeName: 'dashboard', label: 'Dashboard' },
     { routeName: 'staff.attendance', label: 'Presensi' },
     { routeName: 'staff.dashboard', label: 'Dashboard' },
-    { routeName: 'kasi.dashboard', label: 'Feed Aduan Unit' },
-    { routeName: 'kasi.verify', label: 'Verifikasi Aduan Unit' },
+    { routeName: 'kasi.dashboard', label: 'Dashboard Kasi' },
+    { routeName: 'kasi.feed', label: 'Aduan & Verifikasi' },
+    { routeName: 'kasi.verify', label: 'Verifikasi Aduan Ruangan' },
     { routeName: 'kasi.logbook', label: 'Digital Logbook Staf' },
     { routeName: 'executive.dashboard', label: 'Command Center RS' },
     { routeName: 'executive.kasi-responsiveness', label: 'Responsivitas Kasi' },
