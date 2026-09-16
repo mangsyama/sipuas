@@ -136,10 +136,11 @@ const activeRoleDefaultPermissions = computed(() => {
 });
 
 const isPermissionChecked = (key) => {
-    if (useRoleDefault.value) {
-        return activeRoleDefaultPermissions.value.includes(key);
+    const list = useRoleDefault.value ? activeRoleDefaultPermissions.value : selectedPermissions.value;
+    if (key === 'kasi.feed') {
+        return list.includes('kasi.feed') || list.includes('kasi.verify');
     }
-    return selectedPermissions.value.includes(key);
+    return list.includes(key);
 };
 
 const isPermissionDirty = computed(() => {
@@ -169,6 +170,15 @@ const togglePermission = (key) => {
     if (useRoleDefault.value) {
         selectedPermissions.value = [...activeRoleDefaultPermissions.value];
         useRoleDefault.value = false;
+    }
+    if (key === 'kasi.feed') {
+        const hasIt = selectedPermissions.value.includes('kasi.feed') || selectedPermissions.value.includes('kasi.verify');
+        if (hasIt) {
+            selectedPermissions.value = selectedPermissions.value.filter(k => k !== 'kasi.feed' && k !== 'kasi.verify');
+        } else {
+            selectedPermissions.value.push('kasi.feed', 'kasi.verify');
+        }
+        return;
     }
     const index = selectedPermissions.value.indexOf(key);
     if (index > -1) {

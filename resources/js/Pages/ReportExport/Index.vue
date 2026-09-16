@@ -7,7 +7,8 @@ import {
     FileBarChart2, Filter, RotateCcw, Building, MapPin, 
     UserCheck, Eye, ExternalLink, ClipboardList, ChevronDown, 
     ChevronLeft, ChevronRight, Check, Search, Calendar,
-    ThumbsUp, AlertTriangle, MessageSquare, Layers, Sparkles
+    ThumbsUp, AlertTriangle, MessageSquare, Layers, Sparkles,
+    Lock
 } from '@lucide/vue';
 import flatpickr from 'flatpickr';
 import 'flatpickr/dist/flatpickr.css';
@@ -56,6 +57,10 @@ const props = defineProps({
     reports: {
         type: Object,
         default: () => ({ data: [], links: [] }),
+    },
+    isRoomLocked: {
+        type: Boolean,
+        default: false,
     },
 });
 
@@ -128,6 +133,7 @@ const closeAllDropdowns = () => {
 };
 
 const toggleRoomDropdown = (e) => {
+    if (props.isRoomLocked) return;
     e?.stopPropagation();
     isRoomDropdownOpen.value = !isRoomDropdownOpen.value;
     isSentimentDropdownOpen.value = false;
@@ -224,10 +230,12 @@ const resetFilters = () => {
     formFilters.value = {
         start_date: '',
         end_date: '',
-        room_id: '',
+        room_id: props.isRoomLocked ? props.filters.room_id : '',
         sentiment: '',
         category: '',
         status: '',
+        shift: '',
+        search: '',
     };
 
     if (fpRange) fpRange.clear();
@@ -567,23 +575,31 @@ watch(() => props.filters, (newVal) => {
 
                                     <!-- Ruangan / Unit RS -->
                                     <div class="space-y-1.5 sm:col-span-2">
-                                        <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 text-center">
-                                            Ruangan / Unit Pelayanan Rumah Sakit
-                                        </label>
+                                        <div class="flex items-center justify-center gap-2">
+                                            <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 text-center">
+                                                Ruangan / Unit Pelayanan Rumah Sakit
+                                            </label>
+                                            <span v-if="isRoomLocked" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/40">
+                                                <Lock class="h-2.5 w-2.5" /> Unit Terkunci (Kasi Ruangan)
+                                            </span>
+                                        </div>
                                         <div class="relative">
                                             <button
                                                 type="button"
-                                                @click.stop="toggleRoomDropdown"
+                                                :disabled="isRoomLocked"
+                                                @click.stop="isRoomLocked ? null : toggleRoomDropdown($event)"
                                                 class="w-full h-10 px-10 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 text-xs flex items-center justify-center focus:outline-none transition-all duration-150 text-center relative"
+                                                :class="isRoomLocked ? 'cursor-default bg-slate-50/80 dark:bg-slate-800/50 border-amber-200/60 dark:border-amber-800/40 opacity-95' : ''"
                                             >
+                                                <Lock v-if="isRoomLocked" class="absolute left-3.5 h-4 w-4 text-amber-500" />
                                                 <span class="truncate font-medium text-slate-800 dark:text-slate-100 text-center">
                                                     {{ selectedRoomLabel }}
                                                 </span>
-                                                <ChevronDown :class="['absolute right-4 h-4 w-4 text-slate-400 transition-transform duration-200 shrink-0', isRoomDropdownOpen ? 'rotate-180 text-emerald-500 dark:text-white' : '']" />
+                                                <ChevronDown v-if="!isRoomLocked" :class="['absolute right-4 h-4 w-4 text-slate-400 transition-transform duration-200 shrink-0', isRoomDropdownOpen ? 'rotate-180 text-emerald-500 dark:text-white' : '']" />
                                             </button>
 
                                             <div
-                                                v-if="isRoomDropdownOpen"
+                                                v-if="isRoomDropdownOpen && !isRoomLocked"
                                                 class="absolute z-30 mt-1.5 w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden p-2 space-y-2 shadow-md"
                                             >
                                                 <!-- Search Input -->
@@ -602,7 +618,7 @@ watch(() => props.filters, (newVal) => {
                                                         Ruangan tidak ditemukan
                                                     </div>
                                                     <button
-                                                        v-else
+                                                        v-else-if="!isRoomLocked"
                                                         type="button"
                                                         @click.stop="selectRoom('')"
                                                         class="w-full text-left px-3 py-2 rounded-lg text-xs transition-colors flex items-center justify-between hover:bg-emerald-50/50 dark:hover:bg-white/10"

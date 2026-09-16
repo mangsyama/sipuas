@@ -83,6 +83,9 @@ const effectivePermissions = computed(() => {
 });
 
 const isPermissionActive = (key) => {
+    if (key === 'kasi.feed') {
+        return effectivePermissions.value.includes('kasi.feed') || effectivePermissions.value.includes('kasi.verify');
+    }
     return effectivePermissions.value.includes(key);
 };
 </script>

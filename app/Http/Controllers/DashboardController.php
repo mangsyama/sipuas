@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Report;
+use App\Models\Role;
 use App\Models\Unit;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
@@ -14,15 +15,32 @@ use Inertia\Response;
 class DashboardController extends Controller
 {
     /**
-     * Display main hospital dashboard with live data.
+     * Display main hospital dashboard with live data (Administrator Only).
      */
     public function index(Request $request): Response|RedirectResponse
     {
         $user = $request->user();
 
-        // Staf pelayanan diarahkan langsung ke halaman presensi utama
-        if ($user && $user->isStaff()) {
-            return redirect()->route('staff.attendance');
+        if ($user) {
+            // Staf pelayanan diarahkan langsung ke halaman presensi staf
+            if ($user->isStaff()) {
+                return redirect()->route('staff.attendance');
+            }
+
+            // Kasi diarahkan langsung ke Dashboard Kasi
+            if ((int)$user->role_id === Role::KEPALA_SEKSI) {
+                return redirect()->route('kasi.dashboard');
+            }
+
+            // Kabid & Direktur diarahkan langsung ke Executive Dashboard
+            if (in_array((int)$user->role_id, [Role::KEPALA_BIDANG, Role::DIREKTUR])) {
+                return redirect()->route('executive.dashboard');
+            }
+
+            // Pengguna non-administrator lainnya diarahkan ke Dashboard Kasi
+            if (!$user->isAdministrator()) {
+                return redirect()->route('kasi.dashboard');
+            }
         }
 
         // 1. Calculate Aggregate Stats
@@ -72,7 +90,7 @@ class DashboardController extends Controller
         $neutralPercent = $totalReports > 0 ? round(($neutralReports / $totalReports) * 100) : 0;
 
         $sentimentChart = [
-            'labels' => ['Apresiasi (Positif)', 'Keluhan (Negatif)', 'Saran (Netral)'],
+            'labels' => ['Positif', 'Negatif', 'Netral'],
             'data' => [$positiveReports, $negativeReports, $neutralReports],
             'percentages' => [$positivePercent, $negativePercent, $neutralPercent],
             'satisfaction_index' => $satisfactionRate . '%',

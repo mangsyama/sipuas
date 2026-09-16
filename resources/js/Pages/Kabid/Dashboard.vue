@@ -142,6 +142,16 @@ const activeRedZoneUnits = computed(() => {
     return (props.redZoneUnits || []).filter(u => u.complaints > 0);
 });
 
+const sentimentPercentages = computed(() => {
+    const total = executiveStats.value.total_rs_reports || 0;
+    if (total === 0) return [0, 0, 0];
+    return [
+        Math.round(((executiveStats.value.positive_count || 0) / total) * 100),
+        Math.round(((executiveStats.value.negative_count || 0) / total) * 100),
+        Math.round(((executiveStats.value.neutral_count || 0) / total) * 100)
+    ];
+});
+
 const currentRoomName = computed(() => {
     if (selectedRoomId.value) {
         const found = props.rooms.find(r => String(r.id) === String(selectedRoomId.value));
@@ -152,28 +162,25 @@ const currentRoomName = computed(() => {
 </script>
 
 <template>
-    <Head title="Executive Command Center RS" />
+    <Head title="Dashboard Kabid RS" />
 
     <AuthenticatedLayout>
         <div class="py-4 px-4 sm:px-4 lg:px-4 animate-spa-fade-in space-y-4">
-            <!-- Header Panel -->
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-slate-900 border border-white dark:border-slate-800 p-6 rounded-2xl shadow-sm">
-                <div class="flex items-center gap-3.5">
-                    <div class="h-12 w-12 rounded-xl flex-shrink-0 items-center justify-center bg-emerald-50 dark:bg-white/10 text-emerald-600 dark:text-white flex">
-                        <Activity class="h-6 w-6" />
-                    </div>
-                    <div class="space-y-0.5">
-                        <div class="flex items-center gap-2.5 flex-wrap">
-                            <h2 class="text-xl font-extrabold text-slate-900 dark:text-white leading-tight">
-                                Executive Command Center
-                            </h2>
-                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60">
-                                {{ currentRoomName }}
-                            </span>
-                        </div>
-                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 max-w-2xl leading-relaxed">
-                            Pemantauan menyeluruh kualitas pelayanan seluruh unit rumah sakit berbasis agregasi data AI real-time.
+            <!-- Welcome Card (Header) -->
+            <div class="p-[1px] rounded-2xl bg-gradient-to-r from-emerald-600 to-emerald-800 dark:bg-none dark:bg-slate-800 shadow-sm">
+                <div class="overflow-hidden bg-gradient-to-r from-emerald-600 to-emerald-800 dark:from-slate-900 dark:to-slate-900 rounded-[15px] text-white p-6 sm:p-8 relative flex items-center justify-between gap-4 sm:gap-6">
+                    <!-- Text Info -->
+                    <div class="relative z-10 flex-1 min-w-0">
+                        <h3 class="text-2xl font-black tracking-tight mb-1">SIPUAS</h3>
+                        <p class="text-emerald-100 dark:text-slate-300 text-sm font-medium leading-relaxed break-words">
+                            Sistem Integrasi Pelayanan Publik & Akuntabilitas Staf
                         </p>
+                    </div>
+
+                    <!-- Decorative background patterns -->
+                    <div class="absolute inset-0 opacity-10 dark:opacity-5 pointer-events-none overflow-hidden select-none">
+                        <div class="absolute -right-28 -top-28 w-80 h-80 border-2 border-white rounded-[80px] rotate-[15deg]"></div>
+                        <div class="absolute -right-40 -top-40 w-80 h-80 border-2 border-white rounded-[100px] rotate-[15deg]"></div>
                     </div>
                 </div>
             </div>
@@ -330,7 +337,7 @@ const currentRoomName = computed(() => {
                         <TrendAreaChart
                             :labels="trendChart.labels"
                             :datasets="trendChart.datasets"
-                            :height="260"
+                            :height="240"
                         />
                     </div>
                 </div>
@@ -347,15 +354,15 @@ const currentRoomName = computed(() => {
                                     Rasio Sentimen Pasien
                                 </h3>
                                 <p class="text-[11px] text-slate-400 font-medium">
-                                    Proporsi persepsi kepuasan & apresiasi publik
+                                    Tingkat kepuasan & apresiasi di seluruh RS
                                 </p>
                             </div>
                         </div>
 
                         <SentimentDonutChart
-                            :labels="sentimentChart.labels"
-                            :data="sentimentChart.data"
-                            :percentages="sentimentChart.percentages"
+                            :labels="['Positif', 'Negatif', 'Netral']"
+                            :data="[executiveStats.positive_count, executiveStats.negative_count, executiveStats.neutral_count]"
+                            :percentages="sentimentPercentages"
                             :center-text="executiveStats.satisfaction_index"
                             center-subtext="Kepuasan"
                             :height="170"

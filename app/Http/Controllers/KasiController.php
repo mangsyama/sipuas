@@ -451,6 +451,7 @@ class KasiController extends Controller
         return Inertia::render('Kasi/Verify', [
             'id' => $report ? $report->ticket_number : ($id ?? ''),
             'reportDetail' => $reportDetail,
+            'staffList' => $staffList,
             'staffMembers' => $staffList,
             'pesupeluhCategories' => $pesupeluhCategories,
             'pesupeluhRooms' => $pesupeluhRooms,

@@ -22,47 +22,55 @@ class UserManagementController extends Controller
     {
         return [
             [
-                'group' => 'Menu Utama',
+                'group' => 'MENU UTAMA',
                 'permissions' => [
                     ['key' => 'dashboard', 'label' => 'Dashboard Utama'],
                 ],
             ],
             [
-                'group' => 'Modul Staf Pelayanan',
+                'group' => 'MODUL STAF PELAYANAN',
                 'permissions' => [
-                    ['key' => 'staff.attendance', 'label' => 'Presensi Mandiri / Live Attendance'],
-                    ['key' => 'staff.dashboard', 'label' => 'Dashboard Kinerja Staf & Presensi'],
-                    ['key' => 'attendance.status', 'label' => 'Akses Status Presensi Mandiri'],
+                    ['key' => 'staff.attendance', 'label' => 'Presensi'],
+                    ['key' => 'staff.dashboard', 'label' => 'Dashboard Staf'],
                 ],
             ],
             [
-                'group' => 'Modul Kepala Seksi (Kasi)',
+                'group' => 'MODUL KASI',
                 'permissions' => [
-                    ['key' => 'kasi.dashboard', 'label' => 'Feed Aduan & Monitoring Shift'],
-                    ['key' => 'kasi.verify', 'label' => 'Verifikasi Laporan & Evaluasi KPI'],
-                    ['key' => 'kasi.logbook', 'label' => 'Digital Logbook Staf Unit'],
+                    ['key' => 'kasi.dashboard', 'label' => 'Dashboard Kasi'],
+                    ['key' => 'kasi.feed', 'label' => 'Aduan & Verifikasi'],
+                    ['key' => 'kasi.logbook', 'label' => 'Digital Logbook Staf'],
                 ],
             ],
             [
-                'group' => 'Modul Kepala Bidang (Kabid)',
+                'group' => 'MODUL KABID',
                 'permissions' => [
-                    ['key' => 'executive.dashboard', 'label' => 'Executive Analytics & Responsiveness'],
-                    ['key' => 'executive.kasi-responsiveness', 'label' => 'Tingkat Responsivitas Kasi'],
-                    ['key' => 'executive.leaderboard', 'label' => 'Leaderboard Integritas Unit'],
-                    ['key' => 'reports.index', 'label' => 'Pusat Rekapitulasi & Ekspor Laporan'],
+                    ['key' => 'executive.dashboard', 'label' => 'Dashboard Kabid'],
+                    ['key' => 'executive.kasi-responsiveness', 'label' => 'Responsivitas Kasi'],
+                    ['key' => 'executive.leaderboard', 'label' => 'Leaderboard Staf'],
+                    ['key' => 'reports.index', 'label' => 'Laporan & Ekspor'],
                 ],
             ],
             [
-                'group' => 'Master Data & Pengaturan',
+                'group' => 'MASTER DATA',
                 'permissions' => [
-                    ['key' => 'units.index', 'label' => 'Master Ruangan RS'],
-                    ['key' => 'rooms.index', 'label' => 'Master Ruangan RS'],
-                    ['key' => 'users.approvals', 'label' => 'Persetujuan Pendaftar Baru'],
-                    ['key' => 'users.index', 'label' => 'Kelola Akun Sistem'],
-                    ['key' => 'admin.ai-settings.index', 'label' => 'Integrasi AI (Gemini/Groq/OpenAI)'],
-                    ['key' => 'admin.wa-gateway.index', 'label' => 'WhatsApp Gateway Management'],
-                    ['key' => 'admin.qr-generator.index', 'label' => 'Generator QR Code Ruangan'],
-                    ['key' => 'settings.index', 'label' => 'Preferensi Notifikasi Akun'],
+                    ['key' => 'users.approvals', 'label' => 'Persetujuan Pendaftar'],
+                    ['key' => 'users.index', 'label' => 'Daftar Pengguna'],
+                    ['key' => 'rooms.index', 'label' => 'Daftar Ruangan'],
+                ],
+            ],
+            [
+                'group' => 'SYSTEM/INTEGRASI',
+                'permissions' => [
+                    ['key' => 'admin.ai-settings.index', 'label' => 'Integrasi AI'],
+                    ['key' => 'admin.wa-gateway.index', 'label' => 'WhatsApp Gateway'],
+                    ['key' => 'admin.qr-generator.index', 'label' => 'Generator QR Code'],
+                ],
+            ],
+            [
+                'group' => 'AREA PUBLIK PASIEN',
+                'permissions' => [
+                    ['key' => 'report.create', 'label' => 'Form Laporan'],
                 ],
             ],
         ];
@@ -373,7 +381,14 @@ class UserManagementController extends Controller
         if ($request->boolean('use_role_default')) {
             $user->update(['page_permissions' => null]);
         } else {
-            $user->update(['page_permissions' => $validated['page_permissions'] ?? []]);
+            $perms = $validated['page_permissions'] ?? [];
+            if (in_array('kasi.feed', $perms) && !in_array('kasi.verify', $perms)) {
+                $perms[] = 'kasi.verify';
+            }
+            if (in_array('kasi.verify', $perms) && !in_array('kasi.feed', $perms)) {
+                $perms[] = 'kasi.feed';
+            }
+            $user->update(['page_permissions' => array_values(array_unique($perms))]);
         }
 
         return redirect()->back()->with('success', 'Hak akses halaman pengguna berhasil diperbarui.');

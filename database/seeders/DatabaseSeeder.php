@@ -23,42 +23,41 @@ class DatabaseSeeder extends Seeder
                 'id' => Role::ADMINISTRATOR,
                 'name' => 'ADMINISTRATOR',
                 'page_permissions' => [
-                    'dashboard', 'staff.attendance', 'staff.dashboard', 'attendance.status',
-                    'kasi.dashboard', 'kasi.verify', 'kasi.logbook',
-                    'executive.dashboard', 'executive.kasi-responsiveness', 'executive.leaderboard',
-                    'rooms.index', 'users.approvals', 'users.index',
-                    'admin.ai-settings.index', 'admin.wa-gateway.index', 'settings.index',
+                    'dashboard',
+                    'staff.attendance', 'staff.dashboard',
+                    'kasi.dashboard', 'kasi.feed', 'kasi.verify', 'kasi.logbook',
+                    'executive.dashboard', 'executive.kasi-responsiveness', 'executive.leaderboard', 'reports.index',
+                    'users.approvals', 'users.index', 'rooms.index',
+                    'admin.ai-settings.index', 'admin.wa-gateway.index', 'admin.qr-generator.index',
+                    'report.create',
                 ],
             ],
             [
                 'id' => Role::DIREKTUR,
                 'name' => 'DIREKTUR',
                 'page_permissions' => [
-                    'dashboard', 'executive.dashboard', 'executive.kasi-responsiveness', 'executive.leaderboard',
-                    'kasi.dashboard', 'kasi.logbook', 'rooms.index', 'settings.index',
+                    'executive.dashboard', 'executive.kasi-responsiveness', 'executive.leaderboard', 'reports.index',
                 ],
             ],
             [
                 'id' => Role::KEPALA_BIDANG,
                 'name' => 'KEPALA BIDANG',
                 'page_permissions' => [
-                    'dashboard', 'executive.dashboard', 'executive.kasi-responsiveness', 'executive.leaderboard',
-                    'kasi.dashboard', 'kasi.logbook', 'rooms.index', 'settings.index',
+                    'executive.dashboard', 'executive.kasi-responsiveness', 'executive.leaderboard', 'reports.index',
                 ],
             ],
             [
                 'id' => Role::KEPALA_SEKSI,
                 'name' => 'KEPALA SEKSI',
                 'page_permissions' => [
-                    'dashboard', 'kasi.dashboard', 'kasi.verify', 'kasi.logbook',
-                    'staff.dashboard', 'rooms.index', 'settings.index',
+                    'kasi.dashboard', 'kasi.feed', 'kasi.verify', 'kasi.logbook',
                 ],
             ],
             [
                 'id' => Role::STAFF,
                 'name' => 'STAFF',
                 'page_permissions' => [
-                    'staff.dashboard', 'attendance.status', 'settings.index',
+                    'staff.attendance', 'staff.dashboard',
                 ],
             ],
         ];
@@ -295,5 +294,10 @@ class DatabaseSeeder extends Seeder
                 'last_test_status' => 'CONNECTED',
             ]
         );
+
+        // 5. Seed Dummy Staff, Active Clock-in Attendance & Pending Verification Reports (Development / Demo)
+        if (!app()->runningUnitTests()) {
+            $this->call(DummyDataSeeder::class);
+        }
     }
 }

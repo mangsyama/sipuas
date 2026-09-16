@@ -159,4 +159,36 @@ class ExecutiveAndKasiDashboardTest extends TestCase
                 ->has('filters')
         );
     }
+
+    public function test_dashboard_utama_is_admin_only_and_redirects_other_roles(): void
+    {
+        $admin = User::factory()->create([
+            'role_id' => Role::ADMINISTRATOR,
+            'is_active' => true,
+        ]);
+        $kasi = User::factory()->create([
+            'role_id' => Role::KEPALA_SEKSI,
+            'is_active' => true,
+        ]);
+        $kabid = User::factory()->create([
+            'role_id' => Role::KEPALA_BIDANG,
+            'is_active' => true,
+        ]);
+        $staff = User::factory()->create([
+            'role_id' => Role::STAFF,
+            'is_active' => true,
+        ]);
+
+        // Admin can access Dashboard Utama
+        $this->actingAs($admin)->get(route('dashboard'))->assertOk()->assertInertia(fn ($page) => $page->component('Dashboard/Index'));
+
+        // Kasi is redirected to Kasi Dashboard
+        $this->actingAs($kasi)->get(route('dashboard'))->assertRedirect(route('kasi.dashboard'));
+
+        // Kabid is redirected to Executive Dashboard
+        $this->actingAs($kabid)->get(route('dashboard'))->assertRedirect(route('executive.dashboard'));
+
+        // Staff is redirected to Attendance
+        $this->actingAs($staff)->get(route('dashboard'))->assertRedirect(route('staff.attendance'));
+    }
 }

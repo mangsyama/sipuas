@@ -10,6 +10,7 @@ use App\Models\User;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -73,7 +74,7 @@ class KabidController extends Controller
 
         // Chart 3: Sentiment Doughnut Data
         $sentimentChart = [
-            'labels' => ['Apresiasi (Positif)', 'Keluhan (Negatif)', 'Saran (Netral)'],
+            'labels' => ['Positif', 'Negatif', 'Netral'],
             'data' => [$totalPositive, $totalNegative, $totalNeutral],
             'percentages' => [$positivePercent, $negativePercent, $neutralPercent],
         ];
@@ -153,6 +154,41 @@ class KabidController extends Controller
 
             $kasiUser = User::where('room_id', $u->id)->where('role_id', Role::KEPALA_SEKSI)->first();
 
+            $defaultKasiNames = [
+                1 => 'I Wayan Sudarma, S.AP',
+                2 => 'Apt. Ni Nyoman Sariani, S.Si',
+                3 => 'Ns. Ni Made Rai Widiastuti, S.Kep',
+                4 => 'dr. I Putu Gede Sanjaya, Sp.An',
+                5 => 'dr. I Ketut Widiana, Sp.B',
+                6 => 'dr. I Nyoman Sastrawan, Sp.B',
+                7 => 'Bd. Ni Luh Putu Mirah, S.Tr.Keb',
+                8 => 'dr. Ni Kadek Dwipayani, Sp.PK',
+                9 => 'I Gusti Ayu Mas Trisna, SE',
+                10 => 'I Gede Yudiartawan, S.Kom',
+                11 => 'Bd. Ni Ketut Supartini, S.Tr.Keb',
+                12 => 'dr. I Made Sukadana, Sp.A',
+                13 => 'dr. Ni Wayan Murti, Sp.A',
+                14 => 'dr. I Ketut Agus Darmayasa, Sp.B',
+                15 => 'dr. I Dewa Gede Alit, Sp.KFR',
+                16 => 'drg. Ni Made Anggreni, Sp.KG',
+                17 => 'dr. I Wayan Wita, Sp.JP(K)',
+                18 => 'dr. Ni Luh Sukmawati, Sp.KJ',
+                19 => 'dr. I Made Dwi Artha, Sp.OG',
+                20 => 'dr. Ni Kadek Dwi Jayanthi, Sp.DV',
+                21 => 'dr. I Gede Eka Putra, Sp.M',
+                22 => 'dr. I Nyoman Sumartana, Sp.P',
+                23 => 'dr. I Gusti Agung Bagus Krisna, Sp.PD',
+                24 => 'dr. Ni Putu Ayu Lestari, Sp.S',
+                25 => 'dr. I Komang Adi Wiratama, Sp.THT-BKL',
+                26 => 'dr. I Made Pasek Adiputra',
+                27 => 'dr. Ni Wayan Candrawati, Sp.Rad',
+                28 => 'Ns. I Komang Yudi, M.Kep',
+                29 => 'Ns. Ni Ketut Astini, S.Kep',
+                30 => 'Ns. I Putu Agus Sudarma, S.Kep',
+            ];
+
+            $kasiName = $kasiUser ? $kasiUser->name : ($defaultKasiNames[$u->id] ?? 'Kepala Ruangan ' . $u->name);
+
             // Status responsivitas unit: berdasarkan tingkat penyelesaian verifikasi
             $status = $verificationRate >= 80
                 ? 'EXCELLENT'
@@ -161,7 +197,7 @@ class KabidController extends Controller
             return [
                 'unit_id' => $u->id,
                 'unit_name' => $u->name,
-                'kasi_name' => $kasiUser ? $kasiUser->name : 'Plt. Kepala Ruangan',
+                'kasi_name' => $kasiName,
                 'role' => 'Kepala Ruangan / Kasi',
                 'total_reports' => $totalReports,
                 'total_incoming' => $totalReports,
@@ -207,52 +243,85 @@ class KabidController extends Controller
      */
     public function leaderboard(Request $request): Response
     {
-        $topPerformers = User::where('role_id', Role::STAFF)
+        $staffQuery = User::where('role_id', Role::STAFF)
             ->with('unit')
-            ->where('is_active', true)
+            ->where('is_active', true);
+
+        $totalStaff = (clone $staffQuery)->count();
+        $totalPraises = (clone $staffQuery)->sum('praise_count');
+        $totalComplaints = (clone $staffQuery)->sum('complaint_count');
+        $avgPoints = (clone $staffQuery)->avg('total_points') ? round((clone $staffQuery)->avg('total_points')) : 100;
+        $coachingCount = (clone $staffQuery)->where('complaint_count', '>', 0)->count();
+
+        $topPerformers = (clone $staffQuery)
             ->orderByDesc('total_points')
+            ->orderByDesc('praise_count')
             ->take(5)
             ->get()
             ->values()
             ->map(function ($s, $idx) {
                 $rank = $idx + 1;
                 $badge = match ($rank) {
-                    1 => '🥇 Top Performer #1',
-                    2 => '🥈 Top Performer #2',
-                    3 => '🥉 Top Performer #3',
-                    default => 'Top #' . $rank,
+                    1 => '🥇 Teladan Utama RS',
+                    2 => '🥈 Teladan Madya RS',
+                    3 => '🥉 Teladan Pratama RS',
+                    default => 'Top Performer #' . $rank,
                 };
+
+                $latestPraise = Report::where('room_id', $s->room_id)
+                    ->where('ai_sentiment', 'POSITIF')
+                    ->latest()
+                    ->first();
 
                 return [
                     'rank' => $rank,
                     'name' => $s->name,
-                    'unit' => $s->unit ? $s->unit->name : 'Unit Umum',
+                    'nip' => $s->nip ?: '-',
+                    'unit' => $s->unit ? $s->unit->name : 'Unit Pelayanan RS',
                     'points' => $s->total_points,
                     'praise_count' => $s->praise_count,
                     'badge' => $badge,
+                    'praise_highlight' => $latestPraise ? $latestPraise->isi_laporan : 'Pelayanan sangat ramah, sigap, dan tanggap kepada pasien.',
                 ];
             });
 
-        $bottomPerformers = User::where('role_id', Role::STAFF)
-            ->with('unit')
-            ->where('is_active', true)
+        $bottomPerformers = (clone $staffQuery)
             ->where('complaint_count', '>', 0)
             ->orderBy('total_points')
+            ->orderByDesc('complaint_count')
             ->take(5)
             ->get()
             ->values()
             ->map(function ($s, $idx) {
+                $latestReport = Report::where('room_id', $s->room_id)
+                    ->where('ai_sentiment', 'NEGATIF')
+                    ->latest()
+                    ->first();
+
+                $complaintSnippet = $latestReport 
+                    ? ($latestReport->ai_category ? '[' . $latestReport->ai_category . '] ' : '') . $latestReport->isi_laporan
+                    : 'Catatan komplain pelayanan dari pasien / keluarga pasien.';
+
                 return [
                     'rank' => $idx + 1,
                     'name' => $s->name,
-                    'unit' => $s->unit ? $s->unit->name : 'Unit Umum',
+                    'nip' => $s->nip ?: '-',
+                    'unit' => $s->unit ? $s->unit->name : 'Unit Pelayanan RS',
                     'complaint_deductions' => $s->complaint_count,
                     'points' => $s->total_points,
-                    'note' => 'Diperlukan Pembinaan & Evaluasi Pelayanan',
+                    'reason' => $complaintSnippet,
+                    'note' => 'Diperlukan pembinaan alur pelayanan & supervisi oleh Kasi.',
                 ];
             });
 
         return Inertia::render('Kabid/Leaderboard', [
+            'summary' => [
+                'total_staff' => $totalStaff,
+                'total_praises' => $totalPraises,
+                'total_complaints' => $totalComplaints,
+                'avg_points' => $avgPoints,
+                'coaching_count' => $coachingCount,
+            ],
             'topPerformers' => $topPerformers,
             'bottomPerformers' => $bottomPerformers,
         ]);

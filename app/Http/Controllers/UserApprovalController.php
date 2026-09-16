@@ -169,12 +169,23 @@ class UserApprovalController extends Controller
 
         $roomId = $validated['room_id'] ?? $validated['unit_id'] ?? null;
 
+        $pagePermissions = !empty($validated['page_permissions']) ? $validated['page_permissions'] : null;
+        if (is_array($pagePermissions)) {
+            if (in_array('kasi.feed', $pagePermissions) && !in_array('kasi.verify', $pagePermissions)) {
+                $pagePermissions[] = 'kasi.verify';
+            }
+            if (in_array('kasi.verify', $pagePermissions) && !in_array('kasi.feed', $pagePermissions)) {
+                $pagePermissions[] = 'kasi.feed';
+            }
+            $pagePermissions = array_values(array_unique($pagePermissions));
+        }
+
         $user->update([
             'role' => $roleStr,
             'role_id' => $roleId,
             'room_id' => $roomId ?: null,
             'unit_id' => $roomId ?: null,
-            'page_permissions' => !empty($validated['page_permissions']) ? $validated['page_permissions'] : null,
+            'page_permissions' => $pagePermissions,
             'is_active' => true,
             'approved_by' => $request->user() ? $request->user()->id : null,
             'approved_at' => Carbon::now(),

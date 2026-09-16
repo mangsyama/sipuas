@@ -84,16 +84,26 @@ const activeRoleDefaultPermissions = computed(() => {
 });
 
 const isPermissionChecked = (key) => {
-    if (approveForm.use_role_default) {
-        return activeRoleDefaultPermissions.value.includes(key);
+    const list = approveForm.use_role_default ? activeRoleDefaultPermissions.value : selectedPermissions.value;
+    if (key === 'kasi.feed') {
+        return list.includes('kasi.feed') || list.includes('kasi.verify');
     }
-    return selectedPermissions.value.includes(key);
+    return list.includes(key);
 };
 
 const togglePermission = (key) => {
     if (approveForm.use_role_default) {
         selectedPermissions.value = [...activeRoleDefaultPermissions.value];
         approveForm.use_role_default = false;
+    }
+    if (key === 'kasi.feed') {
+        const hasIt = selectedPermissions.value.includes('kasi.feed') || selectedPermissions.value.includes('kasi.verify');
+        if (hasIt) {
+            selectedPermissions.value = selectedPermissions.value.filter(k => k !== 'kasi.feed' && k !== 'kasi.verify');
+        } else {
+            selectedPermissions.value.push('kasi.feed', 'kasi.verify');
+        }
+        return;
     }
     const index = selectedPermissions.value.indexOf(key);
     if (index > -1) {

@@ -18,10 +18,14 @@ class ReportExportController extends Controller
      */
     public function index(Request $request): Response
     {
+        $restrictedRoomId = $this->getRestrictedRoomId($request);
+        $isRoomLocked = !is_null($restrictedRoomId);
+        $selectedRoomId = $isRoomLocked ? (string) $restrictedRoomId : $request->input('room_id', '');
+
         $filters = [
             'start_date' => $request->input('start_date', ''),
             'end_date'   => $request->input('end_date', ''),
-            'room_id'    => $request->input('room_id', ''),
+            'room_id'    => $selectedRoomId,
             'sentiment'  => $request->input('sentiment', ''),
             'category'   => $request->input('category', ''),
             'status'     => $request->input('status', ''),
@@ -29,10 +33,16 @@ class ReportExportController extends Controller
             'search'     => $request->input('search', ''),
         ];
 
-        $rooms = Room::where('is_active', true)
-            ->select(['id', 'name', 'building_name', 'location_floor'])
-            ->orderBy('name')
-            ->get();
+        if ($isRoomLocked) {
+            $rooms = Room::where('id', $restrictedRoomId)
+                ->select(['id', 'name', 'building_name', 'location_floor'])
+                ->get();
+        } else {
+            $rooms = Room::where('is_active', true)
+                ->select(['id', 'name', 'building_name', 'location_floor'])
+                ->orderBy('name')
+                ->get();
+        }
 
         // Standard categories known by AI Triase
         $standardCategories = [
@@ -103,14 +113,15 @@ class ReportExportController extends Controller
         ];
 
         return Inertia::render('ReportExport/Index', [
-            'filters'    => $filters,
-            'rooms'      => $rooms,
-            'categories' => $categories,
-            'sentiments' => $sentiments,
-            'statuses'   => $statuses,
-            'shifts'     => $shifts,
-            'reports'    => $reports,
-            'stats'      => $stats,
+            'filters'      => $filters,
+            'rooms'        => $rooms,
+            'categories'   => $categories,
+            'sentiments'   => $sentiments,
+            'statuses'     => $statuses,
+            'shifts'       => $shifts,
+            'reports'      => $reports,
+            'stats'        => $stats,
+            'isRoomLocked' => $isRoomLocked,
         ]);
     }
 
@@ -122,6 +133,11 @@ class ReportExportController extends Controller
         @ini_set('memory_limit', '512M');
         @ini_set('max_execution_time', 300);
 
+        $restrictedRoomId = $this->getRestrictedRoomId($request);
+        if ($restrictedRoomId) {
+            $request->merge(['room_id' => $restrictedRoomId]);
+        }
+
         $query = Report::with(['room', 'verifier', 'attachments'])->orderByDesc('created_at');
         $this->applyFilters($query, $request);
         $reports = $query->get();
@@ -129,9 +145,10 @@ class ReportExportController extends Controller
         $startDate = $request->input('start_date');
         $endDate = $request->input('end_date');
 
+        $effectiveRoomId = $restrictedRoomId ?: $request->input('room_id');
         $roomName = null;
-        if ($request->filled('room_id')) {
-            $roomName = Room::find($request->input('room_id'))?->name;
+        if ($effectiveRoomId) {
+            $roomName = Room::find($effectiveRoomId)?->name;
         }
 
         $sentimentName = $request->input('sentiment');
@@ -178,8 +195,14 @@ class ReportExportController extends Controller
      */
     public function exportExcel(Request $request)
     {
+        $params = $request->all();
+        $restrictedRoomId = $this->getRestrictedRoomId($request);
+        if ($restrictedRoomId) {
+            $params['room_id'] = $restrictedRoomId;
+        }
+
         return Excel::download(
-            new ReportsExport(null, $request->all()),
+            new ReportsExport(null, $params),
             'laporan_sipuas_' . now()->format('Ymd_His') . '.xlsx'
         );
     }
@@ -189,8 +212,14 @@ class ReportExportController extends Controller
      */
     public function exportCsv(Request $request)
     {
+        $params = $request->all();
+        $restrictedRoomId = $this->getRestrictedRoomId($request);
+        if ($restrictedRoomId) {
+            $params['room_id'] = $restrictedRoomId;
+        }
+
         return Excel::download(
-            new ReportsExport(null, $request->all()),
+            new ReportsExport(null, $params),
             'laporan_sipuas_' . now()->format('Ymd_His') . '.csv',
             \Maatwebsite\Excel\Excel::CSV
         );
@@ -215,8 +244,11 @@ class ReportExportController extends Controller
             $query->where('created_at', '<=', \Carbon\Carbon::parse($endDate)->endOfDay());
         }
 
-        if ($request->filled('room_id')) {
-            $query->where('room_id', $request->input('room_id'));
+        $restrictedRoomId = $this->getRestrictedRoomId($request);
+        $effectiveRoomId = $restrictedRoomId ?: $request->input('room_id');
+
+        if ($effectiveRoomId) {
+            $query->where('room_id', $effectiveRoomId);
         }
 
         if ($request->filled('sentiment') && $request->input('sentiment') !== 'ALL') {
@@ -244,5 +276,31 @@ class ReportExportController extends Controller
                   ->orWhere('target_object', 'like', "%{$s}%");
             });
         }
+    }
+
+    /**
+     * Get the restricted room id for the user, if applicable.
+     * If user is a Kasi assigned to a specific room, returns that room ID.
+     * Otherwise (SuperAdmin, Direktur, Kabid, or Kasi without specific room assignment), returns null.
+     */
+    private function getRestrictedRoomId(Request $request): ?int
+    {
+        $user = $request->user();
+        if (!$user) {
+            return null;
+        }
+
+        // Administrator, Direktur, and Kabid have full hospital-wide access
+        if ($user->isAdministrator() || $user->isDirektur() || $user->isKabid()) {
+            return null;
+        }
+
+        // If user is Kasi and has room_id (or unit_id), restrict strictly to that room
+        $userRoomId = $user->room_id ?? $user->unit_id;
+        if ($userRoomId) {
+            return (int) $userRoomId;
+        }
+
+        return null;
     }
 }

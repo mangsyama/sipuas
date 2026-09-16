@@ -237,79 +237,121 @@ const isRouteActive = (item) => {
 const user = computed(() => page.props.auth?.user);
 const permissions = computed(() => page.props.auth?.page_permissions || []);
 
-const isAdmin = computed(() => user.value?.role_id === 1 || user.value?.role === 'ADMINISTRATOR');
-const hasAccess = (permKey) => {
-    if (isAdmin.value) return true;
-    if (permissions.value.includes(permKey)) return true;
-    if (permKey === 'rooms.index' && permissions.value.includes('units.index')) return true;
-    if (permKey === 'units.index' && permissions.value.includes('rooms.index')) return true;
-    return false;
-};
+const roleId = computed(() => Number(user.value?.role_id));
+const roleName = computed(() => (user.value?.role || '').toUpperCase());
+
+const isAdmin = computed(() => roleId.value === 1 || roleName.value === 'ADMINISTRATOR' || roleName.value === 'SUPERADMIN');
+const isDirekturOrKabid = computed(() => roleId.value === 2 || roleId.value === 3 || roleName.value === 'DIREKTUR' || roleName.value === 'KABID' || roleName.value === 'KEPALA BIDANG');
+const isKasi = computed(() => roleId.value === 4 || roleName.value === 'KASI' || roleName.value === 'KEPALA SEKSI');
+const isStaff = computed(() => roleId.value === 5 || roleName.value === 'STAFF');
+
+const dashboardRoute = computed(() => {
+    if (isStaff.value) return route('staff.attendance');
+    if (isKasi.value) return route('kasi.dashboard');
+    if (isDirekturOrKabid.value) return route('executive.dashboard');
+    return route('dashboard');
+});
 
 const menuGroups = computed(() => {
-    const isStaff = user.value?.role_id === 5 || user.value?.role === 'STAFF';
-
-    const rawGroups = [
-        {
-            title: 'Menu Utama',
-            items: [
-                { label: 'Dashboard Utama', routeName: 'dashboard', permKey: 'dashboard', icon: LayoutDashboard }
-            ]
-        },
-        {
-            title: isStaff ? 'Menu Utama' : 'Modul Staf Pelayanan',
-            items: [
-                { label: 'Presensi', routeName: 'staff.attendance', permKey: isStaff ? null : 'staff.attendance', icon: Clock },
-                { label: isStaff ? 'Dashboard & Kinerja' : 'Dashboard Staf', routeName: 'staff.dashboard', permKey: 'staff.dashboard', icon: isStaff ? LayoutDashboard : UserCheck }
-            ]
-        },
-        {
-            title: 'Modul Kasi',
-            items: [
-                { label: 'Dashboard Kasi', routeName: 'kasi.dashboard', permKey: 'kasi.dashboard', icon: LayoutDashboard },
-                { label: 'Aduan & Verifikasi', routeName: 'kasi.feed', permKey: 'kasi.dashboard', icon: FileText },
-                { label: 'Digital Logbook Staf', routeName: 'kasi.logbook', permKey: 'kasi.logbook', icon: History }
-            ]
-        },
-        {
-            title: 'Modul Kabid',
-            items: [
-                { label: 'Command Center', routeName: 'executive.dashboard', permKey: 'executive.dashboard', icon: Activity },
-                { label: 'Responsivitas Kasi', routeName: 'executive.kasi-responsiveness', permKey: 'executive.kasi-responsiveness', icon: BarChart3 },
-                { label: 'Leaderboard Staf', routeName: 'executive.leaderboard', permKey: 'executive.leaderboard', icon: Award },
-                { label: 'Laporan & Ekspor', routeName: 'reports.index', permKey: 'reports.index', icon: FileBarChart2 }
-            ]
-        },
-        {
-            title: 'Master Data',
-            items: [
-                { label: 'Persetujuan Pendaftar', routeName: 'users.approvals', permKey: 'users.approvals', icon: UserCheck },
-                { label: 'Daftar Pengguna', routeName: 'users.index', permKey: 'users.index', icon: Users },
-                { label: 'Daftar Ruangan', routeName: 'rooms.index', permKey: 'rooms.index', icon: MapPin }
-            ]
-        },
-        {
-            title: 'System / Integrasi',
-            items: [
-                { label: 'Integrasi AI', routeName: 'admin.ai-settings.index', permKey: 'admin.ai-settings.index', icon: Sparkles },
-                { label: 'WhatsApp Gateway', routeName: 'admin.wa-gateway.index', permKey: 'admin.wa-gateway.index', icon: MessageSquareCode },
-                { label: 'Generator QR Code', routeName: 'admin.qr-generator.index', permKey: 'admin.qr-generator.index', icon: QrCode }
-            ]
-        },
-        ...(!isStaff ? [
+    // 1. Modul Staf Pelayanan (Khusus Staff)
+    if (isStaff.value) {
+        return [
             {
-                title: 'Area Publik Pasien',
+                title: 'MODUL STAF PELAYANAN',
                 items: [
-                    { label: 'Form Laporan', routeName: 'report.create', icon: QrCode }
+                    { label: 'Presensi', routeName: 'staff.attendance', icon: Clock },
+                    { label: 'Dashboard Staf', routeName: 'staff.dashboard', icon: UserCheck }
                 ]
             }
-        ] : [])
-    ];
+        ];
+    }
 
-    return rawGroups.map(group => ({
-        ...group,
-        items: group.items.filter(item => !item.permKey || hasAccess(item.permKey))
-    })).filter(group => group.items.length > 0);
+    // 2. Modul Kepala Seksi (Khusus Kasi)
+    if (isKasi.value) {
+        return [
+            {
+                title: 'MODUL KASI',
+                items: [
+                    { label: 'Dashboard Kasi', routeName: 'kasi.dashboard', icon: LayoutDashboard },
+                    { label: 'Aduan & Verifikasi', routeName: 'kasi.feed', icon: FileText },
+                    { label: 'Digital Logbook Staf', routeName: 'kasi.logbook', icon: History },
+                    { label: 'Laporan & Ekspor', routeName: 'reports.index', icon: FileBarChart2 }
+                ]
+            }
+        ];
+    }
+
+    // 3. Modul Kepala Bidang (Khusus Kabid & Direktur)
+    if (isDirekturOrKabid.value) {
+        return [
+            {
+                title: 'MODUL KABID',
+                items: [
+                    { label: 'Dashboard Kabid', routeName: 'executive.dashboard', icon: LayoutDashboard },
+                    { label: 'Responsivitas Kasi', routeName: 'executive.kasi-responsiveness', icon: BarChart3 },
+                    { label: 'Leaderboard Staf', routeName: 'executive.leaderboard', icon: Award },
+                    { label: 'Laporan & Ekspor', routeName: 'reports.index', icon: FileBarChart2 }
+                ]
+            }
+        ];
+    }
+
+    // 4. Administrator RS (Semua Modul Terbuka Penuh)
+    return [
+        {
+            title: 'MENU UTAMA',
+            items: [
+                { label: 'Dashboard Utama', routeName: 'dashboard', icon: LayoutDashboard }
+            ]
+        },
+        {
+            title: 'MODUL STAF PELAYANAN',
+            items: [
+                { label: 'Presensi', routeName: 'staff.attendance', icon: Clock },
+                { label: 'Dashboard Staf', routeName: 'staff.dashboard', icon: UserCheck }
+            ]
+        },
+        {
+            title: 'MODUL KASI',
+            items: [
+                { label: 'Dashboard Kasi', routeName: 'kasi.dashboard', icon: LayoutDashboard },
+                { label: 'Aduan & Verifikasi', routeName: 'kasi.feed', icon: FileText },
+                { label: 'Digital Logbook Staf', routeName: 'kasi.logbook', icon: History },
+                { label: 'Laporan & Ekspor', routeName: 'reports.index', icon: FileBarChart2 }
+            ]
+        },
+        {
+            title: 'MODUL KABID',
+            items: [
+                { label: 'Dashboard Kabid', routeName: 'executive.dashboard', icon: LayoutDashboard },
+                { label: 'Responsivitas Kasi', routeName: 'executive.kasi-responsiveness', icon: BarChart3 },
+                { label: 'Leaderboard Staf', routeName: 'executive.leaderboard', icon: Award },
+                { label: 'Laporan & Ekspor', routeName: 'reports.index', icon: FileBarChart2 }
+            ]
+        },
+        {
+            title: 'MASTER DATA',
+            items: [
+                { label: 'Persetujuan Pendaftar', routeName: 'users.approvals', icon: UserCheck },
+                { label: 'Daftar Pengguna', routeName: 'users.index', icon: Users },
+                { label: 'Daftar Ruangan', routeName: 'rooms.index', icon: MapPin }
+            ]
+        },
+        {
+            title: 'SYSTEM/INTEGRASI',
+            items: [
+                { label: 'Integrasi AI', routeName: 'admin.ai-settings.index', icon: Sparkles },
+                { label: 'WhatsApp Gateway', routeName: 'admin.wa-gateway.index', icon: MessageSquareCode },
+                { label: 'Generator QR Code', routeName: 'admin.qr-generator.index', icon: QrCode }
+            ]
+        },
+        {
+            title: 'AREA PUBLIK PASIEN',
+            items: [
+                { label: 'Form Laporan', routeName: 'report.create', icon: QrCode }
+            ]
+        }
+    ];
 });
 
 const triggerSupportBack = () => {
@@ -319,7 +361,7 @@ const triggerSupportBack = () => {
 const page = usePage();
 const backRoute = computed(() => {
     if (route().current('kasi.verify')) {
-        return route('kasi.dashboard');
+        return route('kasi.feed');
     }
     if (route().current('users.edit') || route().current('users.show')) {
         return route('users.index');
@@ -612,7 +654,7 @@ const searchableItems = [
     { label: 'Dashboard Kasi', routeName: 'kasi.dashboard', description: 'Monitoring kinerja mutu, kepuasan, dan analitik ruangan' },
     { label: 'Aduan & Verifikasi Ruangan', routeName: 'kasi.feed', description: 'Monitoring feed aduan masuk dan verifikasi shift staf' },
     { label: 'Digital Logbook Staf', routeName: 'kasi.logbook', description: 'Rekap kinerja dan poin KPI staf ruangan' },
-    { label: 'Command Center RS', routeName: 'executive.dashboard', description: 'Dashboard eksekutif, analisis sentimen AI, & pantauan zona merah' },
+    { label: 'Dashboard Kabid', routeName: 'executive.dashboard', description: 'Dashboard eksekutif, analisis sentimen AI, & pantauan zona merah' },
     { label: 'Responsivitas Kasi', routeName: 'executive.kasi-responsiveness', description: 'Laporan kecepatan respon & akuntabilitas supervisor ruangan' },
     { label: 'Leaderboard Kinerja Staf', routeName: 'executive.leaderboard', description: 'Peringkat apresiasi pujian & evaluasi staf RS' },
     { label: 'Notifikasi Saya', routeName: 'notifications.index', description: 'Semua riwayat notifikasi sistem dan tugas' },
@@ -628,7 +670,7 @@ const mobilePageTitles = [
     { routeName: 'kasi.feed', label: 'Aduan & Verifikasi' },
     { routeName: 'kasi.verify', label: 'Verifikasi Aduan Ruangan' },
     { routeName: 'kasi.logbook', label: 'Digital Logbook Staf' },
-    { routeName: 'executive.dashboard', label: 'Command Center RS' },
+    { routeName: 'executive.dashboard', label: 'Dashboard Kabid' },
     { routeName: 'executive.kasi-responsiveness', label: 'Responsivitas Kasi' },
     { routeName: 'executive.leaderboard', label: 'Leaderboard Staf' },
     { routeName: 'services.index', label: 'Layanan Penunjang' },
@@ -710,7 +752,7 @@ const getGroupInitials = (title) => {
                             v-if="showBackButton"
                             :href="backRoute"
                             prefetch
-                            @click="route().current('profile.edit') || route().current('services.units.show') || route().current('reports.show') || route().current('reports-management.show') || route().current('design-system.*') ? null : triggerSupportBack"
+                            @click="route().current('kasi.verify') || route().current('profile.edit') || route().current('services.units.show') || route().current('reports.show') || route().current('reports-management.show') || route().current('design-system.*') ? null : triggerSupportBack"
                             class="hidden lg:inline-flex items-center justify-center h-11 w-11 rounded-xl bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-100/80 dark:hover:bg-slate-800/80 transition duration-150 focus:outline-none shadow-sm border border-white dark:border-slate-800 mr-3 flex-shrink-0"
                             title="Kembali"
                         >
@@ -724,7 +766,7 @@ const getGroupInitials = (title) => {
                                 v-if="showBackButton"
                                 :href="backRoute"
                                 prefetch
-                                @click="route().current('profile.edit') || route().current('services.units.show') || route().current('reports.show') || route().current('reports-management.show') || route().current('design-system.*') ? null : triggerSupportBack"
+                                @click="route().current('kasi.verify') || route().current('profile.edit') || route().current('services.units.show') || route().current('reports.show') || route().current('reports-management.show') || route().current('design-system.*') ? null : triggerSupportBack"
                                 class="inline-flex items-center justify-center h-12 w-12 rounded-full bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 shadow-md border border-white dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 transition duration-150 focus:outline-none"
                                 aria-label="Kembali"
                             >
@@ -1275,7 +1317,7 @@ const getGroupInitials = (title) => {
                         </button>
                     </div>
                     
-                    <Link v-else :href="route('dashboard')" prefetch class="flex items-center justify-center w-full px-6">
+                    <Link v-else :href="dashboardRoute" prefetch class="flex items-center justify-center w-full px-6">
                         <img src="/images/logo-sidebar.png" alt="SIPUAS" class="h-9 max-w-full w-auto object-contain dark:brightness-0 dark:invert transition-all duration-200 mx-auto" />
                     </Link>
                     

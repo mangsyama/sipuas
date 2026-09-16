@@ -30,7 +30,8 @@ import {
     Minus,
     Plus,
     Wrench,
-    RefreshCw
+    RefreshCw,
+    Info
 } from '@lucide/vue';
 
 const props = defineProps({
@@ -46,6 +47,10 @@ const props = defineProps({
         type: Array,
         default: () => []
     },
+    staffMembers: {
+        type: Array,
+        default: () => []
+    },
     pesupeluhCategories: {
         type: Array,
         default: () => []
@@ -58,11 +63,12 @@ const props = defineProps({
 
 const isSubmitting = ref(false);
 const showSuccessModal = ref(false);
+const showConfirmModal = ref(false);
+const showValidationModal = ref(false);
 const selectedImagePreview = ref(null);
 
 const report = computed(() => props.reportDetail);
 const isVerified = computed(() => report.value?.status === 'VERIFIED');
-const staffList = ref(props.staffList ? props.staffList.map(s => ({ ...s, selected: s.selected || false })) : []);
 
 const isFacilityComplaint = computed(() => {
     const unit = (report.value?.unit || '').toLowerCase();
@@ -102,6 +108,25 @@ const pointValue = ref(
 );
 const supervisorNotes = ref(report.value?.supervisor_notes || '');
 
+const getEffectiveStaffList = () => {
+    const list = (props.staffList && props.staffList.length > 0) 
+        ? props.staffList 
+        : (props.staffMembers || []);
+    // Jika laporan belum diverifikasi dan jenis tindakan NETRAL, jangan checklist staf bertugas
+    const isNeutral = !isVerified.value && actionType.value === 'NETRAL';
+    return list.map(s => ({ 
+        ...s, 
+        selected_default: s.selected || false,
+        selected: isNeutral ? false : (s.selected || false) 
+    }));
+};
+
+const staffList = ref(getEffectiveStaffList());
+
+watch(() => [props.staffList, props.staffMembers], () => {
+    staffList.value = getEffectiveStaffList();
+}, { deep: true });
+
 // PESU PELUH Disposisi Integration
 const alreadyDispatchedToPesupeluh = computed(() => !!report.value?.pesupeluh_ticket_number);
 const pesupeluhTicketNumber = ref(report.value?.pesupeluh_ticket_number || null);
@@ -118,12 +143,35 @@ const isDispatchedToPesupeluh = computed(() => {
     return !!pesupeluhTicketNumber.value || !!props.reportDetail?.pesupeluh_ticket_number || (forwardToPesupeluh.value && actionType.value === 'NETRAL') || alreadyDispatchedToPesupeluh.value;
 });
 
-// Ketika jenis tindakan diubah: jika bukan NETRAL maka otomatis matikan disposisi PESU PELUH
+// Ketika jenis tindakan diubah: jika NETRAL auto jangan checklist staf bertugas
 watch(actionType, (newAction) => {
-    if (newAction !== 'NETRAL') {
+    if (newAction === 'NETRAL') {
+        // Otomatis bersihkan checklist staf bertugas
+        if (!isVerified.value) {
+            staffList.value.forEach(s => {
+                s.selected = false;
+            });
+        }
+        pointValue.value = 0;
+        if (!alreadyDispatchedToPesupeluh.value) {
+            forwardToPesupeluh.value = true;
+        }
+    } else {
         forwardToPesupeluh.value = false;
-    } else if (!alreadyDispatchedToPesupeluh.value) {
-        forwardToPesupeluh.value = true;
+        if (pointValue.value === 0) {
+            pointValue.value = 5;
+        }
+        // Jika beralih kembali ke Tambah/Potong poin dan belum ada staf terpilih, pulihkan centang staf yang bertugas saat kejadian
+        if (!isVerified.value) {
+            const hasSelected = staffList.value.some(s => s.selected);
+            if (!hasSelected) {
+                staffList.value.forEach(s => {
+                    if (s.active_at_time || s.selected_default) {
+                        s.selected = true;
+                    }
+                });
+            }
+        }
     }
 });
 
@@ -273,17 +321,27 @@ const decrementPoint = () => {
     }
 };
 
+const selectedStaffList = computed(() => staffList.value.filter(s => s.selected));
+
 const submitVerification = () => {
     if (isVerified.value || isSubmitting.value) return;
     
-    const selectedIds = staffList.value.filter(s => s.selected).map(s => s.id);
-    
-    if (actionType.value !== 'NETRAL' && selectedIds.length === 0 && staffList.value.length > 0) {
-        alert('Mohon pilih setidaknya 1 staf yang bertugas saat kejadian untuk mengaitkan poin KPI.');
+    if (actionType.value !== 'NETRAL' && selectedStaffList.value.length === 0 && staffList.value.length > 0) {
+        showValidationModal.value = true;
         return;
     }
 
+    showConfirmModal.value = true;
+};
+
+const confirmAndExecute = () => {
+    showConfirmModal.value = false;
+    executeSubmit();
+};
+
+const executeSubmit = () => {
     isSubmitting.value = true;
+    const selectedIds = selectedStaffList.value.map(s => s.id);
 
     router.post(route('kasi.verify.process', { id: report.value.id }), {
         selected_staff_ids: selectedIds,
@@ -317,7 +375,7 @@ const submitVerification = () => {
 };
 
 const finishVerification = () => {
-    router.get(route('kasi.dashboard'));
+    router.get(route('kasi.feed'));
 };
 </script>
 
@@ -340,7 +398,7 @@ const finishVerification = () => {
                 </div>
                 <div>
                     <Link
-                        :href="route('kasi.dashboard')"
+                        :href="route('kasi.feed')"
                         class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition shadow-sm"
                     >
                         <ArrowLeft class="h-4 w-4" />
@@ -639,6 +697,10 @@ const finishVerification = () => {
                                 <p v-if="isVerified" class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed font-normal">
                                     Daftar staf unit yang telah ditautkan dan dievaluasi pada verifikasi laporan ini:
                                 </p>
+                                <div v-else-if="actionType === 'NETRAL'" class="p-2.5 rounded-xl bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/50 flex items-center gap-2.5 text-xs text-blue-700 dark:text-blue-300">
+                                    <Info class="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
+                                    <span class="font-medium">Tindakan KPI Netral (0 Poin): Pencocokan staf bertugas dinonaktifkan (disabled) karena tidak ada evaluasi poin reward/punishment staf.</span>
+                                </div>
                                 <p v-else class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed font-normal">
                                     Centang staf yang bertugas saat aduan terjadi untuk verifikasi & evaluasi poin KPI (otomatis ditandai dari data Presensi Masuk):
                                 </p>
@@ -648,19 +710,21 @@ const finishVerification = () => {
                                     <label
                                         v-for="staff in staffList"
                                         :key="staff.id"
+                                        @click="(isVerified || actionType === 'NETRAL') ? $event.preventDefault() : null"
                                         :class="[
                                             'flex items-center justify-between p-3 rounded-xl border select-none transition',
-                                            isVerified ? 'cursor-default' : 'cursor-pointer',
-                                            staff.selected 
-                                                ? 'bg-emerald-50/80 border-emerald-500 dark:bg-emerald-950/40 dark:border-emerald-700' 
-                                                : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 hover:border-slate-300'
+                                            (isVerified || actionType === 'NETRAL') 
+                                                ? 'cursor-not-allowed opacity-60 bg-slate-100/70 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800' 
+                                                : (staff.selected 
+                                                    ? 'cursor-pointer bg-emerald-50/80 border-emerald-500 dark:bg-emerald-950/40 dark:border-emerald-700' 
+                                                    : 'cursor-pointer bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 hover:border-slate-300')
                                         ]"
                                     >
                                         <div class="flex items-center gap-3">
                                             <input
                                                 type="checkbox"
                                                 v-model="staff.selected"
-                                                :disabled="isVerified"
+                                                :disabled="isVerified || actionType === 'NETRAL'"
                                                 class="rounded text-emerald-600 focus:ring-emerald-500 h-4 w-4 accent-emerald-600 disabled:cursor-not-allowed"
                                             />
                                             <div>
@@ -1054,6 +1118,142 @@ const finishVerification = () => {
             </div>
         </div>
 
+        <!-- Standard SIPUAS Swal-Style Confirmation Modal -->
+        <Teleport to="body">
+            <Transition
+                enter-active-class="transition ease-out duration-200"
+                enter-from-class="opacity-0"
+                enter-to-class="opacity-100"
+                leave-active-class="transition ease-in duration-150"
+                leave-from-class="opacity-100"
+                leave-to-class="opacity-0"
+            >
+                <div v-if="showConfirmModal" class="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+                    <!-- Backdrop overlay -->
+                    <div @click="showConfirmModal = false" class="fixed inset-0 bg-black/40 backdrop-blur-xs transition-opacity"></div>
+
+                    <!-- Modal Card -->
+                    <div class="relative bg-white/95 dark:bg-slate-900/95 border border-slate-100 dark:border-slate-800 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden p-6 sm:p-7 flex flex-col items-center text-center transform transition-all duration-200 scale-100 backdrop-blur-md">
+                        <!-- Status Icon -->
+                        <div class="h-16 w-16 sm:h-20 sm:w-20 rounded-full flex items-center justify-center mb-4 sm:mb-5 flex-shrink-0 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400">
+                            <ShieldCheck class="h-8 w-8 sm:h-10 sm:w-10" />
+                        </div>
+
+                        <!-- Info Content -->
+                        <h3 class="text-base sm:text-lg font-extrabold text-slate-900 dark:text-white leading-tight px-2">
+                            Konfirmasi Verifikasi Laporan
+                        </h3>
+
+                        <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-2 leading-relaxed px-1">
+                            Periksa kembali rincian verifikasi sebelum disimpan ke logbook dan saldo poin staf unit.
+                        </p>
+
+                        <!-- Summary Card -->
+                        <div class="mt-4 p-4 bg-slate-50/80 dark:bg-slate-950/50 border border-slate-200/80 dark:border-slate-800 rounded-2xl text-left w-full space-y-2.5 text-xs">
+                            <div class="flex justify-between items-center pb-2 border-b border-slate-200/60 dark:border-slate-800">
+                                <span class="text-slate-400 font-medium">Nomor Tiket:</span>
+                                <span class="font-bold text-slate-900 dark:text-white font-['Poppins',sans-serif]">{{ report?.id || '-' }}</span>
+                            </div>
+                            <div class="flex justify-between items-center pb-2 border-b border-slate-200/60 dark:border-slate-800">
+                                <span class="text-slate-400 font-medium">Ruangan / Unit:</span>
+                                <span class="font-semibold text-slate-800 dark:text-slate-200">{{ report?.unit || '-' }}</span>
+                            </div>
+                            <div class="flex justify-between items-center pb-2 border-b border-slate-200/60 dark:border-slate-800">
+                                <span class="text-slate-400 font-medium">Aksi Distribusi KPI:</span>
+                                <div>
+                                    <span v-if="actionType === 'PENAMBAHAN'" class="inline-flex items-center px-2.5 py-0.5 rounded-lg text-xs font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                                        +{{ pointValue }} Poin (Apresiasi / Pujian)
+                                    </span>
+                                    <span v-else-if="actionType === 'PEMOTONGAN'" class="inline-flex items-center px-2.5 py-0.5 rounded-lg text-xs font-bold bg-rose-100 text-rose-800 dark:bg-rose-950/80 dark:text-rose-300 border border-rose-200 dark:border-rose-800">
+                                        -{{ pointValue }} Poin (Evaluasi / Aduan)
+                                    </span>
+                                    <span v-else class="inline-flex items-center px-2.5 py-0.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700">
+                                        0 Poin (Netral / Sarpras)
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="pb-2" :class="actionType === 'NETRAL' && forwardToPesupeluh ? 'border-b border-slate-200/60 dark:border-slate-800' : ''">
+                                <span class="text-slate-400 font-medium block mb-1">Staf Bertugas Terkait:</span>
+                                <div v-if="selectedStaffList.length > 0" class="font-semibold text-slate-800 dark:text-slate-200 text-xs">
+                                    {{ selectedStaffList.map(s => s.name).join(', ') }}
+                                </div>
+                                <div v-else class="text-slate-400 italic text-xs">
+                                    Tidak ada staf dikaitkan
+                                </div>
+                            </div>
+                            <div v-if="actionType === 'NETRAL' && forwardToPesupeluh" class="p-2.5 rounded-xl bg-sky-50 dark:bg-sky-950/40 border border-sky-200/80 dark:border-sky-800/80 text-sky-800 dark:text-sky-300 text-xs font-medium flex items-center gap-2">
+                                <Wrench class="h-4 w-4 shrink-0 text-sky-600 dark:text-sky-400" />
+                                <span>Laporan ini akan otomatis <strong>diteruskan ke PESU PELUH</strong> untuk teknisi sarana.</span>
+                            </div>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="flex items-center gap-3 w-full mt-6">
+                            <button
+                                type="button"
+                                @click="showConfirmModal = false"
+                                class="flex-1 h-11 text-xs sm:text-sm font-bold rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-300 transition duration-150 focus:outline-none cursor-pointer"
+                            >
+                                Batal / Periksa Lagi
+                            </button>
+                            <button
+                                type="button"
+                                @click="confirmAndExecute"
+                                class="flex-1 h-11 text-xs sm:text-sm font-bold rounded-xl text-white shadow-sm transition duration-150 focus:outline-none bg-emerald-600 hover:bg-emerald-500 active:scale-[0.99] cursor-pointer"
+                            >
+                                Ya, Simpan Verifikasi
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </Transition>
+        </Teleport>
+
+        <!-- Standard SIPUAS Swal-Style Validation Warning Modal -->
+        <Teleport to="body">
+            <Transition
+                enter-active-class="transition ease-out duration-200"
+                enter-from-class="opacity-0"
+                enter-to-class="opacity-100"
+                leave-active-class="transition ease-in duration-150"
+                leave-from-class="opacity-100"
+                leave-to-class="opacity-0"
+            >
+                <div v-if="showValidationModal" class="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+                    <!-- Backdrop overlay -->
+                    <div @click="showValidationModal = false" class="fixed inset-0 bg-black/40 backdrop-blur-xs transition-opacity"></div>
+
+                    <!-- Modal Card -->
+                    <div class="relative bg-white/95 dark:bg-slate-900/95 border border-slate-100 dark:border-slate-800 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden p-6 sm:p-7 flex flex-col items-center text-center transform transition-all duration-200 scale-100 backdrop-blur-md">
+                        <!-- Status Icon -->
+                        <div class="h-16 w-16 sm:h-20 sm:w-20 rounded-full flex items-center justify-center mb-4 sm:mb-5 flex-shrink-0 bg-amber-50 dark:bg-amber-950/40 text-amber-500">
+                            <AlertCircle class="h-8 w-8 sm:h-10 sm:w-10" />
+                        </div>
+
+                        <!-- Info Content -->
+                        <h3 class="text-base sm:text-lg font-extrabold text-slate-900 dark:text-white leading-tight px-2">
+                            Pilih Staf Bertugas
+                        </h3>
+
+                        <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-2.5 leading-relaxed px-1">
+                            Mohon centang setidaknya 1 staf yang bertugas saat kejadian untuk mengaitkan poin KPI evaluasi/apresiasi.
+                        </p>
+
+                        <!-- Action Button -->
+                        <div class="w-full mt-6">
+                            <button
+                                type="button"
+                                @click="showValidationModal = false"
+                                class="w-full h-11 text-sm font-bold rounded-xl text-white bg-emerald-600 hover:bg-emerald-500 transition duration-150 focus:outline-none cursor-pointer active:scale-[0.99]"
+                            >
+                                OK, Mengerti
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </Transition>
+        </Teleport>
+
         <!-- Success Verification Modal (Styled as Standard Swal Alert) -->
         <Teleport to="body">
             <Transition
@@ -1104,7 +1304,7 @@ const finishVerification = () => {
                             </div>
                             <div class="p-2.5 bg-white dark:bg-slate-900 rounded-lg border border-emerald-200/80 dark:border-emerald-900/60 flex items-center justify-between gap-2">
                                 <span class="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Nomor Tiket PESU PELUH:</span>
-                                <span class="text-xs font-extrabold text-emerald-600 dark:text-emerald-400 tracking-wide font-mono">
+                                <span class="text-xs font-extrabold text-emerald-600 dark:text-emerald-400 tracking-wide font-['Poppins',sans-serif]">
                                     {{ pesupeluhTicketNumber || props.reportDetail?.pesupeluh_ticket_number || 'Sedang Diproses' }}
                                 </span>
                             </div>

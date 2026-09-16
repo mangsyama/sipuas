@@ -74,4 +74,41 @@ class ReportExportTest extends TestCase
         $this->assertStringContainsString('filename=', $response->headers->get('content-disposition'));
         $this->assertStringContainsString('.csv', $response->headers->get('content-disposition'));
     }
+
+    public function test_kasi_with_assigned_room_is_restricted_to_their_room(): void
+    {
+        $room = Room::first();
+        $kasi = User::factory()->create([
+            'role_id' => Role::KEPALA_SEKSI,
+            'room_id' => $room->id,
+            'is_active' => true,
+        ]);
+
+        $response = $this->actingAs($kasi)->get(route('reports.index'));
+        $response->assertOk();
+        $response->assertInertia(fn ($page) => 
+            $page->component('ReportExport/Index')
+                ->where('isRoomLocked', true)
+                ->where('filters.room_id', (string) $room->id)
+                ->has('rooms', 1)
+        );
+    }
+
+    public function test_kasi_without_assigned_room_can_access_all_reports_like_kabid(): void
+    {
+        $kasi = User::factory()->create([
+            'role_id' => Role::KEPALA_SEKSI,
+            'room_id' => null,
+            'is_active' => true,
+        ]);
+
+        $response = $this->actingAs($kasi)->get(route('reports.index'));
+        $response->assertOk();
+        $response->assertInertia(fn ($page) => 
+            $page->component('ReportExport/Index')
+                ->where('isRoomLocked', false)
+                ->where('filters.room_id', '')
+                ->has('rooms', Room::where('is_active', true)->count())
+        );
+    }
 }

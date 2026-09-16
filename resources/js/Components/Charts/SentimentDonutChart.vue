@@ -18,7 +18,7 @@ Chart.register(
 const props = defineProps({
     labels: {
         type: Array,
-        default: () => ['Apresiasi (Positif)', 'Keluhan (Negatif)', 'Saran (Netral)']
+        default: () => ['Positif', 'Negatif', 'Netral']
     },
     data: {
         type: Array,
@@ -30,7 +30,7 @@ const props = defineProps({
     },
     height: {
         type: Number,
-        default: 220
+        default: 170
     },
     centerText: {
         type: String,
@@ -93,6 +93,9 @@ const getChartOptions = () => {
                     label: function (context) {
                         const val = context.raw || 0;
                         const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                        if (total === 0 || context.label === 'Belum ada laporan') {
+                            return ' Belum ada data laporan';
+                        }
                         const pct = total > 0 ? Math.round((val / total) * 100) : 0;
                         return ` ${context.label}: ${val} Laporan (${pct}%)`;
                     }

@@ -13,6 +13,7 @@ import {
     QrCode, 
     History, 
     Activity, 
+    LayoutDashboard,
     Award, 
     ArrowUpRight, 
     Layers,
@@ -95,6 +96,24 @@ const recentReports = computed(() => {
 const activeRedZoneBreakdown = computed(() => {
     return (props.redZoneBreakdown || []).filter(u => u.count > 0);
 });
+
+const sentimentData = computed(() => {
+    if (props.sentimentChart?.data && Array.isArray(props.sentimentChart.data)) {
+        return props.sentimentChart.data;
+    }
+    return [0, 0, 0];
+});
+
+const sentimentPercentages = computed(() => {
+    const data = sentimentData.value;
+    const total = data.reduce((a, b) => a + b, 0);
+    if (total === 0) return [0, 0, 0];
+    return [
+        Math.round(((data[0] || 0) / total) * 100),
+        Math.round(((data[1] || 0) / total) * 100),
+        Math.round(((data[2] || 0) / total) * 100)
+    ];
+});
 </script>
 
 <template>
@@ -102,7 +121,7 @@ const activeRedZoneBreakdown = computed(() => {
 
     <AuthenticatedLayout>
         <div class="py-4 px-4 sm:px-4 lg:px-4 animate-spa-fade-in space-y-4">
-            <!-- Welcome Card (Header - Asli Utuh Tanpa Diubah) -->
+            <!-- Welcome Card (Header) -->
             <div class="p-[1px] rounded-2xl bg-gradient-to-r from-emerald-600 to-emerald-800 dark:bg-none dark:bg-slate-800 shadow-sm">
                 <div class="overflow-hidden bg-gradient-to-r from-emerald-600 to-emerald-800 dark:from-slate-900 dark:to-slate-900 rounded-[15px] text-white p-6 sm:p-8 relative flex items-center justify-between gap-4 sm:gap-6">
                     <!-- Text Info -->
@@ -166,7 +185,7 @@ const activeRedZoneBreakdown = computed(() => {
                         <TrendAreaChart
                             :labels="trendChart.labels"
                             :datasets="trendChart.datasets"
-                            :height="260"
+                            :height="240"
                         />
                     </div>
                 </div>
@@ -183,18 +202,18 @@ const activeRedZoneBreakdown = computed(() => {
                                     Rasio Sentimen Pasien
                                 </h3>
                                 <p class="text-[11px] text-slate-400 font-medium">
-                                    Distribusi persepsi kepuasan, keluhan & saran
+                                    Tingkat kepuasan & apresiasi di seluruh RS
                                 </p>
                             </div>
                         </div>
 
                         <SentimentDonutChart
-                            :labels="sentimentChart.labels"
-                            :data="sentimentChart.data"
-                            :percentages="sentimentChart.percentages"
-                            :center-text="sentimentChart.satisfaction_index"
+                            :labels="['Positif', 'Negatif', 'Netral']"
+                            :data="sentimentData"
+                            :percentages="sentimentPercentages"
+                            :center-text="sentimentChart.satisfaction_index || '100%'"
                             center-subtext="Kepuasan"
-                            :height="180"
+                            :height="170"
                         />
                     </div>
                 </div>
@@ -442,9 +461,9 @@ const activeRedZoneBreakdown = computed(() => {
                                 class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60 hover:border-emerald-500/50 hover:bg-emerald-50/50 dark:hover:bg-slate-700/60 transition text-center space-y-1.5 group cursor-pointer"
                             >
                                 <div class="h-8 w-8 rounded-lg bg-emerald-50 dark:bg-white/10 text-emerald-600 dark:text-white flex items-center justify-center mx-auto group-hover:scale-110 transition duration-200">
-                                    <Activity class="h-4 w-4" />
+                                    <LayoutDashboard class="h-4 w-4" />
                                 </div>
-                                <div class="text-[11px] font-bold text-slate-800 dark:text-slate-200 leading-tight">Command Center</div>
+                                <div class="text-[11px] font-bold text-slate-800 dark:text-slate-200 leading-tight">Dashboard Kabid</div>
                                 <div class="text-[9px] text-slate-400">Kabid RS</div>
                             </Link>
 

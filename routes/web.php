@@ -29,22 +29,41 @@ Route::middleware('auth')->group(function () {
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
     // Modul Staf Pelayanan — Live Attendance & Personal KPI
-    Route::get('/staff/attendance', [\App\Http\Controllers\AttendanceController::class, 'index'])->name('staff.attendance');
-    Route::get('/staff/dashboard', [\App\Http\Controllers\StaffDashboardController::class, 'index'])->name('staff.dashboard');
+    Route::middleware('role:staff')->group(function () {
+        Route::get('/staff/attendance', [\App\Http\Controllers\AttendanceController::class, 'index'])->name('staff.attendance');
+        Route::get('/staff/dashboard', [\App\Http\Controllers\StaffDashboardController::class, 'index'])->name('staff.dashboard');
+        Route::get('/attendance/status', [\App\Http\Controllers\AttendanceController::class, 'currentStatus'])->name('attendance.status');
+        Route::post('/attendance/check-in', [\App\Http\Controllers\AttendanceController::class, 'checkIn'])->name('attendance.check-in');
+        Route::post('/attendance/check-out', [\App\Http\Controllers\AttendanceController::class, 'checkOut'])->name('attendance.check-out');
+    });
 
     // Modul Kepala Seksi (Kasi) — PRD System
-    Route::get('/kasi/dashboard', [KasiController::class, 'dashboard'])->name('kasi.dashboard');
-    Route::get('/kasi/feed', [KasiController::class, 'feed'])->name('kasi.feed');
-    Route::get('/kasi/verify/{id?}', [KasiController::class, 'verify'])->name('kasi.verify');
-    Route::post('/kasi/verify/{id}/process', [KasiController::class, 'processVerification'])->name('kasi.verify.process');
-    Route::get('/kasi/logbook', [KasiController::class, 'logbook'])->name('kasi.logbook');
+    Route::middleware('role:kasi')->group(function () {
+        Route::get('/kasi/dashboard', [KasiController::class, 'dashboard'])->name('kasi.dashboard');
+        Route::get('/kasi/feed', [KasiController::class, 'feed'])->name('kasi.feed');
+        Route::get('/kasi/verify/{id?}', [KasiController::class, 'verify'])->name('kasi.verify');
+        Route::post('/kasi/verify/{id}/process', [KasiController::class, 'processVerification'])->name('kasi.verify.process');
+        Route::get('/kasi/logbook', [KasiController::class, 'logbook'])->name('kasi.logbook');
+    });
 
     // Modul Kabid Pelayanan — PRD System
-    Route::get('/executive/dashboard', [KabidController::class, 'dashboard'])->name('executive.dashboard');
-    Route::get('/executive/kasi-responsiveness', [KabidController::class, 'kasiResponsiveness'])->name('executive.kasi-responsiveness');
-    Route::get('/executive/leaderboard', [KabidController::class, 'leaderboard'])->name('executive.leaderboard');
+    Route::middleware('role:kabid,direktur')->group(function () {
+        Route::get('/executive/dashboard', [KabidController::class, 'dashboard'])->name('executive.dashboard');
+        Route::get('/executive/kasi-responsiveness', [KabidController::class, 'kasiResponsiveness'])->name('executive.kasi-responsiveness');
+        Route::get('/executive/leaderboard', [KabidController::class, 'leaderboard'])->name('executive.leaderboard');
+    });
 
-    // Pengaturan Sistem & Preferensi Notifikasi
+    // Rekapitulasi & Ekspor Laporan (Kasi, Kabid, Direktur, Administrator)
+    Route::middleware('role:kasi,kabid,direktur')->group(function () {
+        Route::get('/reports', [\App\Http\Controllers\ReportExportController::class, 'index'])->name('reports.index');
+        Route::get('/reports/export/pdf', [\App\Http\Controllers\ReportExportController::class, 'exportPdf'])->name('reports.export.pdf');
+        Route::get('/reports/export/excel', [\App\Http\Controllers\ReportExportController::class, 'exportExcel'])->name('reports.export.excel');
+        Route::get('/reports/export/csv', [\App\Http\Controllers\ReportExportController::class, 'exportCsv'])->name('reports.export.csv');
+        Route::get('/reports/history', fn () => redirect()->route('reports.index'))->name('reports.history');
+        Route::get('/reports/{id}', fn () => redirect()->route('reports.index'))->name('reports.show');
+    });
+
+    // Pengaturan Sistem & Preferensi Notifikasi (Semua Pengguna Terautentikasi)
     Route::get('/settings', [\App\Http\Controllers\SettingsController::class, 'index'])->name('settings.index');
     Route::patch('/settings/notifications', [\App\Http\Controllers\SettingsController::class, 'updateNotifications'])->name('settings.notifications.update');
     Route::patch('/profile/notifications', [\App\Http\Controllers\SettingsController::class, 'updateNotifications'])->name('profile.update-notifications');
@@ -59,17 +78,6 @@ Route::middleware('auth')->group(function () {
         return response()->json(['success' => true]);
     })->name('notifications.markAllAsRead');
 
-    // WhatsApp Gateway Management
-    Route::get('/wa-gateway', [WaGatewayController::class, 'index'])->name('admin.wa-gateway.index');
-    Route::get('/wa-gateway/status', [WaGatewayController::class, 'status'])->name('admin.wa-gateway.status');
-    Route::post('/wa-gateway/logout', [WaGatewayController::class, 'logout'])->name('admin.wa-gateway.logout');
-    Route::post('/wa-gateway/test', [WaGatewayController::class, 'sendTest'])->name('admin.wa-gateway.test');
-
-    // AI Integration Management (Google Gemini / Groq / OpenAI)
-    Route::get('/ai-settings', [\App\Http\Controllers\AiSettingController::class, 'index'])->name('admin.ai-settings.index');
-    Route::post('/ai-settings', [\App\Http\Controllers\AiSettingController::class, 'update'])->name('admin.ai-settings.update');
-    Route::post('/ai-settings/test', [\App\Http\Controllers\AiSettingController::class, 'testConnection'])->name('admin.ai-settings.test');
-
     // Menu Route Placeholders
     Route::get('/services', fn () => redirect()->route('dashboard'))->name('services.index');
     Route::get('/services/medik', fn () => redirect()->route('dashboard'))->name('services.medik');
@@ -79,14 +87,6 @@ Route::middleware('auth')->group(function () {
     Route::get('/technicians/position', fn () => redirect()->route('dashboard'))->name('technicians.position');
     Route::get('/technicians/radar', fn () => redirect()->route('dashboard'))->name('technicians.radar');
 
-    // Rekapitulasi & Ekspor Laporan (Modul Kabid, Kasi & Admin)
-    Route::get('/reports', [\App\Http\Controllers\ReportExportController::class, 'index'])->name('reports.index');
-    Route::get('/reports/export/pdf', [\App\Http\Controllers\ReportExportController::class, 'exportPdf'])->name('reports.export.pdf');
-    Route::get('/reports/export/excel', [\App\Http\Controllers\ReportExportController::class, 'exportExcel'])->name('reports.export.excel');
-    Route::get('/reports/export/csv', [\App\Http\Controllers\ReportExportController::class, 'exportCsv'])->name('reports.export.csv');
-    Route::get('/reports/history', fn () => redirect()->route('reports.index'))->name('reports.history');
-    Route::get('/reports/{id}', fn () => redirect()->route('reports.index'))->name('reports.show');
-
     Route::get('/reports-management', fn () => redirect()->route('dashboard'))->name('reports-management.index');
     Route::get('/reports-management/{id}', fn () => redirect()->route('dashboard'))->name('reports-management.show');
 
@@ -94,45 +94,6 @@ Route::middleware('auth')->group(function () {
     Route::get('/service-management/categories', fn () => redirect()->route('dashboard'))->name('service-management.categories');
     Route::get('/service-management/supporting-units', fn () => redirect()->route('dashboard'))->name('service-management.supporting-units');
     Route::get('/service-management/working-hours', fn () => redirect()->route('dashboard'))->name('service-management.working-hours');
-
-    // Master Data 1: User Management (Akun Sistem SIPUAS)
-    Route::get('/users', [\App\Http\Controllers\UserManagementController::class, 'index'])->name('users.index');
-    Route::post('/users', [\App\Http\Controllers\UserManagementController::class, 'store'])->name('users.store');
-    Route::get('/users/{user}', [\App\Http\Controllers\UserManagementController::class, 'show'])->name('users.show');
-    Route::get('/users/{user}/edit', [\App\Http\Controllers\UserManagementController::class, 'edit'])->name('users.edit');
-    Route::put('/users/{user}', [\App\Http\Controllers\UserManagementController::class, 'update'])->name('users.update');
-    Route::delete('/users/{user}', [\App\Http\Controllers\UserManagementController::class, 'destroy'])->name('users.destroy');
-    Route::patch('/users/{user}/toggle-status', [\App\Http\Controllers\UserManagementController::class, 'toggleStatus'])->name('users.toggle-status');
-    Route::post('/users/{user}/reset-password', [\App\Http\Controllers\UserManagementController::class, 'resetPassword'])->name('users.reset-password');
-    Route::patch('/users/{user}/permissions', [\App\Http\Controllers\UserManagementController::class, 'updatePermissions'])->name('users.permissions.update');
-    
-    // User Approvals (Persetujuan Pendaftaran Akun)
-    Route::get('/users-approvals', [\App\Http\Controllers\UserApprovalController::class, 'index'])->name('users.approvals');
-    Route::get('/users-approvals/{user}', [\App\Http\Controllers\UserApprovalController::class, 'show'])->name('users.approvals.show');
-    Route::post('/users-approvals/{user}/approve', [\App\Http\Controllers\UserApprovalController::class, 'approve'])->name('users.approvals.approve');
-    Route::delete('/users-approvals/{user}/reject', [\App\Http\Controllers\UserApprovalController::class, 'reject'])->name('users.approvals.reject');
-
-    // Master Data 2: Hospital Rooms / Ruangan Pelayanan
-    Route::get('/rooms', [\App\Http\Controllers\RoomManagementController::class, 'index'])->name('rooms.index');
-    Route::post('/rooms', [\App\Http\Controllers\RoomManagementController::class, 'store'])->name('rooms.store');
-    Route::put('/rooms/{room}', [\App\Http\Controllers\RoomManagementController::class, 'update'])->name('rooms.update');
-    Route::delete('/rooms/{room}', [\App\Http\Controllers\RoomManagementController::class, 'destroy'])->name('rooms.destroy');
-    Route::patch('/rooms/{room}/toggle-status', [\App\Http\Controllers\RoomManagementController::class, 'toggleStatus'])->name('rooms.toggle-status');
-
-    // Backward compatibility aliases for legacy /units endpoints
-    Route::get('/units', fn () => redirect()->route('rooms.index'))->name('units.index');
-    Route::post('/units', [\App\Http\Controllers\RoomManagementController::class, 'store'])->name('units.store');
-    Route::put('/units/{room}', [\App\Http\Controllers\RoomManagementController::class, 'update'])->name('units.update');
-    Route::delete('/units/{room}', [\App\Http\Controllers\RoomManagementController::class, 'destroy'])->name('units.destroy');
-    Route::patch('/units/{room}/toggle-status', [\App\Http\Controllers\RoomManagementController::class, 'toggleStatus'])->name('units.toggle-status');
-
-    // Redirect legacy staff route to users
-    Route::get('/staff', fn () => redirect()->route('users.index'))->name('staff.index');
-
-    // Staff Attendance / Presensi Kehadiran Dinas
-    Route::get('/attendance/status', [\App\Http\Controllers\AttendanceController::class, 'currentStatus'])->name('attendance.status');
-    Route::post('/attendance/check-in', [\App\Http\Controllers\AttendanceController::class, 'checkIn'])->name('attendance.check-in');
-    Route::post('/attendance/check-out', [\App\Http\Controllers\AttendanceController::class, 'checkOut'])->name('attendance.check-out');
 
     Route::get('/design-system', fn () => redirect()->route('dashboard'))->name('design-system.index');
     Route::get('/design-system/buttons-badges', fn () => redirect()->route('dashboard'))->name('design-system.buttons-badges');
@@ -142,8 +103,57 @@ Route::middleware('auth')->group(function () {
     Route::get('/design-system/cards', fn () => redirect()->route('dashboard'))->name('design-system.cards');
     Route::get('/design-system/notifications', fn () => redirect()->route('dashboard'))->name('design-system.notifications');
 
-    Route::get('/admin/qr-generator', [\App\Http\Controllers\QrGeneratorController::class, 'index'])->name('admin.qr-generator.index');
-    Route::get('/admin/qr-code', fn () => redirect()->route('admin.qr-generator.index'))->name('admin.qr-code.index');
+    // Master Data & System/Integrasi (KHUSUS ADMINISTRATOR RS)
+    Route::middleware('role:admin')->group(function () {
+        // WhatsApp Gateway Management
+        Route::get('/wa-gateway', [WaGatewayController::class, 'index'])->name('admin.wa-gateway.index');
+        Route::get('/wa-gateway/status', [WaGatewayController::class, 'status'])->name('admin.wa-gateway.status');
+        Route::post('/wa-gateway/logout', [WaGatewayController::class, 'logout'])->name('admin.wa-gateway.logout');
+        Route::post('/wa-gateway/test', [WaGatewayController::class, 'sendTest'])->name('admin.wa-gateway.test');
+
+        // AI Integration Management (Google Gemini / Groq / OpenAI)
+        Route::get('/ai-settings', [\App\Http\Controllers\AiSettingController::class, 'index'])->name('admin.ai-settings.index');
+        Route::post('/ai-settings', [\App\Http\Controllers\AiSettingController::class, 'update'])->name('admin.ai-settings.update');
+        Route::post('/ai-settings/test', [\App\Http\Controllers\AiSettingController::class, 'testConnection'])->name('admin.ai-settings.test');
+
+        // Master Data 1: User Management (Akun Sistem SIPUAS)
+        Route::get('/users', [\App\Http\Controllers\UserManagementController::class, 'index'])->name('users.index');
+        Route::post('/users', [\App\Http\Controllers\UserManagementController::class, 'store'])->name('users.store');
+        Route::get('/users/{user}', [\App\Http\Controllers\UserManagementController::class, 'show'])->name('users.show');
+        Route::get('/users/{user}/edit', [\App\Http\Controllers\UserManagementController::class, 'edit'])->name('users.edit');
+        Route::put('/users/{user}', [\App\Http\Controllers\UserManagementController::class, 'update'])->name('users.update');
+        Route::delete('/users/{user}', [\App\Http\Controllers\UserManagementController::class, 'destroy'])->name('users.destroy');
+        Route::patch('/users/{user}/toggle-status', [\App\Http\Controllers\UserManagementController::class, 'toggleStatus'])->name('users.toggle-status');
+        Route::post('/users/{user}/reset-password', [\App\Http\Controllers\UserManagementController::class, 'resetPassword'])->name('users.reset-password');
+        Route::patch('/users/{user}/permissions', [\App\Http\Controllers\UserManagementController::class, 'updatePermissions'])->name('users.permissions.update');
+        
+        // User Approvals (Persetujuan Pendaftaran Akun)
+        Route::get('/users-approvals', [\App\Http\Controllers\UserApprovalController::class, 'index'])->name('users.approvals');
+        Route::get('/users-approvals/{user}', [\App\Http\Controllers\UserApprovalController::class, 'show'])->name('users.approvals.show');
+        Route::post('/users-approvals/{user}/approve', [\App\Http\Controllers\UserApprovalController::class, 'approve'])->name('users.approvals.approve');
+        Route::delete('/users-approvals/{user}/reject', [\App\Http\Controllers\UserApprovalController::class, 'reject'])->name('users.approvals.reject');
+
+        // Master Data 2: Hospital Rooms / Ruangan Pelayanan
+        Route::get('/rooms', [\App\Http\Controllers\RoomManagementController::class, 'index'])->name('rooms.index');
+        Route::post('/rooms', [\App\Http\Controllers\RoomManagementController::class, 'store'])->name('rooms.store');
+        Route::put('/rooms/{room}', [\App\Http\Controllers\RoomManagementController::class, 'update'])->name('rooms.update');
+        Route::delete('/rooms/{room}', [\App\Http\Controllers\RoomManagementController::class, 'destroy'])->name('rooms.destroy');
+        Route::patch('/rooms/{room}/toggle-status', [\App\Http\Controllers\RoomManagementController::class, 'toggleStatus'])->name('rooms.toggle-status');
+
+        // Backward compatibility aliases for legacy /units endpoints
+        Route::get('/units', fn () => redirect()->route('rooms.index'))->name('units.index');
+        Route::post('/units', [\App\Http\Controllers\RoomManagementController::class, 'store'])->name('units.store');
+        Route::put('/units/{room}', [\App\Http\Controllers\RoomManagementController::class, 'update'])->name('units.update');
+        Route::delete('/units/{room}', [\App\Http\Controllers\RoomManagementController::class, 'destroy'])->name('units.destroy');
+        Route::patch('/units/{room}/toggle-status', [\App\Http\Controllers\RoomManagementController::class, 'toggleStatus'])->name('units.toggle-status');
+
+        // Redirect legacy staff route to users
+        Route::get('/staff', fn () => redirect()->route('users.index'))->name('staff.index');
+
+        // Generator QR Code
+        Route::get('/admin/qr-generator', [\App\Http\Controllers\QrGeneratorController::class, 'index'])->name('admin.qr-generator.index');
+        Route::get('/admin/qr-code', fn () => redirect()->route('admin.qr-generator.index'))->name('admin.qr-code.index');
+    });
 });
 
 Route::get('lang/{locale}', function ($locale) {

@@ -242,12 +242,13 @@ class User extends Authenticatable
         // 2. Administrator has access to all pages
         if ($this->isAdministrator()) {
             return $this->memoizedPermissions = [
-                'dashboard', 'staff.attendance', 'staff.dashboard', 'attendance.status',
-                'kasi.dashboard', 'kasi.verify', 'kasi.logbook',
-                'executive.dashboard', 'executive.kasi-responsiveness', 'executive.leaderboard',
-                'reports.index',
-                'units.index', 'users.approvals', 'users.index',
-                'admin.ai-settings.index', 'admin.wa-gateway.index', 'admin.qr-generator.index', 'settings.index',
+                'dashboard',
+                'staff.attendance', 'staff.dashboard',
+                'kasi.dashboard', 'kasi.feed', 'kasi.verify', 'kasi.logbook',
+                'executive.dashboard', 'executive.kasi-responsiveness', 'executive.leaderboard', 'reports.index',
+                'users.approvals', 'users.index', 'rooms.index',
+                'admin.ai-settings.index', 'admin.wa-gateway.index', 'admin.qr-generator.index',
+                'report.create',
             ];
         }
 
@@ -260,15 +261,13 @@ class User extends Authenticatable
         // 4. Default fallback by role_id
         return $this->memoizedPermissions = match ((int)$this->role_id) {
             Role::DIREKTUR, Role::KEPALA_BIDANG => [
-                'dashboard', 'executive.dashboard', 'executive.kasi-responsiveness', 'executive.leaderboard',
-                'kasi.dashboard', 'kasi.logbook', 'reports.index', 'units.index', 'settings.index',
+                'executive.dashboard', 'executive.kasi-responsiveness', 'executive.leaderboard', 'reports.index',
             ],
             Role::KEPALA_SEKSI => [
-                'dashboard', 'kasi.dashboard', 'kasi.verify', 'kasi.logbook',
-                'staff.dashboard', 'reports.index', 'units.index', 'settings.index',
+                'kasi.dashboard', 'kasi.feed', 'kasi.verify', 'kasi.logbook',
             ],
             default => [
-                'staff.dashboard', 'attendance.status', 'settings.index',
+                'staff.attendance', 'staff.dashboard',
             ],
         };
     }
