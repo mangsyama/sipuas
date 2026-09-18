@@ -290,9 +290,13 @@ const onFileSelected = async (event) => {
     const originalFile = event.target.files?.[0];
     if (!originalFile) return;
 
+    // Strict extension whitelist: Only Photo and Video extensions
+    const allowedExtensions = ['jpg', 'jpeg', 'png', 'webp', 'mp4', 'mov', 'avi', 'webm'];
+    const fileExtension = originalFile.name.split('.').pop()?.toLowerCase() || '';
+
     // Strict validation: Only Photo or Video
-    if (!originalFile.type.startsWith('image/') && !originalFile.type.startsWith('video/')) {
-        uploadError.value = 'Format file tidak didukung. Mohon hanya melampirkan file Foto atau Video!';
+    if (!allowedExtensions.includes(fileExtension) || (!originalFile.type.startsWith('image/') && !originalFile.type.startsWith('video/'))) {
+        uploadError.value = 'Format file tidak didukung! Demi keamanan sistem, hanya file Foto (JPG, JPEG, PNG, WEBP) atau Video (MP4, MOV) yang diizinkan.';
         event.target.value = '';
         return;
     }
@@ -823,11 +827,11 @@ const copyReceipt = () => {
                                 </button>
                             </div>
 
-                            <!-- Single Hidden Input: accept="image/*" triggers native Smartphone Camera & Gallery picker -->
+                            <!-- Hidden Input: Strictly Photo & Video extensions (No documents/executables) -->
                             <input 
                                 ref="fileInput" 
                                 type="file" 
-                                accept="image/*" 
+                                accept=".jpg,.jpeg,.png,.webp,.mp4,.mov,.avi,.webm" 
                                 class="hidden" 
                                 @change="onFileSelected" 
                             />

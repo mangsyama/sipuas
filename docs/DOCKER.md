@@ -1,3 +1,20 @@
+```bash
+
+docker compose up -d --build
+
+docker compose exec php npm run build
+
+docker compose exec php php artisan optimize:clear
+docker compose exec php php artisan optimize
+
+docker compose restart queue-worker
+
+```
+
+
+
+
+
 # 🚀 Panduan Lengkap Perintah Terminal Docker — SIPUAS
 
 Dokumen ini berisi daftar perintah terminal Docker (*Cheat Sheet*) untuk server production **SIPUAS**, termasuk panduan akses via Alamat IP Server dan peralihan ke Domain SSL resmi.
