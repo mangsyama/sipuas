@@ -590,16 +590,20 @@ class KasiController extends Controller
         // Disposisi ke Sistem Penunjang (PESU PELUH) jika diaktifkan dan tindakan NETRAL
         $pesupeluhTicketNumber = null;
         if ($validated['action_type'] === 'NETRAL' && !empty($validated['forward_to_pesupeluh']) && !empty($validated['pesupeluh_category_id'])) {
-            $pesupeluhService = app(\App\Services\PesupeluhService::class);
-            $dispatchResult = $pesupeluhService->dispatchReport($report, [
-                'category_id' => $validated['pesupeluh_category_id'],
-                'pesupeluh_room_id' => $validated['pesupeluh_room_id'] ?? null,
-                'priority' => $validated['pesupeluh_priority'] ?? 'ROUTINE',
-                'supervisor_notes' => $validated['supervisor_notes'],
-            ], $request->user());
+            try {
+                $pesupeluhService = app(\App\Services\PesupeluhService::class);
+                $dispatchResult = $pesupeluhService->dispatchReport($report, [
+                    'category_id' => $validated['pesupeluh_category_id'],
+                    'pesupeluh_room_id' => $validated['pesupeluh_room_id'] ?? null,
+                    'priority' => $validated['pesupeluh_priority'] ?? 'ROUTINE',
+                    'supervisor_notes' => $validated['supervisor_notes'],
+                ], $request->user());
 
-            if (!empty($dispatchResult['ticket_number'])) {
-                $pesupeluhTicketNumber = $dispatchResult['ticket_number'];
+                if (!empty($dispatchResult['ticket_number'])) {
+                    $pesupeluhTicketNumber = $dispatchResult['ticket_number'];
+                }
+            } catch (\Throwable $pesuErr) {
+                \Illuminate\Support\Facades\Log::warning('Pesupeluh dispatch notice in processVerification: ' . $pesuErr->getMessage());
             }
         }
 
@@ -648,20 +652,24 @@ class KasiController extends Controller
                     : 'Pelayanan Rumah Sakit';
 
                 dispatch(function () use ($reporterPhone, $reporterName, $ticketNumber, $roomName) {
-                    $hasName = !empty($reporterName) && strtolower(trim($reporterName)) !== 'anonim';
-                    $greeting = $hasName ? "Halo {$reporterName}," : "Halo,";
+                    try {
+                        $hasName = !empty($reporterName) && strtolower(trim($reporterName)) !== 'anonim';
+                        $greeting = $hasName ? "Halo {$reporterName}," : "Halo,";
 
-                    $waMsg = "{$greeting}\n\n"
-                        . "Terima kasih atas laporan/aspirasi yang telah Anda sampaikan melalui sistem SIPUAS.\n"
-                        . "Laporan Anda dengan rincian:\n"
-                        . "📋 Nomor Tiket : {$ticketNumber}\n"
-                        . "🏥 Unit/Ruangan : {$roomName}\n"
-                        . "✅ Status : Selesai Ditangani & Diverifikasi\n\n"
-                        . "Laporan Anda telah selesai ditinjau dan divalidasi oleh manajemen pelayanan rumah sakit untuk peningkatan mutu pelayanan rumah sakit.\n\n"
-                        . "Setiap masukan dari Anda sangat berarti bagi perbaikan layanan kami.\n\n"
-                        . "Salam sehat,\nTim Manajemen Pelayanan Rumah Sakit";
+                        $waMsg = "{$greeting}\n\n"
+                            . "Terima kasih atas laporan/aspirasi yang telah Anda sampaikan melalui sistem SIPUAS.\n"
+                            . "Laporan Anda dengan rincian:\n"
+                            . "📋 Nomor Tiket : {$ticketNumber}\n"
+                            . "🏥 Unit/Ruangan : {$roomName}\n"
+                            . "✅ Status : Selesai Ditangani & Diverifikasi\n\n"
+                            . "Laporan Anda telah selesai ditinjau dan divalidasi oleh manajemen pelayanan rumah sakit untuk peningkatan mutu pelayanan rumah sakit.\n\n"
+                            . "Setiap masukan dari Anda sangat berarti bagi perbaikan layanan kami.\n\n"
+                            . "Salam sehat,\nTim Manajemen Pelayanan Rumah Sakit";
 
-                    WaGatewayChannel::sendDirect($reporterPhone, $waMsg);
+                        WaGatewayChannel::sendDirect($reporterPhone, $waMsg);
+                    } catch (\Throwable $sendErr) {
+                        \Illuminate\Support\Facades\Log::warning('WA notification send notice: ' . $sendErr->getMessage());
+                    }
                 });
             } catch (\Throwable $waErr) {
                 \Illuminate\Support\Facades\Log::info('Reporter completion WA notification notice: ' . $waErr->getMessage());

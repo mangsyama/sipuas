@@ -101,34 +101,12 @@ const handlePopState = () => {
     }
 };
 
-let pushHistoryFlag = false;
-
 watch(
     [showConfirmModal, showValidationModal, showSuccessModal, selectedImagePreview],
-    ([confirmOpen, validOpen, successOpen, imgOpen], [oldConfirm, oldValid, oldSuccess, oldImg]) => {
+    ([confirmOpen, validOpen, successOpen, imgOpen]) => {
         if (typeof document !== 'undefined') {
             const isAnyOpen = confirmOpen || validOpen || successOpen || !!imgOpen;
-            const wasAnyOpen = oldConfirm || oldValid || oldSuccess || !!oldImg;
-
-            if (isAnyOpen) {
-                document.body.style.overflow = 'hidden';
-                if (!window.history.state?.verifyModalOpen) {
-                    try {
-                        window.history.pushState({ verifyModalOpen: true }, '');
-                        pushHistoryFlag = true;
-                    } catch (e) {}
-                }
-            } else {
-                document.body.style.overflow = '';
-                if (wasAnyOpen && pushHistoryFlag && window.history.state?.verifyModalOpen) {
-                    pushHistoryFlag = false;
-                    try {
-                        window.history.back();
-                    } catch (e) {}
-                } else {
-                    pushHistoryFlag = false;
-                }
-            }
+            document.body.style.overflow = isAnyOpen ? 'hidden' : '';
         }
     }
 );
@@ -554,6 +532,7 @@ const executeSubmit = () => {
         pesupeluh_priority: pesupeluhPriority.value,
         attachments: verificationFiles.value.map(f => f.file),
     }, {
+        preserveScroll: true,
         onSuccess: (page) => {
             isSubmitting.value = false;
             verificationFiles.value.forEach(f => {
@@ -568,8 +547,10 @@ const executeSubmit = () => {
             }
             showSuccessModal.value = true;
         },
-        onError: () => {
+        onError: (errors) => {
             isSubmitting.value = false;
+            console.error('Verification error:', errors);
+            alert('Gagal memverifikasi: ' + (Object.values(errors)[0] || 'Terjadi kesalahan pada validasi data.'));
         },
         onFinish: () => {
             if (!showSuccessModal.value) {
