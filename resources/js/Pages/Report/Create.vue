@@ -158,6 +158,7 @@ const selectedUnitObj = computed(() => {
 });
 
 const fileInput = ref(null);
+const cameraInput = ref(null);
 const targetObjectRef = ref(null);
 const isiLaporanRef = ref(null);
 const reporterNameRef = ref(null);
@@ -215,6 +216,12 @@ const openFileInput = () => {
     if (isTransitioning.value || isCompressing.value) return;
     uploadError.value = '';
     fileInput.value?.click();
+};
+
+const triggerCamera = () => {
+    if (isTransitioning.value || isCompressing.value) return;
+    uploadError.value = '';
+    cameraInput.value?.click();
 };
 
 const onPhoneInput = (e) => {
@@ -353,6 +360,7 @@ const removeAttachment = () => {
     uploadedAttachment.value = null;
     form.value.uploaded_files = [];
     if (fileInput.value) fileInput.value.value = '';
+    if (cameraInput.value) cameraInput.value.value = '';
 };
 
 const goToStep2 = () => {
@@ -471,6 +479,7 @@ const resetForm = () => {
     }
     uploadedAttachment.value = null;
     if (fileInput.value) fileInput.value.value = '';
+    if (cameraInput.value) cameraInput.value.value = '';
     form.value = {
         unit_id: '',
         target_object: '',
@@ -827,11 +836,21 @@ const copyReceipt = () => {
                                 </button>
                             </div>
 
-                            <!-- Hidden Input: Strictly Photo & Video extensions (No documents/executables) -->
+                            <!-- Kamera HP Langsung (Wajib capture="environment" agar HP membuka kamera seketika) -->
+                            <input 
+                                ref="cameraInput" 
+                                type="file" 
+                                accept="image/*" 
+                                capture="environment" 
+                                class="hidden" 
+                                @change="onFileSelected" 
+                            />
+
+                            <!-- Galeri / File Penyimpanan HP -->
                             <input 
                                 ref="fileInput" 
                                 type="file" 
-                                accept=".jpg,.jpeg,.png,.webp,.mp4,.mov,.avi,.webm" 
+                                accept="image/*,video/*" 
                                 class="hidden" 
                                 @change="onFileSelected" 
                             />
@@ -851,16 +870,39 @@ const copyReceipt = () => {
                                 </div>
 
                                 <!-- State 2: Kosong (Space Upload Area Siap Klik/Pilih) -->
-                                <div v-else-if="!uploadedAttachment" class="flex flex-col items-center justify-center p-6 sm:p-7 text-center select-none">
-                                    <div class="h-12 w-12 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mb-3">
+                                <div v-else-if="!uploadedAttachment" class="flex flex-col items-center justify-center p-5 sm:p-7 text-center select-none">
+                                    <div class="h-12 w-12 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mb-2.5">
                                         <Camera class="h-6 w-6" />
                                     </div>
                                     <p class="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100">
                                         Ambil Foto atau Pilih dari Galeri
                                     </p>
+                                    <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1 mb-3.5">
+                                        Buka kamera untuk foto langsung atau ambil dari galeri HP
+                                    </p>
 
-                                    <span class="inline-block text-[10px] text-slate-400 dark:text-slate-500 font-medium mt-1.5 px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800/80">
-                                        Opsional
+                                    <!-- Tombol Pilihan Nyata: Buka Kamera vs Pilih Galeri -->
+                                    <div class="flex flex-wrap items-center justify-center gap-2.5 w-full max-w-xs">
+                                        <button
+                                            type="button"
+                                            @click.stop="triggerCamera"
+                                            class="flex-1 min-w-[125px] flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold shadow-sm transition cursor-pointer"
+                                        >
+                                            <Camera class="h-4 w-4 shrink-0" />
+                                            <span>Buka Kamera</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            @click.stop="openFileInput"
+                                            class="flex-1 min-w-[125px] flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-600 active:scale-95 text-slate-700 dark:text-slate-200 text-xs font-bold shadow-sm transition cursor-pointer"
+                                        >
+                                            <ImageIcon class="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                            <span>Pilih Galeri</span>
+                                        </button>
+                                    </div>
+
+                                    <span class="inline-block text-[10px] text-slate-400 dark:text-slate-500 font-medium mt-3 px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800/80">
+                                        Khusus Foto / Video (Maks. 10MB)
                                     </span>
                                 </div>
 
