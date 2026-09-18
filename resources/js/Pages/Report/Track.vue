@@ -9,7 +9,6 @@ import {
     ArrowRight, 
     Copy, 
     ShieldCheck, 
-    MessageSquare,
     RefreshCw,
     XCircle,
     ArrowLeft
@@ -96,32 +95,33 @@ const copyTicket = () => {
     }, 2000);
 };
 
-// Map status to progress step (1 to 4)
+// Cek status laporan
+const isCompleted = computed(() => {
+    const s = props.report?.status?.toUpperCase() || 'PENDING';
+    return s === 'VERIFIED' || s === 'RESOLVED';
+});
+
+const isRejected = computed(() => {
+    return props.report?.status?.toUpperCase() === 'REJECTED';
+});
+
+// Map status to progress step (1 to 3)
 const currentStepNumber = computed(() => {
     if (!props.report) return 1;
-    const s = props.report.status?.toUpperCase() || 'PENDING';
-    if (s === 'REJECTED') return -1;
-    if (s === 'RESOLVED') return 4;
-    if (s === 'IN_PROGRESS') return 3;
-    if (s === 'VERIFIED') return 2;
-    return 1; // PENDING
+    if (isRejected.value) return -1;
+    if (isCompleted.value) return 3;
+    return 1; // PENDING: Step 1 selesai, Step 2 sedang berjalan
 });
 
 const statusBadge = computed(() => {
     if (!props.report) return { text: 'Menunggu', class: 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300' };
-    const s = props.report.status?.toUpperCase() || 'PENDING';
-    switch (s) {
-        case 'RESOLVED':
-            return { text: 'Selesai Ditangani', class: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700' };
-        case 'IN_PROGRESS':
-            return { text: 'Dalam Penanganan', class: 'bg-sky-100 text-sky-800 dark:bg-sky-950/80 dark:text-sky-300 border-sky-300 dark:border-sky-700' };
-        case 'VERIFIED':
-            return { text: 'Diverifikasi Kepala Ruangan', class: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950/80 dark:text-indigo-300 border-indigo-300 dark:border-indigo-700' };
-        case 'REJECTED':
-            return { text: 'Tidak Dapat Diproses', class: 'bg-rose-100 text-rose-800 dark:bg-rose-950/80 dark:text-rose-300 border-rose-300 dark:border-rose-700' };
-        default:
-            return { text: 'Menunggu Verifikasi', class: 'bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border-amber-300 dark:border-amber-700' };
+    if (isCompleted.value) {
+        return { text: 'Selesai Ditangani', class: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700' };
     }
+    if (isRejected.value) {
+        return { text: 'Tidak Dapat Diproses', class: 'bg-rose-100 text-rose-800 dark:bg-rose-950/80 dark:text-rose-300 border-rose-300 dark:border-rose-700' };
+    }
+    return { text: 'Dalam Proses Verifikasi', class: 'bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border-amber-300 dark:border-amber-700' };
 });
 </script>
 
@@ -142,17 +142,13 @@ const statusBadge = computed(() => {
             <div class="w-full flex-1 sm:flex-initial flex flex-col sm:rounded-2xl sm:border border-slate-200 bg-white sm:shadow-2xl transition-all duration-300 dark:border-slate-800 dark:bg-slate-900 overflow-hidden">
                 <!-- Header Section with Logo & Title -->
                 <div class="border-b border-slate-200 bg-slate-50 p-5 sm:p-7 text-center dark:border-slate-800 dark:bg-slate-950 sm:rounded-t-2xl">
-                    <Link
-                        :href="route('report.create')"
-                        class="inline-flex items-center justify-center transition-transform hover:scale-105 cursor-pointer"
-                        title="SIPUAS"
-                    >
+                    <div class="inline-flex items-center justify-center select-none pointer-events-none">
                         <img
                             src="/images/logo-sidebar.png"
                             alt="SIPUAS Logo"
-                            class="h-8 sm:h-10 w-auto object-contain mx-auto dark:brightness-0 dark:invert"
+                            class="h-8 sm:h-10 w-auto object-contain mx-auto dark:brightness-0 dark:invert pointer-events-none"
                         />
-                    </Link>
+                    </div>
                     <p class="mt-1.5 text-xs text-slate-500 dark:text-slate-400 font-medium">
                         Lacak Progres & Tindak Lanjut Penanganan Suara Masyarakat
                     </p>
@@ -247,25 +243,38 @@ const statusBadge = computed(() => {
                             </div>
                         </div>
 
-                        <!-- Stepper / Resi Timeline -->
+                        <!-- Ringkasan Isi Laporan Pasien (Di Atas Alur Progres) -->
+                        <div class="p-4 sm:p-5 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs space-y-1.5">
+                            <span class="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 block">
+                                Uraian Laporan Anda:
+                            </span>
+                            <p class="text-xs text-slate-700 dark:text-slate-300 italic leading-relaxed pl-1">
+                                "{{ report.isi_laporan }}"
+                            </p>
+                        </div>
+
+                        <!-- Stepper / Resi Timeline (3 Langkah Alur SIPUAS) -->
                         <div class="p-5 sm:p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
                             <h3 class="text-xs font-extrabold uppercase tracking-wider text-slate-400 mb-5">
                                 Alur Progres Penanganan
                             </h3>
 
                             <div class="space-y-0.5">
-                                <!-- Step 1: Laporan Masuk -->
+                                <!-- Step 1: Laporan Masuk & Diterima Sistem -->
                                 <div class="flex gap-3.5">
                                     <div class="flex flex-col items-center shrink-0">
                                         <div class="h-6 w-6 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-sm">
                                             <CheckCircle2 class="h-3.5 w-3.5" />
                                         </div>
-                                        <div class="w-0.5 flex-1 min-h-[34px] bg-slate-200 dark:bg-slate-800 my-1"></div>
+                                        <div 
+                                            class="w-0.5 flex-1 min-h-[34px] my-1 transition-colors"
+                                            :class="isCompleted ? 'bg-emerald-500' : 'bg-slate-200 dark:bg-slate-800'"
+                                        ></div>
                                     </div>
                                     <div class="pb-6 pt-0.5 min-w-0 flex-1">
                                         <p class="text-xs font-bold text-slate-900 dark:text-white">Laporan Masuk & Diterima Sistem</p>
                                         <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
-                                            Laporan berhasil dicatat di sistem SIPUAS dan notifikasi telah dikirim ke unit pelayanan.
+                                            Laporan berhasil dicatat di sistem SIPUAS dan diteruskan langsung ke unit pelayanan terkait.
                                         </p>
                                         <span class="text-[10px] text-slate-400 mt-1 block">{{ report.created_at }}</span>
                                     </div>
@@ -277,24 +286,30 @@ const statusBadge = computed(() => {
                                         <div 
                                             :class="[
                                                 'h-6 w-6 rounded-full flex items-center justify-center shrink-0 transition-colors shadow-sm',
-                                                currentStepNumber >= 2 
+                                                isCompleted 
                                                     ? 'bg-emerald-600 text-white' 
-                                                    : (currentStepNumber === 1 ? 'bg-amber-500 text-white animate-pulse' : 'bg-slate-200 dark:bg-slate-800 text-slate-400')
+                                                    : (isRejected ? 'bg-rose-600 text-white' : 'bg-amber-500 text-white animate-pulse')
                                             ]"
                                         >
-                                            <CheckCircle2 v-if="currentStepNumber >= 2" class="h-3.5 w-3.5" />
+                                            <CheckCircle2 v-if="isCompleted" class="h-3.5 w-3.5" />
+                                            <XCircle v-else-if="isRejected" class="h-3.5 w-3.5" />
                                             <Clock v-else class="h-3.5 w-3.5" />
                                         </div>
-                                        <div class="w-0.5 flex-1 min-h-[34px] bg-slate-200 dark:bg-slate-800 my-1"></div>
+                                        <div 
+                                            class="w-0.5 flex-1 min-h-[34px] my-1 transition-colors"
+                                            :class="isCompleted ? 'bg-emerald-500' : 'bg-slate-200 dark:bg-slate-800'"
+                                        ></div>
                                     </div>
                                     <div class="pb-6 pt-0.5 min-w-0 flex-1">
-                                        <p class="text-xs font-bold" :class="currentStepNumber >= 2 ? 'text-slate-900 dark:text-white' : 'text-slate-500 dark:text-slate-400'">
+                                        <p class="text-xs font-bold" :class="isCompleted ? 'text-slate-900 dark:text-white' : 'text-slate-700 dark:text-slate-300'">
                                             Verifikasi Kepala Ruangan / KASI
                                         </p>
                                         <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
-                                            {{ currentStepNumber >= 2 
-                                                ? 'Laporan telah ditinjau dan divalidasi oleh pimpinan unit kerja terkait.' 
-                                                : 'Sedang menunggu telaah dan verifikasi langsung dari Kepala Ruangan unit kerja.' }}
+                                            {{ isCompleted 
+                                                ? 'Laporan telah ditinjau, divalidasi, dan ditindaklanjuti oleh Kepala Ruangan unit kerja terkait.' 
+                                                : (isRejected 
+                                                    ? 'Laporan telah ditinjau dan dinyatakan tidak memenuhi kriteria penanganan.' 
+                                                    : 'Sedang dalam proses telaah dan verifikasi langsung oleh Kepala Ruangan unit pelayanan.') }}
                                         </p>
                                         <span v-if="report.verified_at" class="text-[10px] text-slate-400 mt-1 block">
                                             {{ report.verified_at }}
@@ -302,86 +317,50 @@ const statusBadge = computed(() => {
                                     </div>
                                 </div>
 
-                                <!-- Step 3: Tindak Lanjut & Pembinaan -->
+                                <!-- Step 3: Selesai Ditangani & Ditutup -->
                                 <div class="flex gap-3.5">
                                     <div class="flex flex-col items-center shrink-0">
                                         <div 
                                             :class="[
                                                 'h-6 w-6 rounded-full flex items-center justify-center shrink-0 transition-colors shadow-sm',
-                                                currentStepNumber >= 3 
+                                                isCompleted 
                                                     ? 'bg-emerald-600 text-white' 
-                                                    : (currentStepNumber === 2 ? 'bg-indigo-500 text-white animate-pulse' : 'bg-slate-200 dark:bg-slate-800 text-slate-400')
+                                                    : (isRejected ? 'bg-rose-600 text-white' : 'bg-slate-200 dark:bg-slate-800 text-slate-400')
                                             ]"
                                         >
-                                            <CheckCircle2 v-if="currentStepNumber >= 3" class="h-3.5 w-3.5" />
-                                            <Clock v-else class="h-3.5 w-3.5" />
-                                        </div>
-                                        <div class="w-0.5 flex-1 min-h-[34px] bg-slate-200 dark:bg-slate-800 my-1"></div>
-                                    </div>
-                                    <div class="pb-6 pt-0.5 min-w-0 flex-1">
-                                        <p class="text-xs font-bold" :class="currentStepNumber >= 3 ? 'text-slate-900 dark:text-white' : 'text-slate-500 dark:text-slate-400'">
-                                            Tindak Lanjut & Evaluasi Layanan
-                                        </p>
-                                        <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
-                                            {{ currentStepNumber >= 3 
-                                                ? 'Langkah perbaikan SOP, fasilitas, atau evaluasi kinerja staf sedang/telah dijalankan.' 
-                                                : 'Koordinasi internal tindak lanjut penyelesaian kendala.' }}
-                                        </p>
-                                    </div>
-                                </div>
-
-                                <!-- Step 4: Selesai Ditangani -->
-                                <div class="flex gap-3.5">
-                                    <div class="flex flex-col items-center shrink-0">
-                                        <div 
-                                            :class="[
-                                                'h-6 w-6 rounded-full flex items-center justify-center shrink-0 transition-colors shadow-sm',
-                                                report.status === 'RESOLVED' 
-                                                    ? 'bg-emerald-600 text-white' 
-                                                    : (report.status === 'REJECTED' ? 'bg-rose-600 text-white' : 'bg-slate-200 dark:bg-slate-800 text-slate-400')
-                                            ]"
-                                        >
-                                            <CheckCircle2 v-if="report.status === 'RESOLVED'" class="h-3.5 w-3.5" />
-                                            <XCircle v-else-if="report.status === 'REJECTED'" class="h-3.5 w-3.5" />
+                                            <CheckCircle2 v-if="isCompleted" class="h-3.5 w-3.5" />
+                                            <XCircle v-else-if="isRejected" class="h-3.5 w-3.5" />
                                             <Clock v-else class="h-3.5 w-3.5" />
                                         </div>
                                     </div>
                                     <div class="pt-0.5 min-w-0 flex-1">
-                                        <p class="text-xs font-bold" :class="report.status === 'RESOLVED' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'">
-                                            {{ report.status === 'REJECTED' ? 'Laporan Tidak Dapat Diproses' : 'Selesai & Ditutup' }}
+                                        <p class="text-xs font-bold" :class="isCompleted ? 'text-emerald-600 dark:text-emerald-400 font-extrabold' : (isRejected ? 'text-rose-600 dark:text-rose-400' : 'text-slate-500 dark:text-slate-400')">
+                                            {{ isRejected ? 'Laporan Tidak Dapat Diproses' : 'Selesai & Ditutup' }}
                                         </p>
                                         <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
-                                            {{ report.status === 'RESOLVED' 
-                                                ? 'Seluruh proses penanganan laporan telah selesai dilakukan.' 
-                                                : (report.status === 'REJECTED' ? 'Laporan tidak memenuhi kriteria tindak lanjut atau informasi kurang memadai.' : 'Menunggu penyelesaian akhir dari unit terkait.') }}
+                                            {{ isCompleted 
+                                                ? 'Seluruh proses penanganan laporan pelayanan telah selesai tuntas ditindaklanjuti.' 
+                                                : (isRejected ? 'Laporan ditutup karena data tidak memenuhi kriteria penanganan atau informasi kurang memadai.' : 'Menunggu penyelesaian verifikasi dari Kepala Ruangan unit terkait.') }}
                                         </p>
-                                        <span v-if="report.resolved_at" class="text-[10px] text-slate-400 mt-1 block">
-                                            {{ report.resolved_at }}
+                                        <span v-if="isCompleted && (report.resolved_at || report.verified_at)" class="text-[10px] text-slate-400 mt-1 block">
+                                            {{ report.resolved_at || report.verified_at }}
                                         </span>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Catatan Resmi Tindak Lanjut dari RS (Jika sudah diverifikasi / ada catatan) -->
+                        <!-- Kartu Konfirmasi Selesai & Apresiasi Resmi (Aman untuk Publik) -->
                         <div 
-                            v-if="report.supervisor_notes || report.resolution_notes" 
-                            class="p-4 sm:p-5 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-500/30 dark:border-emerald-500/30 space-y-1.5"
+                            v-if="isCompleted" 
+                            class="p-4 sm:p-5 rounded-2xl bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-500/30 dark:border-emerald-500/30 space-y-1.5"
                         >
                             <div class="flex items-center gap-2 text-emerald-800 dark:text-emerald-300 font-bold text-xs">
-                                <MessageSquare class="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                                <span>Tanggapan Resmi Pihak Rumah Sakit</span>
+                                <ShieldCheck class="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                <span>Aspirasi Selesai Ditindaklanjuti</span>
                             </div>
                             <p class="text-xs text-slate-700 dark:text-slate-300 leading-relaxed pl-6">
-                                "{{ report.resolution_notes || report.supervisor_notes }}"
-                            </p>
-                        </div>
-
-                        <!-- Ringkasan Isi Laporan Pasien -->
-                        <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs">
-                            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">Kutipan Laporan Anda:</span>
-                            <p class="text-slate-600 dark:text-slate-400 italic leading-relaxed">
-                                "{{ report.isi_laporan }}"
+                                Terima kasih atas partisipasi dan masukan Anda. Laporan ini telah selesai diverifikasi dan ditindaklanjuti oleh manajemen pelayanan rumah sakit untuk peningkatan mutu pelayanan rumah sakit.
                             </p>
                         </div>
                     </div>

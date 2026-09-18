@@ -268,7 +268,7 @@ const sentimentPercentages = computed(() => {
                             </div>
                         </div>
                         <Link
-                            :href="route('executive.dashboard')"
+                            :href="route('kabid.dashboard')"
                             class="text-xs text-emerald-600 dark:text-emerald-400 font-bold hover:underline flex items-center gap-1"
                         >
                             Detail Eksekutif
@@ -457,7 +457,7 @@ const sentimentPercentages = computed(() => {
                             </Link>
 
                             <Link
-                                :href="route('executive.dashboard')"
+                                :href="route('kabid.dashboard')"
                                 class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60 hover:border-emerald-500/50 hover:bg-emerald-50/50 dark:hover:bg-slate-700/60 transition text-center space-y-1.5 group cursor-pointer"
                             >
                                 <div class="h-8 w-8 rounded-lg bg-emerald-50 dark:bg-white/10 text-emerald-600 dark:text-white flex items-center justify-center mx-auto group-hover:scale-110 transition duration-200">
@@ -479,7 +479,7 @@ const sentimentPercentages = computed(() => {
                             </Link>
 
                             <Link
-                                :href="route('executive.leaderboard')"
+                                :href="route('kabid.leaderboard')"
                                 class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60 hover:border-emerald-500/50 hover:bg-emerald-50/50 dark:hover:bg-slate-700/60 transition text-center space-y-1.5 group cursor-pointer"
                             >
                                 <div class="h-8 w-8 rounded-lg bg-emerald-50 dark:bg-white/10 text-emerald-600 dark:text-white flex items-center justify-center mx-auto group-hover:scale-110 transition duration-200">

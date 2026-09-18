@@ -315,7 +315,7 @@ onUnmounted(() => {
             leave-to-class="opacity-0"
         >
             <div v-if="showCheckInModal" class="fixed inset-0 z-50 overflow-y-auto p-4 flex items-center justify-center min-h-screen">
-                <div class="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 transition-opacity" @click="showCheckInModal = false"></div>
+                <div class="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 transition-opacity select-none"></div>
 
                 <div class="relative bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-sm p-6 text-center transform transition-all space-y-4 z-10">
                     <div class="h-12 w-12 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto">
@@ -358,7 +358,7 @@ onUnmounted(() => {
             leave-to-class="opacity-0"
         >
             <div v-if="showCheckOutModal" class="fixed inset-0 z-50 overflow-y-auto p-4 flex items-center justify-center min-h-screen">
-                <div class="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 transition-opacity" @click="showCheckOutModal = false"></div>
+                <div class="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 transition-opacity select-none"></div>
 
                 <div class="relative bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-sm p-6 text-center transform transition-all space-y-4 z-10">
                     <div class="h-12 w-12 rounded-full bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 flex items-center justify-center mx-auto">

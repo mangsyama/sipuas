@@ -32,9 +32,9 @@ class DashboardController extends Controller
                 return redirect()->route('kasi.dashboard');
             }
 
-            // Kabid & Direktur diarahkan langsung ke Executive Dashboard
+            // Kabid & Direktur diarahkan langsung ke Dashboard Kabid
             if (in_array((int)$user->role_id, [Role::KEPALA_BIDANG, Role::DIREKTUR])) {
-                return redirect()->route('executive.dashboard');
+                return redirect()->route('kabid.dashboard');
             }
 
             // Pengguna non-administrator lainnya diarahkan ke Dashboard Kasi
@@ -227,7 +227,7 @@ class DashboardController extends Controller
             ->where('ai_category', '!=', '')
             ->selectRaw('ai_category, count(*) as count')
             ->groupBy('ai_category')
-            ->orderByDesc('count')
+            ->orderByRaw('COUNT(*) DESC')
             ->limit(6)
             ->pluck('ai_category')
             ->toArray();

@@ -33,6 +33,8 @@ Thumbs.db
 /storage/framework/testing/*
 /storage/framework/views/*
 /storage/logs/*
+/storage/fonts/*
+!/storage/fonts/.gitignore
 /storage/pail
 /bootstrap/cache/
 .phpunit.cache

@@ -75,7 +75,7 @@ const applyFilter = (periodKey = selectedPeriod.value) => {
         return;
     }
 
-    router.get(route('executive.dashboard'), {
+    router.get(route('kabid.dashboard'), {
         period: periodKey,
         room_id: selectedRoomId.value || undefined
     }, {
@@ -85,7 +85,7 @@ const applyFilter = (periodKey = selectedPeriod.value) => {
 };
 
 const applyRoomFilter = () => {
-    router.get(route('executive.dashboard'), {
+    router.get(route('kabid.dashboard'), {
         period: selectedPeriod.value,
         room_id: selectedRoomId.value || undefined,
         start_date: selectedPeriod.value === 'custom' ? customStartDate.value : undefined,
@@ -99,7 +99,7 @@ const applyRoomFilter = () => {
 const submitCustomDateFilter = () => {
     if (!customStartDate.value || !customEndDate.value) return;
     isCustomDateModalOpen.value = false;
-    router.get(route('executive.dashboard'), {
+    router.get(route('kabid.dashboard'), {
         period: 'custom',
         start_date: customStartDate.value,
         end_date: customEndDate.value,
@@ -115,7 +115,7 @@ const resetFilter = () => {
     selectedRoomId.value = '';
     customStartDate.value = '';
     customEndDate.value = '';
-    router.get(route('executive.dashboard'), {}, {
+    router.get(route('kabid.dashboard'), {}, {
         preserveState: true,
         replace: true
     });
@@ -420,7 +420,7 @@ const currentRoomName = computed(() => {
                             </div>
                         </div>
                         <Link
-                            :href="route('executive.kasi-responsiveness')"
+                            :href="route('kabid.kasi-responsiveness')"
                             class="text-xs text-emerald-600 dark:text-emerald-400 font-bold hover:underline flex items-center gap-1"
                         >
                             Detail Akuntabilitas

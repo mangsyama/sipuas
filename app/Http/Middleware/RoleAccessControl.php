@@ -66,7 +66,7 @@ class RoleAccessControl
         }
 
         if (in_array($userRoleId, [Role::KEPALA_BIDANG, Role::DIREKTUR]) || in_array($userRoleName, ['KABID', 'DIREKTUR', 'KEPALA BIDANG'])) {
-            return redirect()->route('executive.dashboard');
+            return redirect()->route('kabid.dashboard');
         }
 
         return redirect()->route('dashboard');

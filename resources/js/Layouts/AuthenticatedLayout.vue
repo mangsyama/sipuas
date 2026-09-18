@@ -89,6 +89,36 @@ const handleCustomAlert = (event) => {
                 }
             }
         };
+        try {
+            if (!window.history.state?.customAlertOpen) {
+                window.history.pushState({ customAlertOpen: true }, '');
+            }
+        } catch (e) {}
+    }
+};
+
+const handleCustomAlertKeyDown = (e) => {
+    if (e.key === 'Escape' && customAlert.value.show) {
+        e.preventDefault();
+        if (customAlert.value.cancelText && customAlert.value.onCancel) {
+            customAlert.value.onCancel();
+        } else if (customAlert.value.onConfirm) {
+            customAlert.value.onConfirm();
+        } else {
+            customAlert.value.show = false;
+        }
+    }
+};
+
+const handleCustomAlertPopState = () => {
+    if (customAlert.value.show) {
+        if (customAlert.value.cancelText && customAlert.value.onCancel) {
+            customAlert.value.onCancel();
+        } else if (customAlert.value.onConfirm) {
+            customAlert.value.onConfirm();
+        } else {
+            customAlert.value.show = false;
+        }
     }
 };
 
@@ -110,12 +140,16 @@ onMounted(() => {
     registerNotificationListeners();
     window.addEventListener('show-demo-toast', handleDemoToast);
     window.addEventListener('trigger-custom-alert', handleCustomAlert);
+    window.addEventListener('keydown', handleCustomAlertKeyDown);
+    window.addEventListener('popstate', handleCustomAlertPopState);
     document.addEventListener('click', closeMobileNotificationsOnOutsideClick);
 });
 
 onUnmounted(() => {
     window.removeEventListener('show-demo-toast', handleDemoToast);
     window.removeEventListener('trigger-custom-alert', handleCustomAlert);
+    window.removeEventListener('keydown', handleCustomAlertKeyDown);
+    window.removeEventListener('popstate', handleCustomAlertPopState);
     document.removeEventListener('click', closeMobileNotificationsOnOutsideClick);
 });
 
@@ -203,10 +237,32 @@ const isItemActive = (child) => {
     return false;
 };
 
-const isRouteActive = (item) => {
-    if (item.routeName && route().current(item.routeName)) {
+const isRouteActive = (item, group = null) => {
+    if (!item.routeName) {
+        return false;
+    }
+
+    if (route().current(item.routeName)) {
         return true;
     }
+
+    // Support legacy / kabid route aliases
+    if (item.routeName === 'kabid.dashboard' && (route().current('kabid.dashboard') || route().current('executive.dashboard'))) {
+        return true;
+    }
+    if (item.routeName === 'kabid.kasi-responsiveness' && (route().current('kabid.kasi-responsiveness') || route().current('executive.kasi-responsiveness'))) {
+        return true;
+    }
+    if (item.routeName === 'kabid.leaderboard' && (route().current('kabid.leaderboard') || route().current('executive.leaderboard'))) {
+        return true;
+    }
+
+    // Legacy reports.index fallback
+    if (route().current('reports.index')) {
+        if (item.routeName === 'kasi.reports' && isKasi.value) return true;
+        if (item.routeName === 'kabid.reports' && isDirekturOrKabid.value) return true;
+    }
+
     if (item.routeName === 'kasi.feed' && route().current('kasi.verify')) {
         return true;
     }
@@ -248,7 +304,7 @@ const isStaff = computed(() => roleId.value === 5 || roleName.value === 'STAFF')
 const dashboardRoute = computed(() => {
     if (isStaff.value) return route('staff.attendance');
     if (isKasi.value) return route('kasi.dashboard');
-    if (isDirekturOrKabid.value) return route('executive.dashboard');
+    if (isDirekturOrKabid.value) return route('kabid.dashboard');
     return route('dashboard');
 });
 
@@ -275,7 +331,7 @@ const menuGroups = computed(() => {
                     { label: 'Dashboard Kasi', routeName: 'kasi.dashboard', icon: LayoutDashboard },
                     { label: 'Aduan & Verifikasi', routeName: 'kasi.feed', icon: FileText },
                     { label: 'Digital Logbook Staf', routeName: 'kasi.logbook', icon: History },
-                    { label: 'Laporan & Ekspor', routeName: 'reports.index', icon: FileBarChart2 }
+                    { label: 'Laporan & Ekspor', routeName: 'kasi.reports', icon: FileBarChart2 }
                 ]
             }
         ];
@@ -287,10 +343,10 @@ const menuGroups = computed(() => {
             {
                 title: 'MODUL KABID',
                 items: [
-                    { label: 'Dashboard Kabid', routeName: 'executive.dashboard', icon: LayoutDashboard },
-                    { label: 'Responsivitas Kasi', routeName: 'executive.kasi-responsiveness', icon: BarChart3 },
-                    { label: 'Leaderboard Staf', routeName: 'executive.leaderboard', icon: Award },
-                    { label: 'Laporan & Ekspor', routeName: 'reports.index', icon: FileBarChart2 }
+                    { label: 'Dashboard Kabid', routeName: 'kabid.dashboard', icon: LayoutDashboard },
+                    { label: 'Responsivitas Kasi', routeName: 'kabid.kasi-responsiveness', icon: BarChart3 },
+                    { label: 'Leaderboard Staf', routeName: 'kabid.leaderboard', icon: Award },
+                    { label: 'Laporan & Ekspor', routeName: 'kabid.reports', icon: FileBarChart2 }
                 ]
             }
         ];
@@ -317,16 +373,16 @@ const menuGroups = computed(() => {
                 { label: 'Dashboard Kasi', routeName: 'kasi.dashboard', icon: LayoutDashboard },
                 { label: 'Aduan & Verifikasi', routeName: 'kasi.feed', icon: FileText },
                 { label: 'Digital Logbook Staf', routeName: 'kasi.logbook', icon: History },
-                { label: 'Laporan & Ekspor', routeName: 'reports.index', icon: FileBarChart2 }
+                { label: 'Laporan & Ekspor', routeName: 'kasi.reports', icon: FileBarChart2 }
             ]
         },
         {
             title: 'MODUL KABID',
             items: [
-                { label: 'Dashboard Kabid', routeName: 'executive.dashboard', icon: LayoutDashboard },
-                { label: 'Responsivitas Kasi', routeName: 'executive.kasi-responsiveness', icon: BarChart3 },
-                { label: 'Leaderboard Staf', routeName: 'executive.leaderboard', icon: Award },
-                { label: 'Laporan & Ekspor', routeName: 'reports.index', icon: FileBarChart2 }
+                { label: 'Dashboard Kabid', routeName: 'kabid.dashboard', icon: LayoutDashboard },
+                { label: 'Responsivitas Kasi', routeName: 'kabid.kasi-responsiveness', icon: BarChart3 },
+                { label: 'Leaderboard Staf', routeName: 'kabid.leaderboard', icon: Award },
+                { label: 'Laporan & Ekspor', routeName: 'kabid.reports', icon: FileBarChart2 }
             ]
         },
         {
@@ -353,6 +409,10 @@ const menuGroups = computed(() => {
         }
     ];
 });
+
+const handleItemClick = (item, group) => {
+    closeSidebar();
+};
 
 const triggerSupportBack = () => {
     window.dispatchEvent(new CustomEvent('services-back-clicked'));
@@ -654,9 +714,11 @@ const searchableItems = [
     { label: 'Dashboard Kasi', routeName: 'kasi.dashboard', description: 'Monitoring kinerja mutu, kepuasan, dan analitik ruangan' },
     { label: 'Aduan & Verifikasi Ruangan', routeName: 'kasi.feed', description: 'Monitoring feed aduan masuk dan verifikasi shift staf' },
     { label: 'Digital Logbook Staf', routeName: 'kasi.logbook', description: 'Rekap kinerja dan poin KPI staf ruangan' },
-    { label: 'Dashboard Kabid', routeName: 'executive.dashboard', description: 'Dashboard eksekutif, analisis sentimen AI, & pantauan zona merah' },
-    { label: 'Responsivitas Kasi', routeName: 'executive.kasi-responsiveness', description: 'Laporan kecepatan respon & akuntabilitas supervisor ruangan' },
-    { label: 'Leaderboard Kinerja Staf', routeName: 'executive.leaderboard', description: 'Peringkat apresiasi pujian & evaluasi staf RS' },
+    { label: 'Laporan & Ekspor Kasi', routeName: 'kasi.reports', description: 'Unduh laporan PDF & Excel unit pelayanan Kasi' },
+    { label: 'Dashboard Kabid', routeName: 'kabid.dashboard', description: 'Dashboard eksekutif, analisis sentimen AI, & pantauan zona merah' },
+    { label: 'Responsivitas Kasi', routeName: 'kabid.kasi-responsiveness', description: 'Laporan kecepatan respon & akuntabilitas supervisor ruangan' },
+    { label: 'Leaderboard Kinerja Staf', routeName: 'kabid.leaderboard', description: 'Peringkat apresiasi pujian & evaluasi staf RS' },
+    { label: 'Laporan & Ekspor Kabid', routeName: 'kabid.reports', description: 'Unduh laporan komprehensif RS PDF & Excel' },
     { label: 'Notifikasi Saya', routeName: 'notifications.index', description: 'Semua riwayat notifikasi sistem dan tugas' },
     { label: 'Presensi', routeName: 'staff.attendance', description: 'Pencatatan waktu presensi staf pelayanan' },
     { label: 'Dashboard Staf', routeName: 'staff.dashboard', description: 'Monitoring saldo poin KPI, apresiasi pujian, dan aduan terkait' },
@@ -670,6 +732,11 @@ const mobilePageTitles = [
     { routeName: 'kasi.feed', label: 'Aduan & Verifikasi' },
     { routeName: 'kasi.verify', label: 'Verifikasi Aduan Ruangan' },
     { routeName: 'kasi.logbook', label: 'Digital Logbook Staf' },
+    { routeName: 'kasi.reports', label: 'Laporan & Ekspor' },
+    { routeName: 'kabid.dashboard', label: 'Dashboard Kabid' },
+    { routeName: 'kabid.kasi-responsiveness', label: 'Responsivitas Kasi' },
+    { routeName: 'kabid.leaderboard', label: 'Leaderboard Staf' },
+    { routeName: 'kabid.reports', label: 'Laporan & Ekspor' },
     { routeName: 'executive.dashboard', label: 'Dashboard Kabid' },
     { routeName: 'executive.kasi-responsiveness', label: 'Responsivitas Kasi' },
     { routeName: 'executive.leaderboard', label: 'Leaderboard Staf' },
@@ -1231,8 +1298,8 @@ const getGroupInitials = (title) => {
                 leave-to-class="opacity-0"
             >
                 <div v-if="customAlert.show" class="fixed inset-0 z-[9999] flex items-center justify-center p-4">
-                    <!-- Backdrop overlay -->
-                    <div @click="customAlert.cancelText ? customAlert.onCancel() : customAlert.onConfirm()" class="fixed inset-0 bg-black/40 backdrop-blur-xs transition-opacity"></div>
+                    <!-- Backdrop overlay (Click outside disabled as per standard) -->
+                    <div class="fixed inset-0 bg-black/40 backdrop-blur-xs transition-opacity select-none"></div>
 
                     <!-- Modal Card -->
                     <div class="relative bg-white/95 dark:bg-slate-900/95 border border-slate-100 dark:border-slate-800 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden p-7 flex flex-col items-center text-center transform transition-all duration-200 scale-100 backdrop-blur-md">
@@ -1358,7 +1425,7 @@ const getGroupInitials = (title) => {
                         />
 
                         <!-- Daftar Item di Kelompok -->
-                        <template v-for="item in group.items" :key="item.label">
+                        <template v-for="item in group.items" :key="`${group.title}_${item.label}`">
 
                             <!-- External link (buka tab baru) -->
                             <a
@@ -1558,14 +1625,14 @@ const getGroupInitials = (title) => {
                             <!-- Internal Inertia link -->
                             <Link
                                 v-else
-                                :href="route(item.routeName)"
+                                :href="item.params ? route(item.routeName, item.params) : route(item.routeName)"
                                 prefetch
-                                @click="closeSidebar"
+                                @click="handleItemClick(item, group)"
                                 :class="[
                                     sidebarCollapsed 
                                         ? 'h-11 w-11 mx-auto flex items-center justify-center rounded-xl transition-all duration-150 relative' 
                                         : 'group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150 relative',
-                                    isRouteActive(item)
+                                    isRouteActive(item, group)
                                         ? 'bg-emerald-600 text-white shadow-sm font-semibold dark:bg-white/15 dark:text-white dark:shadow-none'
                                         : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-emerald-600 dark:hover:text-white'
                                 ]"
@@ -1575,7 +1642,7 @@ const getGroupInitials = (title) => {
                                     :is="item.icon"
                                     :class="[
                                         'h-5 w-5 flex-shrink-0 transition duration-150',
-                                        isRouteActive(item)
+                                        isRouteActive(item, group)
                                             ? 'text-white dark:text-white'
                                             : 'text-slate-400 group-hover:text-emerald-500 dark:group-hover:text-white'
                                     ]"
@@ -1589,7 +1656,7 @@ const getGroupInitials = (title) => {
                                         v-if="item.routeName === 'reports-management.index' && pendingReportsCount > 0"
                                         :class="[
                                             'w-5 h-5 flex items-center justify-center rounded-full text-[10px] font-extrabold bg-amber-500 text-white shadow-sm absolute transition-all duration-200',
-                                            isRouteActive(item) ? 'opacity-100 scale-100 group-hover:opacity-0 group-hover:scale-75' : 'opacity-100 scale-100'
+                                            isRouteActive(item, group) ? 'opacity-100 scale-100 group-hover:opacity-0 group-hover:scale-75' : 'opacity-100 scale-100'
                                         ]"
                                     >
                                         {{ pendingReportsCount }}
@@ -1600,7 +1667,7 @@ const getGroupInitials = (title) => {
                                         v-if="item.routeName === 'users.approvals' && pendingApprovalsCount > 0"
                                         :class="[
                                             'w-5 h-5 flex items-center justify-center rounded-full text-[10px] font-extrabold bg-amber-500 text-white shadow-sm absolute transition-all duration-200',
-                                            isRouteActive(item) ? 'opacity-100 scale-100 group-hover:opacity-0 group-hover:scale-75' : 'opacity-100 scale-100'
+                                            isRouteActive(item, group) ? 'opacity-100 scale-100 group-hover:opacity-0 group-hover:scale-75' : 'opacity-100 scale-100'
                                         ]"
                                     >
                                         {{ pendingApprovalsCount }}
@@ -1608,7 +1675,7 @@ const getGroupInitials = (title) => {
 
                                     <!-- ChevronRight (panah ke kanan) ketika aktif -->
                                     <ChevronRight
-                                        v-if="isRouteActive(item)"
+                                        v-if="isRouteActive(item, group)"
                                         :class="[
                                             'h-3.5 w-3.5 text-white dark:text-white absolute transition-all duration-200',
                                             ((item.routeName === 'reports-management.index' && pendingReportsCount > 0) || (item.routeName === 'users.approvals' && pendingApprovalsCount > 0)) ? 'opacity-0 scale-75 group-hover:opacity-100 group-hover:scale-100' : 'opacity-100'

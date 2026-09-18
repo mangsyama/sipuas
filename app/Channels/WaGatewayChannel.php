@@ -10,6 +10,70 @@ use Illuminate\Support\Facades\Log;
 class WaGatewayChannel
 {
     /**
+     * Resolve the appropriate WA Gateway base URL.
+     * Handles Docker network routing where 127.0.0.1 must resolve to 'wa-gateway' service.
+     */
+    public static function getGatewayUrl(string $endpoint = '/send'): string
+    {
+        $baseUrl = config('services.wa_gateway.local_url');
+
+        // Dynamic Docker Resolution:
+        // Inside Docker, 127.0.0.1 or localhost points to the container itself, NOT the wa-gateway service
+        if (file_exists('/.dockerenv') || env('DOCKER_ENV', false)) {
+            if (empty($baseUrl) || str_contains($baseUrl, '127.0.0.1') || str_contains($baseUrl, 'localhost')) {
+                $baseUrl = 'http://wa-gateway:3000/send';
+            }
+        }
+
+        if (empty($baseUrl)) {
+            $baseUrl = 'http://127.0.0.1:3000/send';
+        }
+
+        if ($endpoint !== '/send') {
+            $baseUrl = str_replace('/send', $endpoint, $baseUrl);
+        }
+
+        return $baseUrl;
+    }
+
+    /**
+     * Send direct message to phone number without requiring a Notification instance.
+     */
+    public static function sendDirect(string $phone, string $message): bool
+    {
+        $phone = preg_replace('/[^0-9]/', '', $phone);
+        if (empty($phone) || empty($message)) {
+            return false;
+        }
+
+        $url = self::getGatewayUrl('/send');
+        $secretKey = config('services.wa_gateway.secret_key');
+
+        try {
+            $client = Http::timeout(2)->withoutVerifying();
+            if (!empty($secretKey)) {
+                $client = $client->withHeaders(['X-Api-Key' => $secretKey]);
+            }
+
+            $response = $client->post($url, [
+                'target'  => $phone,
+                'message' => $message,
+            ]);
+
+            if ($response->failed()) {
+                Log::warning('WA Gateway failed (' . $phone . '): ' . $response->body());
+                return false;
+            }
+
+            Log::info('WA Gateway sent successfully to ' . $phone);
+            return true;
+        } catch (\Throwable $e) {
+            Log::warning('WA Gateway exception (' . $phone . '): ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
      * Send the given notification via native WA Gateway microservice.
      */
     public function send($notifiable, Notification $notification): void
@@ -38,32 +102,6 @@ class WaGatewayChannel
             return;
         }
 
-        // Dynamic URL resolution:
-        // 1. Explicitly configured URL from .env (WA_LOCAL_URL or WA_GATEWAY_URL)
-        // 2. If running inside Docker container -> http://wa-gateway:3000/send
-        // 3. Otherwise (standalone local dev) -> http://127.0.0.1:3000/send
-        $url = config('services.wa_gateway.local_url') 
-            ?: (file_exists('/.dockerenv') ? 'http://wa-gateway:3000/send' : 'http://127.0.0.1:3000/send');
-        $secretKey = config('services.wa_gateway.secret_key');
-
-        try {
-            $client = Http::timeout(3)->withoutVerifying();
-            if (!empty($secretKey)) {
-                $client = $client->withHeaders(['X-Api-Key' => $secretKey]);
-            }
-
-            $response = $client->post($url, [
-                'target'  => $phone,
-                'message' => $message,
-            ]);
-
-            if ($response->failed()) {
-                Log::error('WA Gateway failed (' . $phone . '): ' . $response->body());
-            } else {
-                Log::info('WA Gateway sent successfully to ' . $phone . ' Result: ' . $response->body());
-            }
-        } catch (\Throwable $e) {
-            Log::error('WA Gateway exception (' . $phone . '): ' . $e->getMessage());
-        }
+        self::sendDirect($phone, $message);
     }
 }

@@ -60,7 +60,7 @@ const applyFilter = (periodKey = selectedPeriod.value) => {
         return;
     }
 
-    router.get(route('executive.kasi-responsiveness'), {
+    router.get(route('kabid.kasi-responsiveness'), {
         period: periodKey,
         room_id: selectedRoomId.value || undefined
     }, {
@@ -70,7 +70,7 @@ const applyFilter = (periodKey = selectedPeriod.value) => {
 };
 
 const applyRoomFilter = () => {
-    router.get(route('executive.kasi-responsiveness'), {
+    router.get(route('kabid.kasi-responsiveness'), {
         period: selectedPeriod.value,
         room_id: selectedRoomId.value || undefined,
         start_date: selectedPeriod.value === 'custom' ? customStartDate.value : undefined,
@@ -84,7 +84,7 @@ const applyRoomFilter = () => {
 const submitCustomDateFilter = () => {
     if (!customStartDate.value || !customEndDate.value) return;
     isCustomDateModalOpen.value = false;
-    router.get(route('executive.kasi-responsiveness'), {
+    router.get(route('kabid.kasi-responsiveness'), {
         period: 'custom',
         start_date: customStartDate.value,
         end_date: customEndDate.value,
@@ -111,7 +111,7 @@ const resetFilter = () => {
     statusFilter.value = 'ALL';
     customStartDate.value = '';
     customEndDate.value = '';
-    router.get(route('executive.kasi-responsiveness'), {}, {
+    router.get(route('kabid.kasi-responsiveness'), {}, {
         preserveState: true,
         replace: true
     });

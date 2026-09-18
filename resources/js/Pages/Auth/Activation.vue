@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, watch } from 'vue';
+import { ref, onMounted, onUnmounted, watch } from 'vue';
 import { Head, Link, useForm, router } from '@inertiajs/vue3';
 import InputLabel from '@/Components/InputLabel.vue';
 import TextInput from '@/Components/TextInput.vue';
@@ -76,11 +76,60 @@ const closeModal = () => {
     scrollToTop();
 };
 
+const handleKeyDown = (e) => {
+    if (e.key === 'Escape' && showSuccessModal.value) {
+        e.preventDefault();
+        closeModal();
+    }
+};
+
+const handlePopState = () => {
+    if (showSuccessModal.value) {
+        closeModal();
+    }
+};
+
+let pushHistoryFlag = false;
+
+watch(showSuccessModal, (isOpen, oldVal) => {
+    if (typeof document !== 'undefined') {
+        if (isOpen) {
+            document.body.style.overflow = 'hidden';
+            if (!window.history.state?.activationModalOpen) {
+                try {
+                    window.history.pushState({ activationModalOpen: true }, '');
+                    pushHistoryFlag = true;
+                } catch (e) {}
+            }
+        } else {
+            document.body.style.overflow = '';
+            if (oldVal && pushHistoryFlag && window.history.state?.activationModalOpen) {
+                pushHistoryFlag = false;
+                try {
+                    window.history.back();
+                } catch (e) {}
+            } else {
+                pushHistoryFlag = false;
+            }
+        }
+    }
+});
+
 onMounted(() => {
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('popstate', handlePopState);
     if (props.status) {
         statusMessage.value = props.status;
         showSuccessModal.value = true;
         scrollToTop();
+    }
+});
+
+onUnmounted(() => {
+    window.removeEventListener('keydown', handleKeyDown);
+    window.removeEventListener('popstate', handlePopState);
+    if (typeof document !== 'undefined') {
+        document.body.style.overflow = '';
     }
 });
 
@@ -567,8 +616,8 @@ const submit = () => {
                 leave-to-class="opacity-0"
             >
                 <div v-if="showSuccessModal" class="fixed inset-0 z-[9999] flex items-center justify-center p-4 font-['Poppins',sans-serif]">
-                    <!-- Backdrop overlay -->
-                    <div @click="closeModal" class="fixed inset-0 bg-black/40 backdrop-blur-xs"></div>
+                    <!-- Backdrop overlay (Click outside to close disabled as per standard) -->
+                    <div class="fixed inset-0 bg-black/40 backdrop-blur-xs select-none"></div>
 
                     <!-- Modal Card matching AuthenticatedLayout Swal design -->
                     <div class="relative bg-white/95 dark:bg-slate-900/95 border border-slate-100 dark:border-slate-800 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden p-6 sm:p-7 flex flex-col items-center text-center transform transition-all duration-200 backdrop-blur-md">

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import SearchableSelect from '@/Components/SearchableSelect.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
@@ -31,7 +31,10 @@ import {
     Plus,
     Wrench,
     RefreshCw,
-    Info
+    Info,
+    Paperclip,
+    Trash2,
+    Download
 } from '@lucide/vue';
 
 const props = defineProps({
@@ -67,6 +70,82 @@ const showConfirmModal = ref(false);
 const showValidationModal = ref(false);
 const selectedImagePreview = ref(null);
 
+// Modal Keyboard (Escape) & Browser Back (popstate) standard handling
+const handleKeyDown = (e) => {
+    if (e.key === 'Escape') {
+        if (showConfirmModal.value) {
+            e.preventDefault();
+            showConfirmModal.value = false;
+        } else if (showValidationModal.value) {
+            e.preventDefault();
+            showValidationModal.value = false;
+        } else if (selectedImagePreview.value) {
+            e.preventDefault();
+            selectedImagePreview.value = null;
+        } else if (showSuccessModal.value) {
+            e.preventDefault();
+            finishVerification();
+        }
+    }
+};
+
+const handlePopState = () => {
+    if (showConfirmModal.value) {
+        showConfirmModal.value = false;
+    } else if (showValidationModal.value) {
+        showValidationModal.value = false;
+    } else if (selectedImagePreview.value) {
+        selectedImagePreview.value = null;
+    } else if (showSuccessModal.value) {
+        finishVerification();
+    }
+};
+
+let pushHistoryFlag = false;
+
+watch(
+    [showConfirmModal, showValidationModal, showSuccessModal, selectedImagePreview],
+    ([confirmOpen, validOpen, successOpen, imgOpen], [oldConfirm, oldValid, oldSuccess, oldImg]) => {
+        if (typeof document !== 'undefined') {
+            const isAnyOpen = confirmOpen || validOpen || successOpen || !!imgOpen;
+            const wasAnyOpen = oldConfirm || oldValid || oldSuccess || !!oldImg;
+
+            if (isAnyOpen) {
+                document.body.style.overflow = 'hidden';
+                if (!window.history.state?.verifyModalOpen) {
+                    try {
+                        window.history.pushState({ verifyModalOpen: true }, '');
+                        pushHistoryFlag = true;
+                    } catch (e) {}
+                }
+            } else {
+                document.body.style.overflow = '';
+                if (wasAnyOpen && pushHistoryFlag && window.history.state?.verifyModalOpen) {
+                    pushHistoryFlag = false;
+                    try {
+                        window.history.back();
+                    } catch (e) {}
+                } else {
+                    pushHistoryFlag = false;
+                }
+            }
+        }
+    }
+);
+
+onMounted(() => {
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('popstate', handlePopState);
+});
+
+onUnmounted(() => {
+    window.removeEventListener('keydown', handleKeyDown);
+    window.removeEventListener('popstate', handlePopState);
+    if (typeof document !== 'undefined') {
+        document.body.style.overflow = '';
+    }
+});
+
 const report = computed(() => props.reportDetail);
 const isVerified = computed(() => report.value?.status === 'VERIFIED');
 
@@ -82,15 +161,20 @@ const isFacilityComplaint = computed(() => {
 });
 
 const defaultActionType = computed(() => {
+    // 1. Prioritaskan tindakan historis yang sudah diverifikasi jika laporan berstatus VERIFIED
+    if (report.value?.verified_action_type) {
+        return report.value.verified_action_type;
+    }
     if (report.value?.verified_points !== null && report.value?.verified_points !== undefined) {
         if (report.value.verified_points > 0) return 'PENAMBAHAN';
         if (report.value.verified_points < 0) return 'PEMOTONGAN';
         return 'NETRAL';
     }
-    // Jika laporan terkait sarpras/fasilitas, arahkan default ke NETRAL
+    // 2. Jika laporan terkait sarpras/fasilitas, arahkan default ke NETRAL
     if (isFacilityComplaint.value) {
         return 'NETRAL';
     }
+    // 3. Rekomendasi berdasarkan AI Sentiment
     if (report.value?.ai_sentiment === 'POSITIF') {
         return 'PENAMBAHAN';
     }
@@ -107,6 +191,122 @@ const pointValue = ref(
         : (actionType.value === 'NETRAL' ? 0 : 5)
 );
 const supervisorNotes = ref(report.value?.supervisor_notes || '');
+
+// Attachment Upload State (Bisa multiple, dibatasi 1 file saat ini untuk kemudahan ekspansi mendatang)
+const MAX_ATTACHMENTS = 1;
+const verificationFiles = ref([]);
+const fileInputRef = ref(null);
+const fileError = ref(null);
+const isDragging = ref(false);
+
+const triggerFileInput = () => {
+    if (isVerified.value) return;
+    fileInputRef.value?.click();
+};
+
+const formatBytes = (bytes) => {
+    if (!bytes) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+};
+
+const getFileType = (file) => {
+    const name = file.name.toLowerCase();
+    if (file.type.startsWith('image/')) return 'image';
+    if (file.type === 'application/pdf' || name.endsWith('.pdf')) return 'pdf';
+    if (name.endsWith('.doc') || name.endsWith('.docx')) return 'word';
+    if (name.endsWith('.xls') || name.endsWith('.xlsx')) return 'excel';
+    return 'document';
+};
+
+const handleFiles = (files) => {
+    fileError.value = null;
+    const allowedExtensions = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'jpg', 'jpeg', 'png', 'webp'];
+    const maxSizeBytes = 10 * 1024 * 1024; // 10MB
+
+    const newFiles = [];
+    for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const ext = file.name.split('.').pop().toLowerCase();
+        
+        if (!allowedExtensions.includes(ext)) {
+            fileError.value = `Format file .${ext} tidak didukung. Harap unggah file PDF, Dokumen Word/Excel, atau Foto (JPG/PNG).`;
+            return;
+        }
+
+        if (file.size > maxSizeBytes) {
+            fileError.value = `Ukuran file "${file.name}" melebihi batas maksimal 10 MB.`;
+            return;
+        }
+
+        const type = getFileType(file);
+        let previewUrl = null;
+        if (type === 'image') {
+            previewUrl = URL.createObjectURL(file);
+        }
+
+        newFiles.push({
+            file,
+            name: file.name,
+            size: formatBytes(file.size),
+            type,
+            previewUrl
+        });
+    }
+
+    if (MAX_ATTACHMENTS === 1) {
+        // Dibatasi 1 file untuk saat ini
+        verificationFiles.value = newFiles.slice(-1);
+    } else {
+        const combined = [...verificationFiles.value, ...newFiles];
+        verificationFiles.value = combined.slice(0, MAX_ATTACHMENTS);
+    }
+};
+
+const onFileInputChange = (event) => {
+    const files = event.target.files;
+    if (files && files.length > 0) {
+        handleFiles(files);
+    }
+    if (fileInputRef.value) {
+        fileInputRef.value.value = '';
+    }
+};
+
+const onFileDrop = (event) => {
+    isDragging.value = false;
+    if (isVerified.value) return;
+    const files = event.dataTransfer.files;
+    if (files && files.length > 0) {
+        handleFiles(files);
+    }
+};
+
+const removeVerificationFile = (index) => {
+    if (isVerified.value) return;
+    const removed = verificationFiles.value[index];
+    if (removed?.previewUrl) {
+        URL.revokeObjectURL(removed.previewUrl);
+    }
+    verificationFiles.value.splice(index, 1);
+};
+
+watch(() => props.reportDetail, (newVal) => {
+    if (newVal) {
+        actionType.value = defaultActionType.value;
+        pointValue.value = newVal.verified_points !== null && newVal.verified_points !== undefined 
+            ? newVal.verified_points 
+            : (defaultActionType.value === 'NETRAL' ? 0 : 5);
+        supervisorNotes.value = newVal.supervisor_notes || '';
+        verificationFiles.value.forEach(f => {
+            if (f.previewUrl) URL.revokeObjectURL(f.previewUrl);
+        });
+        verificationFiles.value = [];
+        fileError.value = null;
+    }
+}, { deep: true });
 
 const getEffectiveStaffList = () => {
     const list = (props.staffList && props.staffList.length > 0) 
@@ -352,9 +552,14 @@ const executeSubmit = () => {
         pesupeluh_category_id: pesupeluhCategoryId.value,
         pesupeluh_room_id: pesupeluhRoomId.value,
         pesupeluh_priority: pesupeluhPriority.value,
+        attachments: verificationFiles.value.map(f => f.file),
     }, {
         onSuccess: (page) => {
             isSubmitting.value = false;
+            verificationFiles.value.forEach(f => {
+                if (f.previewUrl) URL.revokeObjectURL(f.previewUrl);
+            });
+            verificationFiles.value = [];
             const flashed = page?.props?.flash?.pesupeluh_ticket_number 
                          || page?.props?.reportDetail?.pesupeluh_ticket_number 
                          || props.reportDetail?.pesupeluh_ticket_number;
@@ -713,11 +918,21 @@ const finishVerification = () => {
                                         @click="(isVerified || actionType === 'NETRAL') ? $event.preventDefault() : null"
                                         :class="[
                                             'flex items-center justify-between p-3 rounded-xl border select-none transition',
-                                            (isVerified || actionType === 'NETRAL') 
-                                                ? 'cursor-not-allowed opacity-60 bg-slate-100/70 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800' 
-                                                : (staff.selected 
-                                                    ? 'cursor-pointer bg-emerald-50/80 border-emerald-500 dark:bg-emerald-950/40 dark:border-emerald-700' 
-                                                    : 'cursor-pointer bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 hover:border-slate-300')
+                                            isVerified
+                                                ? (staff.selected 
+                                                    ? (actionType === 'PEMOTONGAN' 
+                                                        ? 'cursor-not-allowed bg-rose-50/70 border-rose-300 dark:bg-rose-950/30 dark:border-rose-800/80' 
+                                                        : (actionType === 'NETRAL' 
+                                                            ? 'cursor-not-allowed bg-blue-50/70 border-blue-300 dark:bg-blue-950/30 dark:border-blue-800/80' 
+                                                            : 'cursor-not-allowed bg-emerald-50/70 border-emerald-300 dark:bg-emerald-950/30 dark:border-emerald-800/80'))
+                                                    : 'cursor-not-allowed opacity-50 bg-slate-100/50 dark:bg-slate-900/30 border-slate-200 dark:border-slate-800')
+                                                : (actionType === 'NETRAL' 
+                                                    ? 'cursor-not-allowed opacity-60 bg-slate-100/70 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800' 
+                                                    : (staff.selected 
+                                                        ? (actionType === 'PEMOTONGAN'
+                                                            ? 'cursor-pointer bg-rose-50/80 border-rose-500 dark:bg-rose-950/40 dark:border-rose-700'
+                                                            : 'cursor-pointer bg-emerald-50/80 border-emerald-500 dark:bg-emerald-950/40 dark:border-emerald-700')
+                                                        : 'cursor-pointer bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 hover:border-slate-300'))
                                         ]"
                                     >
                                         <div class="flex items-center gap-3">
@@ -725,7 +940,12 @@ const finishVerification = () => {
                                                 type="checkbox"
                                                 v-model="staff.selected"
                                                 :disabled="isVerified || actionType === 'NETRAL'"
-                                                class="rounded text-emerald-600 focus:ring-emerald-500 h-4 w-4 accent-emerald-600 disabled:cursor-not-allowed"
+                                                :class="[
+                                                    'rounded h-4 w-4 disabled:cursor-not-allowed',
+                                                    actionType === 'PEMOTONGAN'
+                                                        ? 'text-rose-600 focus:ring-rose-500 accent-rose-600'
+                                                        : 'text-emerald-600 focus:ring-emerald-500 accent-emerald-600'
+                                                ]"
                                             />
                                             <div>
                                                 <div class="flex items-center gap-1.5 flex-wrap">
@@ -753,11 +973,11 @@ const finishVerification = () => {
                                             </div>
                                         </div>
                                         <div class="text-right flex-shrink-0">
-                                            <span class="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 block">
+                                            <span class="text-[11px] font-semibold block" :class="actionType === 'PEMOTONGAN' && isVerified ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'">
                                                 {{ staff.total_points }} Poin
                                             </span>
-                                            <span v-if="staff.selected" class="text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
-                                                Terpilih
+                                            <span v-if="staff.selected" class="text-[10px] font-semibold" :class="actionType === 'PEMOTONGAN' ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'">
+                                                {{ isVerified ? (actionType === 'PEMOTONGAN' ? `Dievaluasi (-${pointValue})` : (actionType === 'NETRAL' ? 'Tercatat (0 Poin)' : `Diberi Reward (+${pointValue})`)) : 'Terpilih' }}
                                             </span>
                                         </div>
                                     </label>
@@ -783,9 +1003,16 @@ const finishVerification = () => {
                                 <h3 class="text-xs font-extrabold uppercase tracking-wider text-slate-900 dark:text-white">
                                     Eksekusi Poin KPI & Berita Acara
                                 </h3>
-                                <span v-if="isVerified" class="px-2.5 py-1 rounded-lg text-[10px] font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 flex items-center gap-1 shrink-0">
+                                <span v-if="isVerified" :class="[
+                                    'px-2.5 py-1 rounded-lg text-[10px] font-semibold flex items-center gap-1 shrink-0 border',
+                                    actionType === 'PEMOTONGAN' 
+                                        ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border-rose-300 dark:border-rose-800' 
+                                        : (actionType === 'NETRAL'
+                                            ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 border-blue-300 dark:border-blue-800'
+                                            : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800')
+                                ]">
                                     <Check class="h-3 w-3" />
-                                    <span>Telah Dieksekusi</span>
+                                    <span>Telah Dieksekusi ({{ actionType === 'PEMOTONGAN' ? 'Potong Poin' : (actionType === 'NETRAL' ? 'Netral' : 'Tambah Poin') }})</span>
                                 </span>
                                 <span v-else class="px-2.5 py-1 rounded-lg text-[10px] font-semibold bg-emerald-50 text-emerald-700 dark:bg-white/10 dark:text-white shrink-0">
                                     Poin KPI
@@ -857,8 +1084,15 @@ const finishVerification = () => {
                                             :disabled="isVerified"
                                             @click="decrementPoint"
                                             :class="[
-                                                'h-11 w-11 sm:h-10 sm:w-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center transition shrink-0 font-bold',
-                                                isVerified ? 'opacity-40 cursor-not-allowed' : 'hover:bg-slate-200 dark:hover:bg-slate-700 active:scale-95 cursor-pointer'
+                                                'h-11 w-11 sm:h-10 sm:w-10 rounded-xl border flex items-center justify-center transition shrink-0 font-bold bg-slate-50 dark:bg-slate-950',
+                                                actionType === 'PEMOTONGAN' 
+                                                    ? 'border-rose-200 dark:border-rose-900/50 text-rose-600 dark:text-rose-400' 
+                                                    : 'border-emerald-200 dark:border-emerald-900/50 text-emerald-600 dark:text-emerald-400',
+                                                isVerified 
+                                                    ? 'opacity-40 cursor-not-allowed' 
+                                                    : (actionType === 'PEMOTONGAN' 
+                                                        ? 'hover:bg-rose-50 hover:border-rose-300 dark:hover:bg-rose-950/40 active:scale-95 cursor-pointer' 
+                                                        : 'hover:bg-emerald-50 hover:border-emerald-300 dark:hover:bg-emerald-950/40 active:scale-95 cursor-pointer')
                                             ]"
                                         >
                                             <Minus class="h-4 w-4" />
@@ -893,8 +1127,15 @@ const finishVerification = () => {
                                             :disabled="isVerified"
                                             @click="incrementPoint"
                                             :class="[
-                                                'h-11 w-11 sm:h-10 sm:w-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center transition shrink-0 font-bold',
-                                                isVerified ? 'opacity-40 cursor-not-allowed' : 'hover:bg-slate-200 dark:hover:bg-slate-700 active:scale-95 cursor-pointer'
+                                                'h-11 w-11 sm:h-10 sm:w-10 rounded-xl border flex items-center justify-center transition shrink-0 font-bold bg-slate-50 dark:bg-slate-950',
+                                                actionType === 'PEMOTONGAN' 
+                                                    ? 'border-rose-200 dark:border-rose-900/50 text-rose-600 dark:text-rose-400' 
+                                                    : 'border-emerald-200 dark:border-emerald-900/50 text-emerald-600 dark:text-emerald-400',
+                                                isVerified 
+                                                    ? 'opacity-40 cursor-not-allowed' 
+                                                    : (actionType === 'PEMOTONGAN' 
+                                                        ? 'hover:bg-rose-50 hover:border-rose-300 dark:hover:bg-rose-950/40 active:scale-95 cursor-pointer' 
+                                                        : 'hover:bg-emerald-50 hover:border-emerald-300 dark:hover:bg-emerald-950/40 active:scale-95 cursor-pointer')
                                             ]"
                                         >
                                             <Plus class="h-4 w-4" />
@@ -1059,13 +1300,204 @@ const finishVerification = () => {
                                     ></textarea>
                                 </div>
 
+                                <!-- Attachment Section: SP / Surat Teguran / Berkas Apresiasi (Opsional, dibatasi 1 file saat ini) -->
+                                <div v-if="actionType !== 'NETRAL' || (isVerified && report?.verification_attachments?.length > 0)" class="space-y-2">
+                                    <div class="flex items-center justify-between">
+                                        <label class="text-[11px] font-medium text-slate-400 dark:text-slate-500 flex items-center gap-1.5">
+                                            <Paperclip class="h-3.5 w-3.5" />
+                                            <span>
+                                                {{ 
+                                                    actionType === 'PEMOTONGAN' 
+                                                        ? 'Lampiran Berkas Evaluasi / SP (Opsional):' 
+                                                        : (actionType === 'PENAMBAHAN' 
+                                                            ? 'Lampiran Berkas Apresiasi / Sertifikat (Opsional):' 
+                                                            : 'Berkas Pendukung / Berita Acara (Opsional):') 
+                                                }}
+                                            </span>
+                                        </label>
+                                        <span v-if="!isVerified" class="text-[10px] text-slate-400 font-normal">
+                                            Maks. {{ MAX_ATTACHMENTS }} Berkas (PDF, Dokumen, atau Foto)
+                                        </span>
+                                    </div>
+
+                                    <!-- Hidden File Input -->
+                                    <input
+                                        ref="fileInputRef"
+                                        type="file"
+                                        accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.webp"
+                                        class="hidden"
+                                        @change="onFileInputChange"
+                                    />
+
+                                    <!-- Mode VERIFIED: Tampilkan berkas yang telah diunggah saat verifikasi -->
+                                    <div v-if="isVerified">
+                                        <div v-if="report?.verification_attachments && report.verification_attachments.length > 0" class="space-y-2">
+                                            <div
+                                                v-for="att in report.verification_attachments"
+                                                :key="'verif-att-' + att.id"
+                                                class="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/50 flex items-center justify-between gap-3"
+                                            >
+                                                <div class="flex items-center gap-3 min-w-0">
+                                                    <div :class="[
+                                                        'h-10 w-10 rounded-xl flex items-center justify-center shrink-0 border',
+                                                        att.file_type === 'pdf' 
+                                                            ? 'bg-rose-50 text-rose-600 border-rose-200 dark:bg-rose-950/40 dark:border-rose-900/50' 
+                                                            : (att.file_type === 'image' 
+                                                                ? 'bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-950/40 dark:border-amber-900/50' 
+                                                                : 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-950/40 dark:border-blue-900/50')
+                                                    ]">
+                                                        <FileText v-if="att.file_type === 'pdf' || att.file_type === 'document'" class="h-5 w-5" />
+                                                        <Image v-else class="h-5 w-5" />
+                                                    </div>
+                                                    <div class="min-w-0">
+                                                        <p class="text-xs font-semibold text-slate-800 dark:text-slate-100 truncate" :title="att.file_name">
+                                                            {{ att.file_name }}
+                                                        </p>
+                                                        <div class="text-[10px] text-slate-400 mt-0.5 flex items-center gap-2 flex-wrap">
+                                                            <span>{{ att.file_size }}</span>
+                                                            <span v-if="att.created_at">• {{ att.created_at }}</span>
+                                                            <span v-if="att.uploaded_by">• Oleh: {{ att.uploaded_by }}</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="flex items-center gap-1.5 shrink-0">
+                                                    <button
+                                                        v-if="att.file_type === 'image'"
+                                                        type="button"
+                                                        @click="selectedImagePreview = att.url"
+                                                        class="h-8 px-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-1 transition cursor-pointer"
+                                                    >
+                                                        <Maximize2 class="h-3.5 w-3.5" />
+                                                        <span class="hidden sm:inline">Lihat</span>
+                                                    </button>
+                                                    <a
+                                                        :href="att.url"
+                                                        target="_blank"
+                                                        download
+                                                        class="h-8 px-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-1 transition cursor-pointer"
+                                                    >
+                                                        <Download class="h-3.5 w-3.5" />
+                                                        <span>Unduh</span>
+                                                    </a>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div v-else class="p-3 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-950/30 text-center text-xs text-slate-400">
+                                            Tidak ada berkas fisik/SP dilampirkan pada verifikasi ini.
+                                        </div>
+                                    </div>
+
+                                    <!-- Mode PENDING (Input Upload) -->
+                                    <div v-else class="space-y-2">
+                                        <!-- If files already selected -->
+                                        <div v-if="verificationFiles.length > 0" class="space-y-2">
+                                            <div
+                                                v-for="(vf, idx) in verificationFiles"
+                                                :key="'vf-' + idx"
+                                                class="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-950/60 flex items-center justify-between gap-3 shadow-xs"
+                                            >
+                                                <div class="flex items-center gap-3 min-w-0">
+                                                    <div :class="[
+                                                        'h-10 w-10 rounded-xl flex items-center justify-center shrink-0 border overflow-hidden',
+                                                        vf.type === 'pdf' 
+                                                            ? 'bg-rose-50 text-rose-600 border-rose-200 dark:bg-rose-950/40 dark:border-rose-900/50' 
+                                                            : (vf.type === 'image' 
+                                                                ? 'bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-950/40 dark:border-amber-900/50' 
+                                                                : 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-950/40 dark:border-blue-900/50')
+                                                    ]">
+                                                        <FileText v-if="vf.type === 'pdf' || vf.type === 'word' || vf.type === 'excel' || vf.type === 'document'" class="h-5 w-5" />
+                                                        <img v-else-if="vf.previewUrl" :src="vf.previewUrl" class="h-full w-full object-cover rounded-xl" />
+                                                        <Image v-else class="h-5 w-5" />
+                                                    </div>
+                                                    <div class="min-w-0">
+                                                        <p class="text-xs font-semibold text-slate-800 dark:text-slate-100 truncate" :title="vf.name">
+                                                            {{ vf.name }}
+                                                        </p>
+                                                        <p class="text-[10px] text-slate-400 mt-0.5">
+                                                            {{ vf.size }} • <span class="text-emerald-600 dark:text-emerald-400 font-medium">Siap diunggah</span>
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <div class="flex items-center gap-2 shrink-0">
+                                                    <button
+                                                        type="button"
+                                                        @click="triggerFileInput"
+                                                        class="text-[11px] font-semibold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 underline cursor-pointer"
+                                                        title="Ganti berkas"
+                                                    >
+                                                        Ganti
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        @click="removeVerificationFile(idx)"
+                                                        class="h-7 w-7 rounded-lg bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 text-rose-600 dark:text-rose-400 flex items-center justify-center transition cursor-pointer"
+                                                        title="Hapus berkas"
+                                                    >
+                                                        <Trash2 class="h-3.5 w-3.5" />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Upload Dropzone (jika belum mencapai batas maksimal upload) -->
+                                        <div
+                                            v-if="verificationFiles.length < MAX_ATTACHMENTS"
+                                            @click="triggerFileInput"
+                                            @dragover.prevent="isDragging = true"
+                                            @dragleave.prevent="isDragging = false"
+                                            @drop.prevent="onFileDrop"
+                                            :class="[
+                                                'border-2 border-dashed rounded-xl p-3.5 sm:p-4 text-center cursor-pointer transition flex flex-col items-center justify-center gap-1.5 select-none',
+                                                isDragging 
+                                                    ? 'border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20' 
+                                                    : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/30 hover:border-slate-300 dark:hover:border-slate-700 hover:bg-slate-100/40'
+                                            ]"
+                                        >
+                                            <div class="h-8 w-8 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 flex items-center justify-center">
+                                                <Paperclip class="h-4 w-4" />
+                                            </div>
+                                            <div>
+                                                <p class="text-xs font-semibold text-slate-700 dark:text-slate-200">
+                                                    Pilih Berkas Lampiran <span class="text-slate-400 font-normal">atau seret ke sini</span>
+                                                </p>
+                                                <p class="text-[10px] text-slate-400 mt-0.5">
+                                                    PDF, Word, Excel, atau Foto JPG/PNG (Maks. 10 MB • Opsional)
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <!-- Error message if invalid file -->
+                                        <p v-if="fileError" class="text-[11px] text-rose-600 dark:text-rose-400 font-medium flex items-center gap-1 mt-1">
+                                            <AlertCircle class="h-3.5 w-3.5 shrink-0" />
+                                            <span>{{ fileError }}</span>
+                                        </p>
+                                    </div>
+                                </div>
+
                                 <!-- Verified State Banner or Submit Button -->
-                                <div v-if="isVerified" class="p-3.5 sm:p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 text-center space-y-1.5 select-none shadow-xs">
-                                    <div class="flex items-center justify-center gap-2 text-emerald-800 dark:text-emerald-300 font-bold text-xs sm:text-sm">
-                                        <CheckCircle2 class="h-4 w-4 sm:h-4.5 sm:w-4.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                <div v-if="isVerified" :class="[
+                                    'p-3.5 sm:p-4 rounded-xl text-center space-y-1.5 select-none shadow-xs border',
+                                    actionType === 'PEMOTONGAN'
+                                        ? 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900/60'
+                                        : (actionType === 'NETRAL'
+                                            ? 'bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-900/60'
+                                            : 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800')
+                                ]">
+                                    <div :class="[
+                                        'flex items-center justify-center gap-2 font-bold text-xs sm:text-sm',
+                                        actionType === 'PEMOTONGAN'
+                                            ? 'text-rose-800 dark:text-rose-300'
+                                            : (actionType === 'NETRAL' ? 'text-blue-800 dark:text-blue-300' : 'text-emerald-800 dark:text-emerald-300')
+                                    ]">
+                                        <CheckCircle2 class="h-4 w-4 sm:h-4.5 sm:w-4.5 shrink-0" :class="actionType === 'PEMOTONGAN' ? 'text-rose-600 dark:text-rose-400' : (actionType === 'NETRAL' ? 'text-blue-600 dark:text-blue-400' : 'text-emerald-600 dark:text-emerald-400')" />
                                         <span>Laporan Ini Telah Selesai Diverifikasi</span>
                                     </div>
-                                    <p class="text-[11px] sm:text-xs text-emerald-700/90 dark:text-emerald-300/80 font-normal leading-relaxed">
+                                    <p :class="[
+                                        'text-[11px] sm:text-xs font-normal leading-relaxed',
+                                        actionType === 'PEMOTONGAN'
+                                            ? 'text-rose-700/90 dark:text-rose-300/80'
+                                            : (actionType === 'NETRAL' ? 'text-blue-700/90 dark:text-blue-300/80' : 'text-emerald-700/90 dark:text-emerald-300/80')
+                                    ]">
                                         Verifikasi dieksekusi pada <strong>{{ report.verified_at || '-' }}</strong><template v-if="report.verified_by"> oleh <strong>{{ report.verified_by }}</strong></template>. Saldo poin staf unit telah tercatat di logbook dan tidak dapat diubah kembali.
                                     </p>
                                 </div>
@@ -1129,8 +1561,8 @@ const finishVerification = () => {
                 leave-to-class="opacity-0"
             >
                 <div v-if="showConfirmModal" class="fixed inset-0 z-[9999] flex items-center justify-center p-4">
-                    <!-- Backdrop overlay -->
-                    <div @click="showConfirmModal = false" class="fixed inset-0 bg-black/40 backdrop-blur-xs transition-opacity"></div>
+                    <!-- Backdrop overlay (Click outside to close disabled as per standard) -->
+                    <div class="fixed inset-0 bg-black/40 backdrop-blur-xs transition-opacity select-none"></div>
 
                     <!-- Modal Card -->
                     <div class="relative bg-white/95 dark:bg-slate-900/95 border border-slate-100 dark:border-slate-800 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden p-6 sm:p-7 flex flex-col items-center text-center transform transition-all duration-200 scale-100 backdrop-blur-md">
@@ -1172,7 +1604,7 @@ const finishVerification = () => {
                                     </span>
                                 </div>
                             </div>
-                            <div class="pb-2" :class="actionType === 'NETRAL' && forwardToPesupeluh ? 'border-b border-slate-200/60 dark:border-slate-800' : ''">
+                            <div class="pb-2" :class="(actionType === 'NETRAL' && forwardToPesupeluh) || verificationFiles.length > 0 ? 'border-b border-slate-200/60 dark:border-slate-800' : ''">
                                 <span class="text-slate-400 font-medium block mb-1">Staf Bertugas Terkait:</span>
                                 <div v-if="selectedStaffList.length > 0" class="font-semibold text-slate-800 dark:text-slate-200 text-xs">
                                     {{ selectedStaffList.map(s => s.name).join(', ') }}
@@ -1180,6 +1612,13 @@ const finishVerification = () => {
                                 <div v-else class="text-slate-400 italic text-xs">
                                     Tidak ada staf dikaitkan
                                 </div>
+                            </div>
+                            <div v-if="verificationFiles.length > 0" class="flex justify-between items-center pb-2" :class="actionType === 'NETRAL' && forwardToPesupeluh ? 'border-b border-slate-200/60 dark:border-slate-800' : ''">
+                                <span class="text-slate-400 font-medium">Lampiran Berkas:</span>
+                                <span class="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1.5 truncate max-w-[200px]">
+                                    <Paperclip class="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                    <span class="truncate">{{ verificationFiles[0].name }} ({{ verificationFiles[0].size }})</span>
+                                </span>
                             </div>
                             <div v-if="actionType === 'NETRAL' && forwardToPesupeluh" class="p-2.5 rounded-xl bg-sky-50 dark:bg-sky-950/40 border border-sky-200/80 dark:border-sky-800/80 text-sky-800 dark:text-sky-300 text-xs font-medium flex items-center gap-2">
                                 <Wrench class="h-4 w-4 shrink-0 text-sky-600 dark:text-sky-400" />
@@ -1220,8 +1659,8 @@ const finishVerification = () => {
                 leave-to-class="opacity-0"
             >
                 <div v-if="showValidationModal" class="fixed inset-0 z-[9999] flex items-center justify-center p-4">
-                    <!-- Backdrop overlay -->
-                    <div @click="showValidationModal = false" class="fixed inset-0 bg-black/40 backdrop-blur-xs transition-opacity"></div>
+                    <!-- Backdrop overlay (Click outside to close disabled as per standard) -->
+                    <div class="fixed inset-0 bg-black/40 backdrop-blur-xs transition-opacity select-none"></div>
 
                     <!-- Modal Card -->
                     <div class="relative bg-white/95 dark:bg-slate-900/95 border border-slate-100 dark:border-slate-800 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden p-6 sm:p-7 flex flex-col items-center text-center transform transition-all duration-200 scale-100 backdrop-blur-md">
@@ -1265,8 +1704,8 @@ const finishVerification = () => {
                 leave-to-class="opacity-0"
             >
                 <div v-if="showSuccessModal" class="fixed inset-0 z-[9999] flex items-center justify-center p-4">
-                    <!-- Backdrop overlay -->
-                    <div @click="finishVerification" class="fixed inset-0 bg-black/40 backdrop-blur-xs transition-opacity"></div>
+                    <!-- Backdrop overlay (Click outside to close disabled as per standard) -->
+                    <div class="fixed inset-0 bg-black/40 backdrop-blur-xs transition-opacity select-none"></div>
 
                     <!-- Modal Card -->
                     <div class="relative bg-white/95 dark:bg-slate-900/95 border border-slate-100 dark:border-slate-800 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden p-7 flex flex-col items-center text-center transform transition-all duration-200 scale-100 backdrop-blur-md">

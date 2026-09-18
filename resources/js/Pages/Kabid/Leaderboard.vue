@@ -199,7 +199,7 @@ const props = defineProps({
                                         <span class="text-[10px] text-slate-400 block font-medium uppercase tracking-wider">Apresiasi</span>
                                         <span class="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
                                             <ThumbsUp class="h-3 w-3" />
-                                            +{{ staf.praise_count }} Pujian
+                                            {{ staf.praise_count }} Pujian
                                         </span>
                                     </div>
                                     <div class="text-right min-w-[75px]">

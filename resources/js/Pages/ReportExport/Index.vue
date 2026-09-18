@@ -213,7 +213,7 @@ watch(() => props.reports, () => {
 
 const applyFilters = () => {
     isFiltering.value = true;
-    router.visit(route('reports.index'), {
+    router.visit(window.location.pathname, {
         data: formFilters.value,
         preserveState: true,
         preserveScroll: true,

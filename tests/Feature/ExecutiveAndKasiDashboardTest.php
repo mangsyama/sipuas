@@ -185,10 +185,62 @@ class ExecutiveAndKasiDashboardTest extends TestCase
         // Kasi is redirected to Kasi Dashboard
         $this->actingAs($kasi)->get(route('dashboard'))->assertRedirect(route('kasi.dashboard'));
 
-        // Kabid is redirected to Executive Dashboard
-        $this->actingAs($kabid)->get(route('dashboard'))->assertRedirect(route('executive.dashboard'));
+        // Kabid is redirected to Kabid Dashboard
+        $this->actingAs($kabid)->get(route('dashboard'))->assertRedirect(route('kabid.dashboard'));
 
         // Staff is redirected to Attendance
         $this->actingAs($staff)->get(route('dashboard'))->assertRedirect(route('staff.attendance'));
     }
+
+    public function test_kasi_process_verification_updates_status_and_dispatches_wa_to_reporter(): void
+    {
+        $kasi = User::factory()->create([
+            'role_id' => Role::KEPALA_SEKSI,
+            'is_active' => true,
+        ]);
+        $room = Room::first();
+
+        $report = Report::create([
+            'ticket_number' => 'LP-WA-TEST-99',
+            'room_id' => $room->id,
+            'isi_laporan' => 'Pelayanan ramah dan memuaskan.',
+            'reporter_name' => 'Budi Santoso',
+            'reporter_phone' => '081234567890',
+            'status' => 'PENDING',
+        ]);
+
+        $response = $this->actingAs($kasi)->post(route('kasi.verify.process', $report->id), [
+            'action_type' => 'NETRAL',
+            'points' => 0,
+            'supervisor_notes' => 'Telah ditindaklanjuti dengan baik.',
+        ]);
+
+        $response->assertRedirect();
+        $this->assertDatabaseHas('reports', [
+            'id' => $report->id,
+            'status' => 'VERIFIED',
+            'verified_by' => $kasi->id,
+        ]);
+    }
+
+    public function test_kasi_and_kabid_reports_dedicated_routes(): void
+    {
+        $kasi = User::factory()->create([
+            'role_id' => Role::KEPALA_SEKSI,
+            'is_active' => true,
+        ]);
+        $kabid = User::factory()->create([
+            'role_id' => Role::KEPALA_BIDANG,
+            'is_active' => true,
+        ]);
+
+        // Kasi can access /kasi/reports
+        $this->actingAs($kasi)->get(route('kasi.reports'))->assertOk()->assertInertia(fn ($page) => $page->component('ReportExport/Index'));
+
+        // Kabid can access /kabid/reports and /kabid/dashboard
+        $this->actingAs($kabid)->get(route('kabid.reports'))->assertOk()->assertInertia(fn ($page) => $page->component('ReportExport/Index'));
+        $this->actingAs($kabid)->get(route('kabid.dashboard'))->assertOk()->assertInertia(fn ($page) => $page->component('Kabid/Dashboard'));
+    }
 }
+
+

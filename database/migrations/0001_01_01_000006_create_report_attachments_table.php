@@ -16,9 +16,11 @@ return new class extends Migration
             $table->id();
             $table->uuid('uuid')->default(DB::raw(DB::getDriverName() === 'sqlsrv' ? 'NEWID()' : 'NULL'))->unique();
             $table->foreignId('report_id')->constrained('reports')->cascadeOnDelete();
+            $table->string('category', 50)->default('REPORT'); // REPORT, VERIFICATION
+            $table->foreignId('uploaded_by')->nullable()->constrained('users')->nullOnDelete();
             $table->string('file_path', 255);
             $table->string('file_name', 255);
-            $table->string('file_type', 20)->default('image'); // image, video
+            $table->string('file_type', 30)->default('image'); // image, video, pdf, document
             $table->string('mime_type', 100)->nullable();
             $table->unsignedBigInteger('file_size_bytes')->nullable();
             $table->timestampsTz();

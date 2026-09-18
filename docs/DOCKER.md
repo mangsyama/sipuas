@@ -145,3 +145,11 @@ Jika penyimpanan server terasa penuh karena sisa image lama:
 # Hapus image/container bekas yang tidak terpakai
 docker system prune -f
 ```
+
+---
+
+## 📖 9. Standar Arsitektur Produksi & Troubleshooting
+
+Untuk panduan lengkap mengenai aturan database Microsoft SQL Server (`sqlsrv`), integrasi aman WhatsApp Gateway, konfigurasi CSRF form publik, dan pencegahan error 500 saat rilis update, silakan pelajari dokumen:
+👉 **[STANDAR_PRODUKSI_DAN_SINKRONISASI.md](./STANDAR_PRODUKSI_DAN_SINKRONISASI.md)**
+

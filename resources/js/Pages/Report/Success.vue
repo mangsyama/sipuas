@@ -40,17 +40,13 @@ const copyReceipt = () => {
                 <div
                     class="border-b border-slate-200 bg-slate-50 p-5 sm:p-7 text-center dark:border-slate-800 dark:bg-slate-950 sm:p-9"
                 >
-                    <Link
-                        href="/"
-                        class="inline-flex items-center justify-center transition-transform hover:scale-105 cursor-pointer"
-                        title="SIPUAS"
-                    >
+                    <div class="inline-flex items-center justify-center select-none pointer-events-none">
                         <img
                             src="/images/logo-sidebar.png"
                             alt="SIPUAS Logo"
-                            class="h-8 sm:h-10 w-auto object-contain mx-auto dark:brightness-0 dark:invert"
+                            class="h-8 sm:h-10 w-auto object-contain mx-auto dark:brightness-0 dark:invert pointer-events-none"
                         />
-                    </Link>
+                    </div>
 
                     <p class="mt-1.5 text-xs text-slate-500 dark:text-slate-400 font-medium">
                         Sistem Integrasi Pelayanan Publik & Akuntabilitas Staf

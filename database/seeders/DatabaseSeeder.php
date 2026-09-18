@@ -295,9 +295,9 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
-        // 5. Seed Dummy Staff, Active Clock-in Attendance & Pending Verification Reports (Development / Demo)
-        if (!app()->runningUnitTests()) {
-            $this->call(DummyDataSeeder::class);
-        }
+        // 5. Seed Dummy Data (Disabled for clean production/initial state)
+        // if (!app()->runningUnitTests()) {
+        //     $this->call(DummyDataSeeder::class);
+        // }
     }
 }

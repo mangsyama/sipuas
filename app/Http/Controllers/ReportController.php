@@ -76,171 +76,223 @@ class ReportController extends Controller
      */
     public function store(Request $request)
     {
-        $validated = $request->validate([
-            'room_id' => 'nullable',
-            'unit_id' => 'nullable',
-            'target_object' => 'nullable|string|max:255',
-            'isi_laporan' => 'required|string|min:5|max:3000',
-            'reporter_name' => 'nullable|string|max:150',
-            'reporter_phone' => 'nullable|string|max:30',
-            'attachment' => 'nullable|file|mimes:jpg,jpeg,png,webp,mp4,mov,avi,webm|max:10240', // Max 10MB
-        ]);
-
-        $roomId = $validated['room_id'] ?? $validated['unit_id'] ?? null;
-
-        // Find room either by id or name
-        $room = Room::where('id', $roomId)
-            ->orWhere('name', $roomId)
-            ->first();
-
-        if (!$room) {
-            $room = Room::first();
-        }
-
-        // Run AI Analysis with safety fallback
+        $report = null;
         try {
-            $aiAnalysis = $this->aiService->analyzeReport(
-                $validated['isi_laporan'],
-                $room ? $room->name : 'Umum',
-                $validated['target_object'] ?? null
-            );
-        } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::warning('AI Analysis Warning: ' . $e->getMessage());
-            $aiAnalysis = $this->aiService->fallbackHeuristicAnalysis(
-                $validated['isi_laporan'],
-                $room ? $room->name : 'Umum',
-                $validated['target_object'] ?? null
-            );
-        }
-
-        $sentiment = $aiAnalysis['sentiment'] ?? 'NETRAL';
-        $score = $aiAnalysis['score'] ?? 0;
-        $category = $aiAnalysis['category'] ?? 'Pelayanan Umum';
-        $confidence = $aiAnalysis['confidence'] ?? '95%';
-
-        // Determine shift from current time
-        $hour = (int) date('H');
-        $shiftInfo = ($hour >= 7 && $hour < 14) 
-            ? 'Shift Pagi (07:00 - 14:00 WITA)' 
-            : (($hour >= 14 && $hour < 21) ? 'Shift Siang (14:00 - 21:00 WITA)' : 'Shift Malam (21:00 - 07:00 WITA)');
-
-        $ticketNumber = Report::generateTicketNumber();
-
-        $report = Report::create([
-            'ticket_number' => $ticketNumber,
-            'room_id' => $room->id,
-            'target_object' => $validated['target_object'] ?? null,
-            'isi_laporan' => $validated['isi_laporan'],
-            'ai_sentiment' => $sentiment,
-            'ai_category' => $category,
-            'ai_score' => $score,
-            'ai_confidence' => $confidence,
-            'ai_metadata' => $aiAnalysis,
-            'shift_info' => $shiftInfo,
-            'reporter_name' => $validated['reporter_name'] ?? 'Anonim',
-            'reporter_phone' => $validated['reporter_phone'] ?? null,
-            'is_anonymous' => empty($validated['reporter_name']) || strtolower($validated['reporter_name']) === 'anonim',
-            'status' => 'PENDING',
-            'priority' => ($sentiment === 'NEGATIF' || ($aiAnalysis['urgency'] ?? '') === 'TINGGI' || ($aiAnalysis['urgency'] ?? '') === 'KRITIS') ? 'HIGH' : 'NORMAL',
-        ]);
-
-        // Process file attachment if present
-        if ($request->hasFile('attachment') && $request->file('attachment')->isValid()) {
-            $file = $request->file('attachment');
-            $path = $file->store('attachments/' . date('Y/m'), 'public');
-            $mime = $file->getMimeType();
-            $type = str_starts_with($mime, 'video/') ? 'video' : 'image';
-
-            ReportAttachment::create([
-                'report_id' => $report->id,
-                'file_path' => $path,
-                'file_name' => $file->getClientOriginalName(),
-                'file_type' => $type,
-                'mime_type' => $mime,
-                'file_size_bytes' => $file->getSize(),
+            $validated = $request->validate([
+                'room_id' => 'nullable',
+                'unit_id' => 'nullable',
+                'target_object' => 'nullable|string|max:255',
+                'isi_laporan' => 'required|string|min:5|max:3000',
+                'reporter_name' => 'nullable|string|max:150',
+                'reporter_phone' => 'nullable|string|max:30',
+                'attachment' => 'nullable|file|mimes:jpg,jpeg,png,webp,mp4,mov,avi,webm|max:10240', // Max 10MB
             ]);
-        }
 
-        // Kirim Notifikasi WhatsApp Siaga ke Kasi Terkait (Non-blocking)
-        try {
-            $kasiUsers = \App\Models\User::where(function ($q) use ($room) {
-                    $q->where('room_id', $room->id)
-                      ->orWhere('unit_id', $room->id);
-                })
-                ->where('role', 'KASI')
-                ->where('is_active', true)
-                ->whereNotNull('phone_number')
-                ->get();
+            $rawRoomId = $validated['room_id'] ?? $validated['unit_id'] ?? null;
+            if (is_array($rawRoomId) || is_object($rawRoomId)) {
+                $rawRoomId = is_array($rawRoomId) ? ($rawRoomId['id'] ?? $rawRoomId['name'] ?? null) : ($rawRoomId->id ?? $rawRoomId->name ?? null);
+            }
 
-            if ($kasiUsers->isNotEmpty()) {
-                $waUrl = config('services.wa_gateway.local_url', 'http://127.0.0.1:3000/send');
-                $secretKey = config('services.wa_gateway.secret_key');
+            // Find room safely without triggering SQL Server type mismatch
+            $room = null;
+            if (is_numeric($rawRoomId)) {
+                $room = Room::where('id', (int)$rawRoomId)->first();
+            }
+            if (!$room && !empty($rawRoomId) && is_string($rawRoomId) && $rawRoomId !== '[object Object]') {
+                $room = Room::where('name', 'LIKE', '%' . trim((string)$rawRoomId) . '%')->first();
+            }
+            if (!$room) {
+                $room = Room::where('is_active', true)->first() ?? Room::first();
+            }
 
-                $waMessage = "🔔 *NOTIFIKASI SIAGA SIPUAS*\n"
-                    . "Ada laporan pelayanan baru di ruangan Anda:\n\n"
-                    . "📋 *No. Tiket :* {$ticketNumber}\n"
-                    . "🏥 *Ruangan :* " . ($room->name ?? 'Umum') . " (" . ($room->location_info ?? '-') . ")\n"
-                    . "👤 *Sasaran/Staf :* " . ($validated['target_object'] ?? '-') . "\n"
-                    . "🕒 *Waktu :* " . now()->translatedFormat('d F Y, H:i') . " WITA\n"
-                    . "📊 *Sentimen AI :* {$sentiment}\n"
-                    . "📝 *Uraian Singkat :* " . mb_substr($validated['isi_laporan'], 0, 100) . "...\n\n"
-                    . "Mohon segera buka menu *Feed Aduan Masuk Unit* untuk melakukan verifikasi staf dinas.\n"
-                    . "🔗 " . url('/kasi/dashboard');
+            // Safe fallback for room_id to avoid foreign key failure
+            $fallbackRoomId = $room ? $room->id : (Room::query()->value('id') ?? 1);
 
-                foreach ($kasiUsers as $kasi) {
-                    \Illuminate\Support\Facades\Http::timeout(3)->withoutVerifying()
-                        ->withHeaders(!empty($secretKey) ? ['X-Api-Key' => $secretKey] : [])
-                        ->post($waUrl, [
-                            'target' => $kasi->phone_number,
-                            'message' => $waMessage,
-                        ]);
+            // Run AI Analysis with safety fallback
+            try {
+                $aiAnalysis = $this->aiService->analyzeReport(
+                    $validated['isi_laporan'],
+                    $room ? $room->name : 'Umum',
+                    $validated['target_object'] ?? null
+                );
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('AI Analysis Warning: ' . $e->getMessage());
+                $aiAnalysis = $this->aiService->fallbackHeuristicAnalysis(
+                    $validated['isi_laporan'],
+                    $room ? $room->name : 'Umum',
+                    $validated['target_object'] ?? null
+                );
+            }
+
+            $sentiment = $aiAnalysis['sentiment'] ?? 'NETRAL';
+            $score = $aiAnalysis['score'] ?? 0;
+            $category = $aiAnalysis['category'] ?? 'Pelayanan Umum';
+            $confidence = $aiAnalysis['confidence'] ?? '95%';
+
+            // Determine shift from current time
+            $hour = (int) date('H');
+            $shiftInfo = ($hour >= 7 && $hour < 14) 
+                ? 'Shift Pagi (07:00 - 14:00 WITA)' 
+                : (($hour >= 14 && $hour < 21) ? 'Shift Siang (14:00 - 21:00 WITA)' : 'Shift Malam (21:00 - 07:00 WITA)');
+
+            $ticketNumber = Report::generateTicketNumber();
+
+            // Try creating report record with full fields, with minimal fallback on error
+            try {
+                $report = Report::create([
+                    'ticket_number' => $ticketNumber,
+                    'room_id' => $fallbackRoomId,
+                    'target_object' => mb_substr($validated['target_object'] ?? '', 0, 250) ?: null,
+                    'isi_laporan' => $validated['isi_laporan'],
+                    'ai_sentiment' => $sentiment,
+                    'ai_category' => mb_substr($category, 0, 90),
+                    'ai_score' => (int) $score,
+                    'ai_confidence' => mb_substr((string) $confidence, 0, 18),
+                    'ai_metadata' => is_array($aiAnalysis) ? $aiAnalysis : [],
+                    'shift_info' => $shiftInfo,
+                    'reporter_name' => mb_substr($validated['reporter_name'] ?? 'Anonim', 0, 140),
+                    'reporter_phone' => mb_substr($validated['reporter_phone'] ?? '', 0, 28) ?: null,
+                    'is_anonymous' => empty($validated['reporter_name']) || strtolower(trim($validated['reporter_name'])) === 'anonim',
+                    'status' => 'PENDING',
+                    'priority' => ($sentiment === 'NEGATIF' || ($aiAnalysis['urgency'] ?? '') === 'TINGGI' || ($aiAnalysis['urgency'] ?? '') === 'KRITIS') ? 'HIGH' : 'NORMAL',
+                ]);
+            } catch (\Throwable $createErr) {
+                \Illuminate\Support\Facades\Log::error('Report::create Primary Attempt Notice: ' . $createErr->getMessage() . '. Executing minimal fallback insert.');
+                
+                $report = Report::create([
+                    'ticket_number' => $ticketNumber,
+                    'room_id' => $fallbackRoomId,
+                    'isi_laporan' => $validated['isi_laporan'],
+                    'reporter_name' => mb_substr($validated['reporter_name'] ?? 'Anonim', 0, 140),
+                    'reporter_phone' => mb_substr($validated['reporter_phone'] ?? '', 0, 28) ?: null,
+                    'is_anonymous' => empty($validated['reporter_name']) || strtolower(trim($validated['reporter_name'])) === 'anonim',
+                    'status' => 'PENDING',
+                    'priority' => 'NORMAL',
+                    'ai_sentiment' => 'NETRAL',
+                ]);
+            }
+
+            // Process file attachment if present
+            if ($request->hasFile('attachment') && $request->file('attachment')->isValid()) {
+                try {
+                    $file = $request->file('attachment');
+                    $path = $file->store('attachments/' . date('Y/m'), 'public');
+                    $mime = $file->getMimeType();
+                    $type = str_starts_with($mime, 'video/') ? 'video' : 'image';
+
+                    ReportAttachment::create([
+                        'report_id' => $report->id,
+                        'file_path' => $path,
+                        'file_name' => $file->getClientOriginalName(),
+                        'file_type' => $type,
+                        'mime_type' => $mime,
+                        'file_size_bytes' => $file->getSize(),
+                    ]);
+                } catch (\Throwable $attErr) {
+                    \Illuminate\Support\Facades\Log::warning('Report Attachment upload notice: ' . $attErr->getMessage());
                 }
             }
-        } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::info('WA Gateway notification notice: ' . $e->getMessage());
-        }
 
-        // Kirim Notifikasi WhatsApp Konfirmasi & Pengingat Tiket ke Pelapor (jika nomor HP diisi)
-        if (!empty($validated['reporter_phone'])) {
+            // Kirim Notifikasi WhatsApp secara Asinkron (Non-blocking via Queue)
             try {
-                $hasName = !empty($validated['reporter_name']) && strtolower(trim($validated['reporter_name'])) !== 'anonim';
-                $greeting = $hasName ? "Halo *{$validated['reporter_name']}*," : "Halo,";
-                $waktuLaporan = now()->translatedFormat('d F Y, H:i') . ' WITA';
-                $trackingUrl = url('/report/track?ticket=' . $ticketNumber);
-                $roomLabel = $room ? ($room->name . ' (' . $room->location_info . ')') : 'Pelayanan Rumah Sakit';
+                dispatch(function () use ($room, $ticketNumber, $validated, $sentiment) {
+                    try {
+                        if ($room) {
+                            $kasiUsers = \App\Models\User::where('room_id', $room->id)
+                                ->where('role_id', \App\Models\Role::KEPALA_SEKSI)
+                                ->where('is_active', true)
+                                ->whereNotNull('phone_number')
+                                ->get();
 
-                $reporterWaMsg = "{$greeting}\n\n"
-                    . "Terima kasih telah menyampaikan laporan/aspirasi pelayanan Anda melalui sistem *SIPUAS*.\n\n"
-                    . "Berikut adalah rincian tiket aduan Anda:\n"
-                    . "📋 *Nomor Tiket :* *{$ticketNumber}*\n"
-                    . "🏥 *Ruangan :* {$roomLabel}\n"
-                    . "🕒 *Waktu :* {$waktuLaporan}\n"
-                    . "📊 *Status :* Menunggu Verifikasi Kepala Seksi\n\n"
-                    . "Simpan nomor tiket ini untuk memantau proses tindak lanjut penanganan aduan Anda secara berkala melalui tautan berikut:\n"
-                    . "🔗 {$trackingUrl}\n\n"
-                    . "Setiap masukan Anda sangat berarti untuk peningkatan mutu pelayanan kami.\n\n"
-                    . "Salam sehat,\n_Tim Manajemen Pelayanan Rumah Sakit_";
+                            if ($kasiUsers->isNotEmpty()) {
+                                $waMessage = "🔔 *NOTIFIKASI SIAGA SIPUAS*\n"
+                                    . "Ada laporan pelayanan baru di ruangan Anda:\n\n"
+                                    . "📋 *No. Tiket :* {$ticketNumber}\n"
+                                    . "🏥 *Ruangan :* " . ($room->name ?? 'Umum') . " (" . ($room->location_info ?? '-') . ")\n"
+                                    . "👤 *Sasaran/Staf :* " . ($validated['target_object'] ?? '-') . "\n"
+                                    . "🕒 *Waktu :* " . now()->translatedFormat('d F Y, H:i') . " WITA\n"
+                                    . "📊 *Sentimen AI :* {$sentiment}\n"
+                                    . "📝 *Uraian Singkat :* " . mb_substr($validated['isi_laporan'], 0, 100) . "...\n\n"
+                                    . "Mohon segera buka menu *Feed Aduan Masuk Unit* untuk melakukan verifikasi staf dinas.\n"
+                                    . "🔗 " . url('/kasi/dashboard');
 
-                $channel = new WaGatewayChannel();
-                $channel->send($validated['reporter_phone'], new class($reporterWaMsg) extends \Illuminate\Notifications\Notification {
-                    public function __construct(public string $msg) {}
-                    public function toWaGateway($notifiable) { return $this->msg; }
+                                foreach ($kasiUsers as $kasi) {
+                                    WaGatewayChannel::sendDirect($kasi->phone_number, $waMessage);
+                                }
+                            }
+                        }
+                    } catch (\Throwable $e) {
+                        \Illuminate\Support\Facades\Log::info('WA Gateway notification notice: ' . $e->getMessage());
+                    }
+
+                    // Kirim Notifikasi WhatsApp Konfirmasi & Pengingat Tiket ke Pelapor (jika nomor HP diisi)
+                    if (!empty($validated['reporter_phone'])) {
+                        try {
+                            $hasName = !empty($validated['reporter_name']) && strtolower(trim($validated['reporter_name'])) !== 'anonim';
+                            $greeting = $hasName ? "Halo *{$validated['reporter_name']}*," : "Halo,";
+                            $waktuLaporan = now()->translatedFormat('d F Y, H:i') . ' WITA';
+                            $trackingUrl = url('/report/track?ticket=' . $ticketNumber);
+                            $roomLabel = $room ? ($room->name . ' (' . $room->location_info . ')') : 'Pelayanan Rumah Sakit';
+
+                            $reporterWaMsg = "{$greeting}\n\n"
+                                . "Terima kasih telah menyampaikan laporan/aspirasi pelayanan Anda melalui sistem *SIPUAS*.\n\n"
+                                . "Berikut adalah rincian tiket aduan Anda:\n"
+                                . "📋 *Nomor Tiket :* *{$ticketNumber}*\n"
+                                . "🏥 *Ruangan :* {$roomLabel}\n"
+                                . "🕒 *Waktu :* {$waktuLaporan}\n"
+                                . "📊 *Status :* Menunggu Verifikasi Kepala Seksi\n\n"
+                                . "Simpan nomor tiket ini untuk memantau proses tindak lanjut penanganan aduan Anda secara berkala melalui tautan berikut:\n"
+                                . "🔗 {$trackingUrl}\n\n"
+                                . "Setiap masukan Anda sangat berarti untuk peningkatan mutu pelayanan kami.\n\n"
+                                . "Salam sehat,\n_Tim Manajemen Pelayanan Rumah Sakit_";
+
+                            WaGatewayChannel::sendDirect($validated['reporter_phone'], $reporterWaMsg);
+                        } catch (\Throwable $e) {
+                            \Illuminate\Support\Facades\Log::info('Reporter WA confirmation failed: ' . $e->getMessage());
+                        }
+                    }
                 });
-            } catch (\Throwable $e) {
-                \Illuminate\Support\Facades\Log::info('Reporter WA confirmation failed: ' . $e->getMessage());
+            } catch (\Throwable $dispatchErr) {
+                \Illuminate\Support\Facades\Log::warning('Dispatch WA notice: ' . $dispatchErr->getMessage());
             }
-        }
 
-        if ($request->wantsJson() || $request->ajax() || $request->expectsJson() || $request->header('X-Requested-With') === 'XMLHttpRequest') {
-            return response()->json([
-                'success' => true,
-                'ticket_number' => $ticketNumber,
-                'uuid' => $report->uuid,
-                'report_id' => $report->id,
-            ]);
-        }
+            if ($request->wantsJson() || $request->ajax() || $request->expectsJson() || $request->header('X-Requested-With') === 'XMLHttpRequest') {
+                return response()->json([
+                    'success' => true,
+                    'ticket_number' => $ticketNumber,
+                    'uuid' => $report->uuid ?? null,
+                    'report_id' => $report->id ?? null,
+                ]);
+            }
 
-        return redirect()->route('report.success', ['id' => $ticketNumber]);
+            return redirect()->route('report.success', ['id' => $ticketNumber]);
+        } catch (\Illuminate\Validation\ValidationException $ve) {
+            throw $ve;
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('ReportController::store Error: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
+
+            // If report record was successfully saved to DB, return success to client instead of 500 error
+            if ($report && $report->exists) {
+                if ($request->wantsJson() || $request->ajax() || $request->expectsJson() || $request->header('X-Requested-With') === 'XMLHttpRequest') {
+                    return response()->json([
+                        'success' => true,
+                        'ticket_number' => $report->ticket_number,
+                        'uuid' => $report->uuid,
+                        'report_id' => $report->id,
+                        'notice' => 'Laporan tersimpan. Sebagian notifikasi sekunder mengalami kendala.',
+                    ]);
+                }
+                return redirect()->route('report.success', ['id' => $report->ticket_number]);
+            }
+
+            if ($request->wantsJson() || $request->ajax() || $request->expectsJson() || $request->header('X-Requested-With') === 'XMLHttpRequest') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Terjadi kendala saat menyimpan aduan: ' . $e->getMessage(),
+                ], 422);
+            }
+            throw $e;
+        }
     }
 
     /**
@@ -266,12 +318,19 @@ class ReportController extends Controller
 
         if (!empty($ticket)) {
             $searched = true;
-            $report = Report::with(['room', 'attachments'])
-                ->where('ticket_number', $ticket)
-                ->orWhere('uuid', $ticket)
-                ->first();
+            $query = Report::with(['room', 'attachments']);
+            if (\Illuminate\Support\Str::isUuid($ticket)) {
+                $query->where('uuid', strtolower($ticket));
+            } else {
+                $query->where('ticket_number', $ticket);
+            }
+            $report = $query->first();
 
             if ($report) {
+                $evidenceAttachments = $report->attachments->filter(function ($att) {
+                    return $att->category !== 'VERIFICATION';
+                });
+
                 $reportData = [
                     'uuid' => $report->uuid,
                     'ticket_number' => $report->ticket_number,
@@ -283,11 +342,9 @@ class ReportController extends Controller
                     'status' => $report->status ?? 'PENDING',
                     'created_at' => $report->created_at ? $report->created_at->format('d M Y, H:i') : null,
                     'verified_at' => $report->verified_at ? $report->verified_at->format('d M Y, H:i') : null,
-                    'resolved_at' => $report->resolved_at ? $report->resolved_at->format('d M Y, H:i') : null,
-                    'supervisor_notes' => $report->supervisor_notes,
-                    'resolution_notes' => $report->resolution_notes,
-                    'has_attachment' => $report->attachments->isNotEmpty(),
-                    'attachments_count' => $report->attachments->count(),
+                    'resolved_at' => ($report->resolved_at ?? $report->verified_at) ? ($report->resolved_at ?? $report->verified_at)->format('d M Y, H:i') : null,
+                    'has_attachment' => $evidenceAttachments->isNotEmpty(),
+                    'attachments_count' => $evidenceAttachments->count(),
                 ];
             }
         }

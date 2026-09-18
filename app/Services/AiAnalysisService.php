@@ -52,7 +52,7 @@ Berikan output HANYA dalam format JSON valid tanpa markdown dengan struktur:
 
         try {
             $response = Http::withToken(trim($setting->api_key))
-                ->timeout(8)
+                ->timeout(2)
                 ->post($url, [
                     'model' => $model,
                     'messages' => [

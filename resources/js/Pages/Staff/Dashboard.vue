@@ -2,6 +2,7 @@
 import { ref } from 'vue';
 import { Head } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import ReportDetailModal from '@/Components/ReportDetailModal.vue';
 import {
     Award,
     ThumbsUp,
@@ -9,7 +10,10 @@ import {
     Calendar,
     FileText,
     History,
-    LayoutDashboard
+    LayoutDashboard,
+    Paperclip,
+    Download,
+    Eye
 } from '@lucide/vue';
 
 const props = defineProps({
@@ -36,6 +40,17 @@ const props = defineProps({
 });
 
 const activeTab = ref('kpi'); // 'kpi', 'reports', 'attendance'
+const selectedLogForModal = ref(null);
+const showDetailModal = ref(false);
+
+const openReportDetail = (log) => {
+    selectedLogForModal.value = log;
+    showDetailModal.value = true;
+};
+
+const isImage = (att) => {
+    return att?.mime_type?.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif)$/i.test(att?.file_name || '');
+};
 </script>
 
 <template>
@@ -84,10 +99,10 @@ const activeTab = ref('kpi'); // 'kpi', 'reports', 'attendance'
                     <div class="space-y-1">
                         <span class="text-xs font-bold uppercase tracking-wider text-slate-400 block">Apresiasi Pujian Pasien</span>
                         <div class="text-3xl font-extrabold text-emerald-600 dark:text-emerald-400 leading-tight">
-                            +{{ staff.praise_count }}
+                            {{ staff.praise_count }}
                         </div>
                         <span class="text-[11px] text-slate-400 block">
-                            Memberi reward +poin kinerja
+                            Total laporan apresiasi diterima
                         </span>
                     </div>
                     <div class="h-12 w-12 rounded-xl flex items-center justify-center flex-shrink-0 bg-emerald-50 dark:bg-emerald-950/40">
@@ -100,10 +115,10 @@ const activeTab = ref('kpi'); // 'kpi', 'reports', 'attendance'
                     <div class="space-y-1">
                         <span class="text-xs font-bold uppercase tracking-wider text-slate-400 block">Keluhan / Evaluasi SOP</span>
                         <div class="text-3xl font-extrabold text-rose-600 dark:text-rose-400 leading-tight">
-                            -{{ staff.complaint_count }}
+                            {{ staff.complaint_count }}
                         </div>
                         <span class="text-[11px] text-slate-400 block">
-                            Kelalaian SOP terverifikasi Kasi
+                            Total laporan keluhan terverifikasi
                         </span>
                     </div>
                     <div class="h-12 w-12 rounded-xl flex items-center justify-center flex-shrink-0 bg-rose-50 dark:bg-rose-950/40">
@@ -114,28 +129,25 @@ const activeTab = ref('kpi'); // 'kpi', 'reports', 'attendance'
 
             <!-- 3. Tab Navigasi & Konten Riwayat -->
             <div class="bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 rounded-2xl p-4 sm:p-6 shadow-sm space-y-5">
-                <!-- Navigation Tabs (Segmented Control yang Responsif & Bebas Scroll) -->
-                <div class="grid grid-cols-3 gap-1 sm:gap-1.5 p-1 sm:p-1.5 bg-slate-100 dark:bg-slate-800/60 rounded-2xl border border-slate-200/60 dark:border-slate-800">
+                <!-- Navigation Tabs (Segmented Control yang Responsif & Bertumpuk di Mobile) -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-1.5 p-1.5 bg-slate-100 dark:bg-slate-800/60 rounded-2xl border border-slate-200/60 dark:border-slate-800">
                     <!-- Tab 1: Logbook -->
                     <button
                         type="button"
                         @click="activeTab = 'kpi'"
                         :class="[
-                            'py-2 px-1 sm:py-2.5 sm:px-4 rounded-xl text-xs font-bold flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 transition cursor-pointer select-none text-center',
+                            'w-full py-2.5 px-3.5 sm:px-4 rounded-xl text-xs font-bold flex flex-row items-center justify-between sm:justify-center gap-2 transition cursor-pointer select-none text-left sm:text-center',
                             activeTab === 'kpi' 
                                 ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-sm' 
                                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                         ]"
                     >
-                        <div class="flex items-center gap-1 sm:gap-1.5 min-w-0">
-                            <History class="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
-                            <span class="truncate">
-                                <span class="sm:hidden">Logbook</span>
-                                <span class="hidden sm:inline">Logbook Poin</span>
-                            </span>
+                        <div class="flex items-center gap-2 sm:gap-1.5 min-w-0">
+                            <History class="h-4 w-4 shrink-0" />
+                            <span class="truncate">Logbook Poin</span>
                         </div>
                         <span :class="[
-                            'text-[10px] font-black px-1.5 py-0.5 rounded-full shrink-0 transition',
+                            'text-[11px] sm:text-[10px] font-black px-2 sm:px-1.5 py-0.5 rounded-full shrink-0 transition',
                             activeTab === 'kpi'
                                 ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800'
                                 : 'bg-slate-200/70 dark:bg-slate-700/60 text-slate-600 dark:text-slate-400'
@@ -149,21 +161,18 @@ const activeTab = ref('kpi'); // 'kpi', 'reports', 'attendance'
                         type="button"
                         @click="activeTab = 'reports'"
                         :class="[
-                            'py-2 px-1 sm:py-2.5 sm:px-4 rounded-xl text-xs font-bold flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 transition cursor-pointer select-none text-center',
+                            'w-full py-2.5 px-3.5 sm:px-4 rounded-xl text-xs font-bold flex flex-row items-center justify-between sm:justify-center gap-2 transition cursor-pointer select-none text-left sm:text-center',
                             activeTab === 'reports' 
                                 ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-sm' 
                                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                         ]"
                     >
-                        <div class="flex items-center gap-1 sm:gap-1.5 min-w-0">
-                            <FileText class="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
-                            <span class="truncate">
-                                <span class="sm:hidden">Aduan</span>
-                                <span class="hidden sm:inline">Aduan Terkait</span>
-                            </span>
+                        <div class="flex items-center gap-2 sm:gap-1.5 min-w-0">
+                            <FileText class="h-4 w-4 shrink-0" />
+                            <span class="truncate">Aduan Terkait</span>
                         </div>
                         <span :class="[
-                            'text-[10px] font-black px-1.5 py-0.5 rounded-full shrink-0 transition',
+                            'text-[11px] sm:text-[10px] font-black px-2 sm:px-1.5 py-0.5 rounded-full shrink-0 transition',
                             activeTab === 'reports'
                                 ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800'
                                 : 'bg-slate-200/70 dark:bg-slate-700/60 text-slate-600 dark:text-slate-400'
@@ -177,21 +186,18 @@ const activeTab = ref('kpi'); // 'kpi', 'reports', 'attendance'
                         type="button"
                         @click="activeTab = 'attendance'"
                         :class="[
-                            'py-2 px-1 sm:py-2.5 sm:px-4 rounded-xl text-xs font-bold flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 transition cursor-pointer select-none text-center',
+                            'w-full py-2.5 px-3.5 sm:px-4 rounded-xl text-xs font-bold flex flex-row items-center justify-between sm:justify-center gap-2 transition cursor-pointer select-none text-left sm:text-center',
                             activeTab === 'attendance' 
                                 ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-sm' 
                                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                         ]"
                     >
-                        <div class="flex items-center gap-1 sm:gap-1.5 min-w-0">
-                            <Calendar class="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
-                            <span class="truncate">
-                                <span class="sm:hidden">Presensi</span>
-                                <span class="hidden sm:inline">Riwayat Presensi</span>
-                            </span>
+                        <div class="flex items-center gap-2 sm:gap-1.5 min-w-0">
+                            <Calendar class="h-4 w-4 shrink-0" />
+                            <span class="truncate">Riwayat Presensi</span>
                         </div>
                         <span :class="[
-                            'text-[10px] font-black px-1.5 py-0.5 rounded-full shrink-0 transition',
+                            'text-[11px] sm:text-[10px] font-black px-2 sm:px-1.5 py-0.5 rounded-full shrink-0 transition',
                             activeTab === 'attendance'
                                 ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800'
                                 : 'bg-slate-200/70 dark:bg-slate-700/60 text-slate-600 dark:text-slate-400'
@@ -212,35 +218,59 @@ const activeTab = ref('kpi'); // 'kpi', 'reports', 'attendance'
                             <p class="text-[11px] text-slate-400 max-w-sm mx-auto leading-relaxed">Saldo poin Anda saat ini masih utuh pada standar awal nilai 100 poin.</p>
                         </div>
                     </div>
-                    <div v-else class="divide-y divide-slate-100 dark:divide-slate-800">
+                    <div v-else class="space-y-2.5">
                         <div 
                             v-for="log in kpiLogs" 
                             :key="log.id" 
-                            class="py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 rounded-xl px-2.5 transition"
+                            class="p-3 sm:p-4 rounded-2xl bg-slate-50/80 dark:bg-slate-950/60 border border-slate-200/70 dark:border-slate-800/80 hover:border-emerald-500/40 dark:hover:border-emerald-500/30 transition flex items-center justify-between gap-2.5 sm:gap-4 min-w-0"
                         >
-                            <div class="flex items-start gap-3">
+                            <!-- Sisi Kiri: Badge Poin + Informasi Transaksi -->
+                            <div class="flex items-center gap-2.5 sm:gap-3.5 min-w-0 flex-1">
+                                <!-- Badge Poin Kotak Rounded -->
                                 <div :class="[
-                                    'h-9 w-9 rounded-xl flex items-center justify-center font-black text-xs shrink-0 shadow-xs mt-0.5',
-                                    log.action_type === 'PENAMBAHAN' 
-                                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800' 
-                                        : 'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400 border border-rose-200 dark:border-rose-800'
+                                    'h-10 w-10 sm:h-11 sm:w-11 rounded-xl flex items-center justify-center font-black text-xs sm:text-sm shrink-0',
+                                    log.points > 0 
+                                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/70 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800' 
+                                        : 'bg-rose-100 text-rose-700 dark:bg-rose-950/70 dark:text-rose-300 border border-rose-200 dark:border-rose-800'
                                 ]">
                                     {{ log.points > 0 ? '+' + log.points : log.points }}
                                 </div>
-                                <div class="space-y-0.5">
-                                    <p class="text-xs font-bold text-slate-800 dark:text-slate-200 leading-snug">
+
+                                <!-- Informasi & Detail Catatan -->
+                                <div class="min-w-0 flex-1 space-y-0.5">
+                                    <p class="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100 truncate" :title="log.note || 'Penilaian verifikasi kinerja staf pelayanan'">
                                         {{ log.note || 'Penilaian verifikasi kinerja staf pelayanan' }}
                                     </p>
-                                    <div class="flex flex-wrap items-center gap-1.5 text-[11px] text-slate-400">
-                                        <span>Tiket: <strong class="text-slate-600 dark:text-slate-300">{{ log.ticket_number }}</strong></span>
-                                        <span>•</span>
-                                        <span>Diverifikasi: {{ log.verifier_name }}</span>
-                                    </div>
+
+                                    <p class="text-[10.5px] sm:text-[11px] text-slate-400 truncate">
+                                        <span>Diverifikasi: <strong class="text-slate-600 dark:text-slate-300 font-medium">{{ log.verifier_name || 'Supervisor Kasi' }}</strong></span>
+                                        <span class="mx-1.5">•</span>
+                                        <span class="text-slate-400 font-medium">{{ log.date }}</span>
+                                    </p>
                                 </div>
                             </div>
-                            <span class="text-[11px] font-medium text-slate-400 pl-12 sm:pl-0 sm:whitespace-nowrap">
-                                {{ log.date }}
-                            </span>
+
+                            <!-- Sisi Kanan: Tombol Tetap Berada di Kanan (Icon Saja di Mobile) -->
+                            <div class="flex items-center shrink-0">
+                                <button
+                                    v-if="log.report_detail"
+                                    type="button"
+                                    @click="openReportDetail(log)"
+                                    class="inline-flex items-center justify-center gap-1.5 p-2 sm:px-3.5 sm:py-2 rounded-xl text-xs font-bold bg-white dark:bg-slate-900 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 border border-slate-200/80 dark:border-slate-800 hover:border-emerald-300 dark:hover:border-emerald-700 transition cursor-pointer select-none whitespace-nowrap"
+                                    title="Buka detail bukti laporan & verifikasi"
+                                >
+                                    <FileText class="h-4 w-4 shrink-0" />
+                                    <span class="hidden sm:inline">Bukti Laporan</span>
+                                </button>
+                                <span 
+                                    v-else
+                                    class="text-[10px] sm:text-[11px] font-semibold text-slate-400 bg-slate-100 dark:bg-slate-800/80 px-2 py-1.5 sm:px-3 rounded-xl border border-slate-200/50 dark:border-slate-700/50 whitespace-nowrap"
+                                    title="Penilaian Manual"
+                                >
+                                    <span class="sm:hidden">Manual</span>
+                                    <span class="hidden sm:inline">Penilaian Manual</span>
+                                </span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -272,8 +302,58 @@ const activeTab = ref('kpi'); // 'kpi', 'reports', 'attendance'
                                 "{{ rep.isi_laporan }}"
                             </p>
                             <div v-if="rep.supervisor_notes" class="text-[11px] text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200/60 dark:border-slate-800 space-y-0.5">
-                                <div class="font-bold text-slate-800 dark:text-slate-200">Catatan Supervisor Kasi:</div>
+                                <div class="font-bold text-slate-800 dark:text-slate-200">Catatan Kasi:</div>
                                 <div>{{ rep.supervisor_notes }}</div>
+                            </div>
+
+                            <!-- Berkas Lampiran Verifikasi jika ada -->
+                            <div v-if="rep.has_attachment && rep.attachments?.length" class="p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 space-y-2">
+                                <div class="text-[11px] font-bold text-slate-700 dark:text-slate-200">
+                                    Lampiran Berkas Verifikasi:
+                                </div>
+                                <div class="space-y-1.5">
+                                    <div 
+                                        v-for="att in rep.attachments" 
+                                        :key="att.id"
+                                        class="flex items-center justify-between gap-2.5 p-2 sm:p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200/80 dark:border-slate-800 text-xs w-full transition hover:border-slate-300 dark:hover:border-slate-700"
+                                    >
+                                        <div class="flex items-center gap-2.5 min-w-0 flex-1">
+                                            <div v-if="isImage(att)" class="h-8 w-8 sm:h-9 sm:w-9 rounded-lg overflow-hidden shrink-0 border border-slate-200 dark:border-slate-700 bg-slate-100">
+                                                <img :src="att.url" :alt="att.file_name" class="h-full w-full object-cover" />
+                                            </div>
+                                            <div v-else class="h-8 w-8 sm:h-9 sm:w-9 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200/60 dark:border-amber-900/40 flex items-center justify-center shrink-0">
+                                                <FileText class="h-4 w-4" />
+                                            </div>
+                                            <div class="truncate min-w-0 flex-1">
+                                                <p class="font-semibold text-slate-800 dark:text-slate-200 truncate text-xs leading-snug" :title="att.file_name">
+                                                    {{ att.file_name }}
+                                                </p>
+                                                <p class="text-[10px] text-slate-400 mt-0.5">{{ att.file_size }}</p>
+                                            </div>
+                                        </div>
+                                        <div class="flex items-center gap-1.5 shrink-0">
+                                            <a 
+                                                :href="att.url" 
+                                                target="_blank" 
+                                                class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-semibold text-[11px] transition"
+                                                title="Lihat berkas"
+                                            >
+                                                <Eye class="h-3 w-3 text-slate-500 dark:text-slate-400" />
+                                                <span>Lihat</span>
+                                            </a>
+                                            <a 
+                                                :href="att.url" 
+                                                target="_blank" 
+                                                download 
+                                                class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-[11px] transition shadow-2xs"
+                                                title="Unduh berkas"
+                                            >
+                                                <Download class="h-3 w-3" />
+                                                <span>Unduh</span>
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -361,6 +441,14 @@ const activeTab = ref('kpi'); // 'kpi', 'reports', 'attendance'
                     </div>
                 </div>
             </div>
+
+            <!-- Modal Detail Bukti Laporan & Mutasi KPI -->
+            <ReportDetailModal
+                :show="showDetailModal"
+                :report="selectedLogForModal?.report_detail"
+                :kpi-info="selectedLogForModal"
+                @close="showDetailModal = false"
+            />
 
         </div>
     </AuthenticatedLayout>

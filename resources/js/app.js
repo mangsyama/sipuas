@@ -24,14 +24,19 @@ if (typeof window !== 'undefined' && 'caches' in window) {
 if (typeof window !== 'undefined') {
     const appKey = import.meta.env.VITE_REVERB_APP_KEY || 'w60yiz2uk29hsgi3bxgg';
     if (appKey) {
+        const isHttps = window.location.protocol === 'https:';
+        const rawPort = import.meta.env.VITE_REVERB_PORT;
+        const defaultPort = isHttps ? 443 : 80;
+        const portNum = (rawPort && Number(rawPort) !== 8081) ? Number(rawPort) : defaultPort;
+
         window.Pusher = Pusher;
         window.Echo = new Echo({
             broadcaster: 'reverb',
             key: appKey,
             wsHost: import.meta.env.VITE_REVERB_HOST || window.location.hostname,
-            wsPort: import.meta.env.VITE_REVERB_PORT ? Number(import.meta.env.VITE_REVERB_PORT) : (window.location.port ? Number(window.location.port) : 80),
-            wssPort: import.meta.env.VITE_REVERB_PORT ? Number(import.meta.env.VITE_REVERB_PORT) : (window.location.port ? Number(window.location.port) : 443),
-            forceTLS: (import.meta.env.VITE_REVERB_SCHEME ?? (window.location.protocol === 'https:' ? 'https' : 'http')) === 'https',
+            wsPort: portNum,
+            wssPort: isHttps ? 443 : portNum,
+            forceTLS: isHttps || import.meta.env.VITE_REVERB_SCHEME === 'https',
             enabledTransports: ['ws', 'wss'],
             authEndpoint: '/broadcasting/auth',
             auth: {

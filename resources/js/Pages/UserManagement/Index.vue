@@ -246,12 +246,13 @@ const getRoleLabel = (role) => {
 
 // Modal Scroll Lock & Keyboard / History Navigation Management
 const isAnyModalOpen = computed(() => {
-    return showCreateModal.value || showDeleteConfirmModal.value;
+    return showCreateModal.value || showDeleteConfirmModal.value || showResetPasswordModal.value;
 });
 
 const closeAllModals = () => {
     showCreateModal.value = false;
     showDeleteConfirmModal.value = false;
+    showResetPasswordModal.value = false;
 };
 
 const handleKeyDown = (e) => {
@@ -593,7 +594,7 @@ onUnmounted(() => {
             leave-to-class="opacity-0"
         >
             <div v-if="showCreateModal" class="fixed inset-0 z-50 overflow-y-auto sm:px-0 flex sm:items-center sm:justify-center min-h-screen">
-                <div class="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 transition-opacity" @click="showCreateModal = false"></div>
+                <div class="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 transition-opacity select-none"></div>
 
                 <div class="relative bg-white dark:bg-slate-900 w-full min-h-screen sm:min-h-0 sm:max-w-xl sm:rounded-2xl rounded-none border-0 shadow-2xl overflow-hidden transform transition-all flex flex-col z-10 sm:max-h-[90vh]">
                     <!-- Green Header with Icon, No X button -->
@@ -739,7 +740,7 @@ onUnmounted(() => {
             leave-to-class="opacity-0"
         >
             <div v-if="showDeleteConfirmModal" class="fixed inset-0 z-50 overflow-y-auto p-4 sm:p-0 flex items-center justify-center min-h-screen">
-                <div class="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 transition-opacity" @click="showDeleteConfirmModal = false"></div>
+                <div class="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 transition-opacity select-none"></div>
 
                 <div class="relative bg-white dark:bg-slate-900 rounded-2xl border-0 shadow-2xl w-full max-w-md p-6 pb-8 sm:pb-6 text-center transform transition-all space-y-4 z-10">
                     <div class="h-12 w-12 rounded-full bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 flex items-center justify-center mx-auto">

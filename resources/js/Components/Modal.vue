@@ -14,6 +14,10 @@ const props = defineProps({
         type: Boolean,
         default: true,
     },
+    closeOnClickOutside: {
+        type: Boolean,
+        default: false,
+    },
 });
 
 const emit = defineEmits(['close']);
@@ -72,6 +76,12 @@ const close = () => {
     }
 };
 
+const handleBackdropClick = () => {
+    if (props.closeOnClickOutside && props.closeable) {
+        close();
+    }
+};
+
 const closeOnEscape = (e) => {
     if (e.key === 'Escape') {
         e.preventDefault();
@@ -122,7 +132,7 @@ const maxWidthClass = computed(() => {
                 <div
                     v-show="show"
                     class="fixed inset-0 transform transition-all"
-                    @click="close"
+                    @click="handleBackdropClick"
                 >
                     <div
                         class="absolute inset-0 bg-black/40 transition-opacity"

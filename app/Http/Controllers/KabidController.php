@@ -555,7 +555,7 @@ class KabidController extends Controller
             ->where('ai_category', '!=', '')
             ->selectRaw('ai_category, count(*) as count')
             ->groupBy('ai_category')
-            ->orderByDesc('count')
+            ->orderByRaw('COUNT(*) DESC')
             ->limit(6)
             ->pluck('ai_category')
             ->toArray();

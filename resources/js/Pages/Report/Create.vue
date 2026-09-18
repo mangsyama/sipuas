@@ -11,6 +11,7 @@ import {
     MessageSquare, 
     Building2, 
     Sparkles, 
+    Check,
     CheckCircle2,
     Copy,
     ArrowRight,
@@ -157,9 +158,43 @@ const selectedUnitObj = computed(() => {
 });
 
 const fileInput = ref(null);
+const targetObjectRef = ref(null);
+const isiLaporanRef = ref(null);
+const reporterNameRef = ref(null);
+const reporterPhoneRef = ref(null);
 const uploadedAttachment = ref(null);
 const isTransitioning = ref(false);
 const isCompressing = ref(false);
+
+const handleStep1Enter = () => {
+    if (form.value.unit_id) {
+        goToStep2();
+    }
+};
+
+const onIsiLaporanKeydown = (e) => {
+    if (e.key === 'Enter') {
+        // Desktop: Ctrl+Enter or Cmd+Enter to advance
+        if (e.ctrlKey || e.metaKey) {
+            e.preventDefault();
+            if (form.value.isi_laporan.trim().length >= 5) {
+                goToStep3();
+            }
+            return;
+        }
+
+        // Mobile / Touch devices with enterkeyhint="next"
+        const isTouch = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+        if (isTouch && !e.shiftKey && form.value.isi_laporan.trim().length >= 5) {
+            e.preventDefault();
+            goToStep3();
+        }
+    }
+};
+
+const handleReporterNameEnter = () => {
+    reporterPhoneRef.value?.focus();
+};
 
 const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: 'instant' });
@@ -323,6 +358,7 @@ const goToStep2 = () => {
     scrollToTop();
     setTimeout(() => {
         isTransitioning.value = false;
+        isiLaporanRef.value?.focus();
     }, 350);
 };
 
@@ -333,6 +369,7 @@ const goToStep3 = () => {
     scrollToTop();
     setTimeout(() => {
         isTransitioning.value = false;
+        reporterNameRef.value?.focus();
     }, 350);
 };
 
@@ -373,7 +410,11 @@ const submitReport = async () => {
     
     try {
         const formData = new FormData();
-        formData.append('unit_id', form.value.unit_id);
+        const rawUnit = (typeof form.value.unit_id === 'object' && form.value.unit_id !== null) 
+            ? (form.value.unit_id.id || form.value.unit_id.name || '') 
+            : (form.value.unit_id || '');
+        formData.append('unit_id', rawUnit);
+        formData.append('room_id', rawUnit);
         formData.append('target_object', form.value.target_object || '');
         formData.append('isi_laporan', form.value.isi_laporan);
         formData.append('reporter_name', form.value.reporter_name || '');
@@ -399,18 +440,19 @@ const submitReport = async () => {
             data = await response.json();
         }
 
+        if (data && data.success && data.ticket_number) {
+            generatedReportId.value = data.ticket_number;
+            currentStep.value = 4;
+            scrollToTop();
+            return;
+        }
+
         if (!response.ok) {
             alert('Gagal mengirim formulir: ' + (data?.message || response.statusText || 'Terjadi kesalahan pada server.'));
             return;
         }
 
-        if (data && data.success && data.ticket_number) {
-            generatedReportId.value = data.ticket_number;
-            currentStep.value = 4;
-            scrollToTop();
-        } else {
-            alert('Gagal mengirim formulir: ' + (data?.message || 'Silakan periksa kembali kelengkapan data Anda.'));
-        }
+        alert('Gagal mengirim formulir: ' + (data?.message || 'Silakan periksa kembali kelengkapan data Anda.'));
     } catch (e) {
         console.error('Gagal mengirim laporan:', e);
         alert('Gagal mengirim formulir: Terjadi gangguan (' + (e?.message || 'Silakan coba lagi') + ').');
@@ -469,15 +511,11 @@ const copyReceipt = () => {
                 <div
                     class="border-b border-slate-200 bg-slate-50 p-5 sm:p-7 text-center dark:border-slate-800 dark:bg-slate-950 sm:rounded-t-2xl"
                 >
-                    <div
-                        @click="goToStep0"
-                        class="inline-flex items-center justify-center transition-transform hover:scale-105 cursor-pointer"
-                        title="SIPUAS"
-                    >
+                    <div class="inline-flex items-center justify-center select-none pointer-events-none">
                         <img
                             src="/images/logo-sidebar.png"
                             alt="SIPUAS Logo"
-                            class="h-8 sm:h-10 w-auto object-contain mx-auto dark:brightness-0 dark:invert"
+                            class="h-8 sm:h-10 w-auto object-contain mx-auto dark:brightness-0 dark:invert pointer-events-none"
                         />
                     </div>
 
@@ -503,11 +541,11 @@ const copyReceipt = () => {
                             <div class="flex flex-col items-center text-center z-10 relative">
                                 <div 
                                     :class="[
-                                        'h-9 w-9 rounded-full flex items-center justify-center font-extrabold text-xs transition-all duration-300 border-2',
-                                        currentStep >= 1 ? 'bg-emerald-600 text-white border-emerald-600 shadow-md ring-4 ring-emerald-50 dark:ring-emerald-950' : 'bg-slate-100 dark:bg-slate-800 text-slate-400 border-slate-200 dark:border-slate-700'
+                                        'h-9 w-9 rounded-full flex items-center justify-center font-extrabold text-xs transition-all duration-300 border-2 ring-4 ring-white dark:ring-slate-900',
+                                        currentStep >= 1 ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-slate-100 dark:bg-slate-800 text-slate-400 border-slate-200 dark:border-slate-700'
                                     ]"
                                 >
-                                    <CheckCircle2 v-if="currentStep > 1" class="h-5 w-5" />
+                                    <Check v-if="currentStep > 1" class="h-4 w-4 stroke-[3]" />
                                     <span v-else>1</span>
                                 </div>
                                 <span class="text-[10px] sm:text-[11px] font-extrabold mt-2 uppercase tracking-wide text-slate-700 dark:text-slate-200">Lokasi</span>
@@ -517,11 +555,11 @@ const copyReceipt = () => {
                             <div class="flex flex-col items-center text-center z-10 relative">
                                 <div 
                                     :class="[
-                                        'h-9 w-9 rounded-full flex items-center justify-center font-extrabold text-xs transition-all duration-300 border-2',
-                                        currentStep >= 2 ? 'bg-emerald-600 text-white border-emerald-600 shadow-md ring-4 ring-emerald-50 dark:ring-emerald-950' : 'bg-slate-100 dark:bg-slate-800 text-slate-400 border-slate-200 dark:border-slate-700'
+                                        'h-9 w-9 rounded-full flex items-center justify-center font-extrabold text-xs transition-all duration-300 border-2 ring-4 ring-white dark:ring-slate-900',
+                                        currentStep >= 2 ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-slate-100 dark:bg-slate-800 text-slate-400 border-slate-200 dark:border-slate-700'
                                     ]"
                                 >
-                                    <CheckCircle2 v-if="currentStep > 2" class="h-5 w-5" />
+                                    <Check v-if="currentStep > 2" class="h-4 w-4 stroke-[3]" />
                                     <span v-else>2</span>
                                 </div>
                                 <span class="text-[10px] sm:text-[11px] font-extrabold mt-2 uppercase tracking-wide text-slate-700 dark:text-slate-200">Detail</span>
@@ -531,11 +569,11 @@ const copyReceipt = () => {
                             <div class="flex flex-col items-center text-center z-10 relative">
                                 <div 
                                     :class="[
-                                        'h-9 w-9 rounded-full flex items-center justify-center font-extrabold text-xs transition-all duration-300 border-2',
-                                        currentStep >= 3 ? 'bg-emerald-600 text-white border-emerald-600 shadow-md ring-4 ring-emerald-50 dark:ring-emerald-950' : 'bg-slate-100 dark:bg-slate-800 text-slate-400 border-slate-200 dark:border-slate-700'
+                                        'h-9 w-9 rounded-full flex items-center justify-center font-extrabold text-xs transition-all duration-300 border-2 ring-4 ring-white dark:ring-slate-900',
+                                        currentStep >= 3 ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-slate-100 dark:bg-slate-800 text-slate-400 border-slate-200 dark:border-slate-700'
                                     ]"
                                 >
-                                    <CheckCircle2 v-if="currentStep > 3" class="h-5 w-5" />
+                                    <Check v-if="currentStep > 3" class="h-4 w-4 stroke-[3]" />
                                     <span v-else>3</span>
                                 </div>
                                 <span class="text-[10px] sm:text-[11px] font-extrabold mt-2 uppercase tracking-wide text-slate-700 dark:text-slate-200">Identitas</span>
@@ -545,11 +583,11 @@ const copyReceipt = () => {
                             <div class="flex flex-col items-center text-center z-10 relative">
                                 <div 
                                     :class="[
-                                        'h-9 w-9 rounded-full flex items-center justify-center font-extrabold text-xs transition-all duration-300 border-2',
-                                        currentStep === 4 ? 'bg-emerald-600 text-white border-emerald-600 shadow-md ring-4 ring-emerald-50 dark:ring-emerald-950' : 'bg-slate-100 dark:bg-slate-800 text-slate-400 border-slate-200 dark:border-slate-700'
+                                        'h-9 w-9 rounded-full flex items-center justify-center font-extrabold text-xs transition-all duration-300 border-2 ring-4 ring-white dark:ring-slate-900',
+                                        currentStep === 4 ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-slate-100 dark:bg-slate-800 text-slate-400 border-slate-200 dark:border-slate-700'
                                     ]"
                                 >
-                                    <CheckCircle2 v-if="currentStep === 4" class="h-5 w-5" />
+                                    <Check v-if="currentStep === 4" class="h-4 w-4 stroke-[3]" />
                                     <span v-else>4</span>
                                 </div>
                                 <span class="text-[10px] sm:text-[11px] font-extrabold mt-2 uppercase tracking-wide text-slate-700 dark:text-slate-200">Selesai</span>
@@ -677,9 +715,12 @@ const copyReceipt = () => {
                             <InputLabel for="target_object" value="Nama / Fasilitas / Barang (Opsional)" />
                             <TextInput
                                 id="target_object"
+                                ref="targetObjectRef"
                                 type="text"
                                 class="block w-full"
                                 v-model="form.target_object"
+                                enterkeyhint="next"
+                                @keydown.enter.prevent="handleStep1Enter"
                                 placeholder="Contoh: AC Rusak / Kloset Bocor / Nurse Sinta Dewi"
                             />
                         </div>
@@ -739,10 +780,13 @@ const copyReceipt = () => {
                             />
                             <textarea
                                 id="isi_laporan"
+                                ref="isiLaporanRef"
                                 v-model="form.isi_laporan"
                                 rows="4"
                                 maxlength="3000"
                                 required
+                                enterkeyhint="next"
+                                @keydown="onIsiLaporanKeydown"
                                 :placeholder="isStaffReview ? `Tuliskan pengalaman pelayanan, kepuasan, atau masukan Anda untuk ${form.target_object} secara rinci...` : 'Tuliskan pengalaman pelayanan, apresiasi pujian, atau kendala keluhan Anda di sini secara rinci...'"
                                 class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 p-4 text-xs sm:text-sm focus:border-emerald-500 dark:focus:border-emerald-400 focus:bg-white dark:focus:bg-slate-950 focus:outline-none focus:ring-0 focus:shadow-none transition duration-150 leading-relaxed"
                             ></textarea>
@@ -779,11 +823,11 @@ const copyReceipt = () => {
                                 </button>
                             </div>
 
-                            <!-- Single Hidden Input for Photo & Video (Triggers native Camera / Gallery picker on smartphones) -->
+                            <!-- Single Hidden Input: accept="image/*" triggers native Smartphone Camera & Gallery picker -->
                             <input 
                                 ref="fileInput" 
                                 type="file" 
-                                accept="image/*,video/*" 
+                                accept="image/*" 
                                 class="hidden" 
                                 @change="onFileSelected" 
                             />
@@ -808,7 +852,7 @@ const copyReceipt = () => {
                                         <Camera class="h-6 w-6" />
                                     </div>
                                     <p class="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100">
-                                        Ambil Foto / Video atau Pilih dari Galeri
+                                        Ambil Foto atau Pilih dari Galeri
                                     </p>
 
                                     <span class="inline-block text-[10px] text-slate-400 dark:text-slate-500 font-medium mt-1.5 px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800/80">
@@ -924,7 +968,7 @@ const copyReceipt = () => {
                             <Award class="h-5 w-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
                             <div class="text-xs leading-relaxed">
                                 <strong class="text-slate-900 dark:text-white font-bold block mb-0.5">Keuntungan Mengisi Identitas:</strong>
-                                Riwayat laporan Anda akan terhubung di sistem dan berpotensi mendapatkan **Apresiasi Pelapor Terdaftar**. Bila dikosongkan, laporan akan tetap diproses secara **ANONIM**.
+                                Riwayat laporan Anda akan terhubung di sistem dan berpotensi mendapatkan <span class="font-semibold">Apresiasi Pelapor Terdaftar</span>. Bila dikosongkan, laporan akan tetap diproses secara <span class="font-semibold">ANONIM</span>.
                             </div>
                         </div>
 
@@ -933,9 +977,12 @@ const copyReceipt = () => {
                             <InputLabel for="reporter_name" value="Nama Lengkap Pelapor (Opsional / Anonim)" />
                             <TextInput
                                 id="reporter_name"
+                                ref="reporterNameRef"
                                 type="text"
                                 class="block w-full"
                                 v-model="form.reporter_name"
+                                enterkeyhint="next"
+                                @keydown.enter.prevent="handleReporterNameEnter"
                                 placeholder="Biarkan kosong jika ingin ANONIM..."
                             />
                         </div>
@@ -945,6 +992,7 @@ const copyReceipt = () => {
                             <InputLabel for="reporter_phone" value="No. WhatsApp / Telepon (Opsional)" />
                             <TextInput
                                 id="reporter_phone"
+                                ref="reporterPhoneRef"
                                 type="tel"
                                 inputmode="numeric"
                                 pattern="[0-9]*"
@@ -953,6 +1001,8 @@ const copyReceipt = () => {
                                 v-model="form.reporter_phone"
                                 @input="onPhoneInput"
                                 @keypress="onPhoneKeyPress"
+                                enterkeyhint="send"
+                                @keydown.enter.prevent="submitReport"
                                 placeholder="Contoh: 081234567890..."
                             />
                         </div>

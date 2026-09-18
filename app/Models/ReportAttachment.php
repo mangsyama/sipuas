@@ -14,6 +14,8 @@ class ReportAttachment extends Model
     protected $fillable = [
         'uuid',
         'report_id',
+        'category',
+        'uploaded_by',
         'file_path',
         'file_name',
         'file_type',
@@ -37,6 +39,11 @@ class ReportAttachment extends Model
     public function report(): BelongsTo
     {
         return $this->belongsTo(Report::class);
+    }
+
+    public function uploadedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'uploaded_by');
     }
 
     public function getFileUrlAttribute(): string

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Report;
+use App\Models\ReportAttachment;
 use App\Models\ReportStaff;
 use App\Models\Role;
 use App\Models\StaffAttendance;
@@ -15,6 +16,7 @@ use Inertia\Response;
 
 use App\Models\Room;
 use Carbon\CarbonPeriod;
+use App\Channels\WaGatewayChannel;
 
 class KasiController extends Controller
 {
@@ -134,12 +136,12 @@ class KasiController extends Controller
         $topCategories = (clone $baseQuery)
             ->whereNotNull('ai_category')
             ->where('ai_category', '!=', '')
-            ->selectRaw('ai_category, count(*) as count,
-                SUM(CASE WHEN ai_sentiment = "POSITIF" THEN 1 ELSE 0 END) as positive_count,
-                SUM(CASE WHEN ai_sentiment = "NEGATIF" THEN 1 ELSE 0 END) as negative_count,
-                SUM(CASE WHEN ai_sentiment = "NETRAL" THEN 1 ELSE 0 END) as neutral_count')
+            ->selectRaw("ai_category, count(*) as count,
+                SUM(CASE WHEN ai_sentiment = 'POSITIF' THEN 1 ELSE 0 END) as positive_count,
+                SUM(CASE WHEN ai_sentiment = 'NEGATIF' THEN 1 ELSE 0 END) as negative_count,
+                SUM(CASE WHEN ai_sentiment = 'NETRAL' THEN 1 ELSE 0 END) as neutral_count")
             ->groupBy('ai_category')
-            ->orderByDesc('count')
+            ->orderByRaw('COUNT(*) DESC')
             ->limit(5)
             ->get()
             ->map(function ($item) use ($totalUnitReports) {
@@ -290,10 +292,15 @@ class KasiController extends Controller
     {
         $report = null;
         if ($id) {
-            $report = Report::with(['room', 'unit', 'attachments', 'staff', 'verifier'])
-                ->where('ticket_number', $id)
-                ->orWhere('id', $id)
-                ->first();
+            $query = Report::with(['room', 'unit', 'attachments', 'staff', 'verifier']);
+            if (is_numeric($id)) {
+                $query->where(function ($q) use ($id) {
+                    $q->where('ticket_number', (string)$id)->orWhere('id', (int)$id);
+                });
+            } else {
+                $query->where('ticket_number', (string)$id);
+            }
+            $report = $query->first();
         }
 
         if (!$report) {
@@ -372,13 +379,28 @@ class KasiController extends Controller
             });
 
         // Format attachments
-        $attachments = $report ? $report->attachments->map(function ($att) {
+        $attachments = $report ? $report->attachments->where('category', '!=', 'VERIFICATION')->values()->map(function ($att) {
             return [
                 'id' => $att->id,
                 'file_name' => $att->file_name,
                 'file_type' => $att->file_type,
+                'mime_type' => $att->mime_type,
                 'url' => \Illuminate\Support\Facades\Storage::url($att->file_path),
                 'file_size' => $att->file_size_bytes ? round($att->file_size_bytes / 1024, 1) . ' KB' : '-',
+            ];
+        }) : [];
+
+        // Format verification attachments (SP, Surat Teguran, Berita Acara, dll)
+        $verificationAttachments = $report ? $report->attachments->where('category', 'VERIFICATION')->values()->map(function ($att) {
+            return [
+                'id' => $att->id,
+                'file_name' => $att->file_name,
+                'file_type' => $att->file_type,
+                'mime_type' => $att->mime_type,
+                'url' => \Illuminate\Support\Facades\Storage::url($att->file_path),
+                'file_size' => $att->file_size_bytes ? round($att->file_size_bytes / 1024, 1) . ' KB' : '-',
+                'uploaded_by' => $att->uploadedBy ? $att->uploadedBy->name : null,
+                'created_at' => $att->created_at ? $att->created_at->format('d M Y, H:i') : null,
             ];
         }) : [];
 
@@ -400,6 +422,33 @@ class KasiController extends Controller
                 if ($firstKpi) {
                     $verifiedActionType = $firstKpi->action_type;
                     $verifiedPoints = abs($firstKpi->points);
+                }
+            }
+
+            if (!$verifiedActionType) {
+                $verifiedActionType = 'NETRAL';
+                $verifiedPoints = 0;
+            }
+
+            // Pastikan staf yang terkait saat verifikasi selalu ada dalam daftar staf
+            if ($report->staff->isNotEmpty()) {
+                $existingStaffIds = $staffList->pluck('id')->toArray();
+                foreach ($report->staff as $linkedStaff) {
+                    if (!in_array($linkedStaff->id, $existingStaffIds)) {
+                        $staffList->push([
+                            'id' => $linkedStaff->id,
+                            'name' => $linkedStaff->name,
+                            'nip' => $linkedStaff->nip ?? '-',
+                            'role' => $linkedStaff->role ?? 'Staf Pelayanan',
+                            'total_points' => $linkedStaff->total_points,
+                            'is_on_duty' => (bool)$linkedStaff->is_on_duty,
+                            'active_at_time' => false,
+                            'attendance_type' => 'NONE',
+                            'attendance_label' => 'Staf Terkait',
+                            'clock_in_time' => null,
+                            'selected' => true,
+                        ]);
+                    }
                 }
             }
         }
@@ -442,6 +491,7 @@ class KasiController extends Controller
             'pesupeluh_ticket_number' => $report->pesupeluh_ticket_number,
             'dispatched_to_pesupeluh_at' => $report->dispatched_to_pesupeluh_at ? $report->dispatched_to_pesupeluh_at->format('d M Y, H:i') . ' WITA' : null,
             'attachments' => $attachments,
+            'verification_attachments' => $verificationAttachments,
         ] : null;
 
         $pesupeluhService = app(\App\Services\PesupeluhService::class);
@@ -463,7 +513,9 @@ class KasiController extends Controller
      */
     public function processVerification(Request $request, $id)
     {
-        $report = Report::where('ticket_number', $id)->orWhere('id', $id)->firstOrFail();
+        $report = is_numeric($id)
+            ? Report::where('ticket_number', (string)$id)->orWhere('id', (int)$id)->firstOrFail()
+            : Report::where('ticket_number', (string)$id)->firstOrFail();
 
         if ($report->status === 'VERIFIED') {
             return redirect()->route('kasi.feed');
@@ -480,9 +532,10 @@ class KasiController extends Controller
             'pesupeluh_category_id' => 'nullable|integer',
             'pesupeluh_room_id' => 'nullable|integer',
             'pesupeluh_priority' => 'nullable|string|in:ROUTINE,URGENT',
+            'attachments' => 'nullable|array|max:5',
+            'attachments.*' => 'nullable|file|max:10240|mimes:jpeg,png,jpg,webp,pdf,doc,docx,xls,xlsx',
+            'attachment' => 'nullable|file|max:10240|mimes:jpeg,png,jpg,webp,pdf,doc,docx,xls,xlsx',
         ]);
-
-        $report = Report::where('ticket_number', $id)->orWhere('id', $id)->firstOrFail();
 
         $points = (int) $validated['points'];
         if ($validated['action_type'] === 'NETRAL') {
@@ -498,6 +551,41 @@ class KasiController extends Controller
             'verified_at' => Carbon::now(),
             'supervisor_notes' => $validated['supervisor_notes'],
         ]);
+
+        // Simpan lampiran berkas verifikasi (Surat Peringatan, Berita Acara, dll) jika diunggah
+        $uploadedFiles = [];
+        if ($request->hasFile('attachments')) {
+            $files = $request->file('attachments');
+            $uploadedFiles = is_array($files) ? $files : [$files];
+        } elseif ($request->hasFile('attachment')) {
+            $uploadedFiles = [$request->file('attachment')];
+        }
+
+        foreach ($uploadedFiles as $file) {
+            if ($file && $file->isValid()) {
+                $path = $file->store('verification_attachments/' . date('Y/m'), 'public');
+                $mime = $file->getMimeType();
+                $ext = strtolower($file->getClientOriginalExtension());
+
+                $type = 'document';
+                if (str_starts_with($mime, 'image/')) {
+                    $type = 'image';
+                } elseif ($mime === 'application/pdf' || $ext === 'pdf') {
+                    $type = 'pdf';
+                }
+
+                ReportAttachment::create([
+                    'report_id' => $report->id,
+                    'category' => 'VERIFICATION',
+                    'uploaded_by' => $request->user() ? $request->user()->id : null,
+                    'file_path' => $path,
+                    'file_name' => $file->getClientOriginalName(),
+                    'file_type' => $type,
+                    'mime_type' => $mime,
+                    'file_size_bytes' => $file->getSize(),
+                ]);
+            }
+        }
 
         // Disposisi ke Sistem Penunjang (PESU PELUH) jika diaktifkan dan tindakan NETRAL
         $pesupeluhTicketNumber = null;
@@ -548,6 +636,38 @@ class KasiController extends Controller
             ]);
         }
 
+        // Kirim Notifikasi WhatsApp Ucapan Terima Kasih & Laporan Selesai ke Pelapor (jika nomor HP diisi)
+        if (!empty($report->reporter_phone)) {
+            try {
+                $report->loadMissing('room');
+                $reporterPhone = $report->reporter_phone;
+                $reporterName = $report->reporter_name;
+                $ticketNumber = $report->ticket_number;
+                $roomName = $report->room 
+                    ? ($report->room->location_info ? "{$report->room->name} ({$report->room->location_info})" : $report->room->name) 
+                    : 'Pelayanan Rumah Sakit';
+
+                dispatch(function () use ($reporterPhone, $reporterName, $ticketNumber, $roomName) {
+                    $hasName = !empty($reporterName) && strtolower(trim($reporterName)) !== 'anonim';
+                    $greeting = $hasName ? "Halo {$reporterName}," : "Halo,";
+
+                    $waMsg = "{$greeting}\n\n"
+                        . "Terima kasih atas laporan/aspirasi yang telah Anda sampaikan melalui sistem SIPUAS.\n"
+                        . "Laporan Anda dengan rincian:\n"
+                        . "📋 Nomor Tiket : {$ticketNumber}\n"
+                        . "🏥 Unit/Ruangan : {$roomName}\n"
+                        . "✅ Status : Selesai Ditangani & Diverifikasi\n\n"
+                        . "Laporan Anda telah selesai ditinjau dan divalidasi oleh manajemen pelayanan rumah sakit untuk peningkatan mutu pelayanan rumah sakit.\n\n"
+                        . "Setiap masukan dari Anda sangat berarti bagi perbaikan layanan kami.\n\n"
+                        . "Salam sehat,\nTim Manajemen Pelayanan Rumah Sakit";
+
+                    WaGatewayChannel::sendDirect($reporterPhone, $waMsg);
+                });
+            } catch (\Throwable $waErr) {
+                \Illuminate\Support\Facades\Log::info('Reporter completion WA notification notice: ' . $waErr->getMessage());
+            }
+        }
+
         if ($request->wantsJson()) {
             return response()->json([
                 'success' => true,
@@ -569,7 +689,17 @@ class KasiController extends Controller
     {
         $user = $request->user();
 
-        $query = User::where('role_id', Role::STAFF)->with(['room', 'unit', 'kpiLogs.report', 'kpiLogs.verifier'])->where('is_active', true);
+        $query = User::where('role_id', Role::STAFF)
+            ->with([
+                'room',
+                'unit',
+                'kpiLogs' => fn($q) => $q->latest('logged_at'),
+                'kpiLogs.report.attachments',
+                'kpiLogs.report.room',
+                'kpiLogs.verifier'
+            ])
+            ->where('is_active', true);
+
         $userRoomId = $user ? ($user->room_id ?? $user->unit_id) : null;
         if ($userRoomId && !$user->isSuperAdmin()) {
             $query->where('room_id', $userRoomId);
@@ -586,12 +716,55 @@ class KasiController extends Controller
                 'complaint_count' => $s->complaint_count,
                 'last_update' => $s->last_point_update_at ? $s->last_point_update_at->format('Y-m-d H:i') : '-',
                 'history' => $s->kpiLogs->map(function ($log) {
+                    $report = $log->report;
+                    $verificationAttachments = ($report && $report->attachments)
+                        ? $report->attachments->where('category', 'VERIFICATION')->values()->map(function ($att) {
+                            return [
+                                'id' => $att->id,
+                                'file_name' => $att->file_name,
+                                'file_type' => $att->file_type,
+                                'mime_type' => $att->mime_type,
+                                'file_size' => $att->file_size_bytes ? round($att->file_size_bytes / 1024, 1) . ' KB' : '-',
+                                'url' => \Illuminate\Support\Facades\Storage::url($att->file_path),
+                            ];
+                        }) : [];
+
+                    $evidenceAttachments = ($report && $report->attachments)
+                        ? $report->attachments->where('category', '!=', 'VERIFICATION')->values()->map(function ($att) {
+                            return [
+                                'id' => $att->id,
+                                'file_name' => $att->file_name,
+                                'file_type' => $att->file_type,
+                                'mime_type' => $att->mime_type,
+                                'file_size' => $att->file_size_bytes ? round($att->file_size_bytes / 1024, 1) . ' KB' : '-',
+                                'url' => \Illuminate\Support\Facades\Storage::url($att->file_path),
+                            ];
+                        }) : [];
+
                     return [
-                        'id' => $log->report ? $log->report->ticket_number : 'MANUAL',
+                        'id' => $log->id,
+                        'ticket_number' => $report ? $report->ticket_number : 'EVALUASI_MANUAL',
                         'type' => $log->action_type,
                         'points' => $log->points,
                         'note' => $log->note,
-                        'date' => $log->logged_at ? $log->logged_at->format('Y-m-d') : '-',
+                        'verifier_name' => $log->verifier ? $log->verifier->name : 'Supervisor Kasi',
+                        'date' => $log->logged_at ? $log->logged_at->format('d M Y, H:i') : ($log->created_at ? $log->created_at->format('d M Y, H:i') : '-'),
+                        'has_attachment' => count($verificationAttachments) > 0,
+                        'attachments' => $verificationAttachments,
+                        'report_detail' => $report ? [
+                            'ticket_number' => $report->ticket_number,
+                            'isi_laporan' => $report->isi_laporan,
+                            'room_name' => $report->room ? $report->room->name : ($report->unit ? $report->unit->name : '-'),
+                            'ai_sentiment' => $report->ai_sentiment,
+                            'ai_category' => $report->ai_category,
+                            'status' => $report->status,
+                            'supervisor_notes' => $report->supervisor_notes,
+                            'verified_at' => $report->verified_at ? $report->verified_at->format('d M Y, H:i') : '-',
+                            'created_at' => $report->created_at ? $report->created_at->format('d M Y, H:i') : '-',
+                            'reporter_name' => $report->is_anonymous ? 'Anonim (Pasien/Pengunjung)' : ($report->reporter_name ?: 'Pasien/Pengunjung'),
+                            'verification_attachments' => $verificationAttachments,
+                            'evidence_attachments' => $evidenceAttachments,
+                        ] : null,
                     ];
                 }),
             ];
@@ -602,3 +775,4 @@ class KasiController extends Controller
         ]);
     }
 }
+

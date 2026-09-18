@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Channels\WaGatewayChannel;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Inertia\Inertia;
-use App\Channels\WaGatewayChannel;
 
 class WaGatewayController extends Controller
 {
@@ -13,14 +13,13 @@ class WaGatewayController extends Controller
     {
         return Inertia::render('WaGateway/Index', [
             'driver' => config('services.wa_gateway.driver', 'local'),
-            'localUrl' => config('services.wa_gateway.local_url', 'http://127.0.0.1:3000/send'),
+            'localUrl' => WaGatewayChannel::getGatewayUrl('/send'),
         ]);
     }
 
     public function status(Request $request)
     {
-        $baseUrl = config('services.wa_gateway.local_url', 'http://127.0.0.1:3000/send');
-        $statusUrl = str_replace('/send', '/status', $baseUrl);
+        $statusUrl = WaGatewayChannel::getGatewayUrl('/status');
 
         $data = [
             'status' => 'offline',
@@ -32,7 +31,7 @@ class WaGatewayController extends Controller
         $secretKey = config('services.wa_gateway.secret_key');
 
         try {
-            $client = Http::timeout(4)->withoutVerifying();
+            $client = Http::timeout(3)->withoutVerifying();
             if (!empty($secretKey)) {
                 $client = $client->withHeaders(['X-Api-Key' => $secretKey]);
             }
@@ -53,13 +52,11 @@ class WaGatewayController extends Controller
 
     public function logout(Request $request)
     {
-        $baseUrl = config('services.wa_gateway.local_url', 'http://127.0.0.1:3000/send');
-        $logoutUrl = str_replace('/send', '/logout', $baseUrl);
-
+        $logoutUrl = WaGatewayChannel::getGatewayUrl('/logout');
         $secretKey = config('services.wa_gateway.secret_key');
 
         try {
-            $client = Http::timeout(5)->withoutVerifying();
+            $client = Http::timeout(4)->withoutVerifying();
             if (!empty($secretKey)) {
                 $client = $client->withHeaders(['X-Api-Key' => $secretKey]);
             }
@@ -90,13 +87,12 @@ class WaGatewayController extends Controller
         ]);
 
         try {
-            $channel = new WaGatewayChannel();
-            $channel->send($request->input('phone'), new class($request->input('message')) extends \Illuminate\Notifications\Notification {
-                public function __construct(public string $msg) {}
-                public function toWaGateway($notifiable) { return $this->msg; }
-            });
+            $success = WaGatewayChannel::sendDirect($request->input('phone'), $request->input('message'));
 
-            return back()->with('success', 'Pesan Uji Coba WhatsApp telah dikirimkan!');
+            if ($success) {
+                return back()->with('success', 'Pesan Uji Coba WhatsApp telah dikirimkan!');
+            }
+            return back()->with('error', 'Gagal mengirim pesan uji coba. Periksa apakah server WA Gateway aktif.');
         } catch (\Throwable $e) {
             return back()->with('error', 'Gagal mengirim pesan uji coba: ' . $e->getMessage());
         }

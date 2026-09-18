@@ -110,9 +110,7 @@ class UserManagementController extends Controller
         }
 
         if (!empty($unitFilter) && $unitFilter !== 'ALL') {
-            $query->where(function ($q) use ($unitFilter) {
-                $q->where('room_id', $unitFilter)->orWhere('unit_id', $unitFilter);
-            });
+            $query->where('room_id', $unitFilter);
         }
 
         if ($statusFilter !== '' && $statusFilter !== 'ALL') {

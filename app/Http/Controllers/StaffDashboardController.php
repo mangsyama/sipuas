@@ -30,29 +30,82 @@ class StaffDashboardController extends Controller
 
         // 2. Riwayat logbook KPI
         $kpiLogs = $user->kpiLogs()
-            ->with(['report', 'verifier'])
+            ->with(['report.attachments', 'report.room', 'verifier'])
             ->latest('logged_at')
-            ->take(15)
+            ->take(20)
             ->get()
             ->map(function ($log) {
+                $report = $log->report;
+                $verificationAttachments = ($report && $report->attachments)
+                    ? $report->attachments->where('category', 'VERIFICATION')->values()->map(function ($att) {
+                        return [
+                            'id' => $att->id,
+                            'file_name' => $att->file_name,
+                            'file_type' => $att->file_type,
+                            'mime_type' => $att->mime_type,
+                            'file_size' => $att->file_size_bytes ? round($att->file_size_bytes / 1024, 1) . ' KB' : '-',
+                            'url' => \Illuminate\Support\Facades\Storage::url($att->file_path),
+                        ];
+                    }) : [];
+
+                $evidenceAttachments = ($report && $report->attachments)
+                    ? $report->attachments->where('category', '!=', 'VERIFICATION')->values()->map(function ($att) {
+                        return [
+                            'id' => $att->id,
+                            'file_name' => $att->file_name,
+                            'file_type' => $att->file_type,
+                            'mime_type' => $att->mime_type,
+                            'file_size' => $att->file_size_bytes ? round($att->file_size_bytes / 1024, 1) . ' KB' : '-',
+                            'url' => \Illuminate\Support\Facades\Storage::url($att->file_path),
+                        ];
+                    }) : [];
+
                 return [
                     'id' => $log->id,
                     'action_type' => $log->action_type,
                     'points' => $log->points,
                     'note' => $log->note,
-                    'ticket_number' => $log->report ? $log->report->ticket_number : 'EVALUASI_MANUAL',
+                    'ticket_number' => $report ? $report->ticket_number : 'EVALUASI_MANUAL',
                     'verifier_name' => $log->verifier ? $log->verifier->name : 'Supervisor Kasi',
                     'date' => $log->logged_at ? $log->logged_at->format('d M Y, H:i') : '-',
+                    'has_attachment' => count($verificationAttachments) > 0,
+                    'attachments' => $verificationAttachments,
+                    'report_detail' => $report ? [
+                        'ticket_number' => $report->ticket_number,
+                        'isi_laporan' => $report->isi_laporan,
+                        'room_name' => $report->room ? $report->room->name : ($report->unit ? $report->unit->name : '-'),
+                        'ai_sentiment' => $report->ai_sentiment,
+                        'ai_category' => $report->ai_category,
+                        'status' => $report->status,
+                        'supervisor_notes' => $report->supervisor_notes,
+                        'verified_at' => $report->verified_at ? $report->verified_at->format('d M Y, H:i') : '-',
+                        'created_at' => $report->created_at ? $report->created_at->format('d M Y, H:i') : '-',
+                        'reporter_name' => 'Pasien / Pengunjung (Dirahasiakan)',
+                        'verification_attachments' => $verificationAttachments,
+                        'evidence_attachments' => $evidenceAttachments,
+                    ] : null,
                 ];
             });
 
         // 3. Riwayat laporan pasien yang berkaitan langsung dengan staf
         $relatedReports = $user->reports()
-            ->with(['unit', 'verifier'])
+            ->with(['unit', 'verifier', 'attachments'])
             ->latest('verified_at')
-            ->take(10)
+            ->take(15)
             ->get()
             ->map(function ($r) {
+                $verificationAttachments = $r->attachments 
+                    ? $r->attachments->where('category', 'VERIFICATION')->values()->map(function ($att) {
+                        return [
+                            'id' => $att->id,
+                            'file_name' => $att->file_name,
+                            'file_type' => $att->file_type,
+                            'mime_type' => $att->mime_type,
+                            'file_size' => $att->file_size_bytes ? round($att->file_size_bytes / 1024, 1) . ' KB' : '-',
+                            'url' => \Illuminate\Support\Facades\Storage::url($att->file_path),
+                        ];
+                    }) : [];
+
                 return [
                     'id' => $r->ticket_number,
                     'isi_laporan' => $r->isi_laporan,
@@ -61,6 +114,8 @@ class StaffDashboardController extends Controller
                     'points' => $r->pivot->points ?? 0,
                     'supervisor_notes' => $r->supervisor_notes,
                     'verified_at' => $r->verified_at ? $r->verified_at->format('d M Y, H:i') : '-',
+                    'has_attachment' => count($verificationAttachments) > 0,
+                    'attachments' => $verificationAttachments,
                 ];
             });
 

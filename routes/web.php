@@ -44,10 +44,17 @@ Route::middleware('auth')->group(function () {
         Route::get('/kasi/verify/{id?}', [KasiController::class, 'verify'])->name('kasi.verify');
         Route::post('/kasi/verify/{id}/process', [KasiController::class, 'processVerification'])->name('kasi.verify.process');
         Route::get('/kasi/logbook', [KasiController::class, 'logbook'])->name('kasi.logbook');
+        Route::get('/kasi/reports', [\App\Http\Controllers\ReportExportController::class, 'index'])->name('kasi.reports');
     });
 
     // Modul Kabid Pelayanan — PRD System
     Route::middleware('role:kabid,direktur')->group(function () {
+        Route::get('/kabid/dashboard', [KabidController::class, 'dashboard'])->name('kabid.dashboard');
+        Route::get('/kabid/kasi-responsiveness', [KabidController::class, 'kasiResponsiveness'])->name('kabid.kasi-responsiveness');
+        Route::get('/kabid/leaderboard', [KabidController::class, 'leaderboard'])->name('kabid.leaderboard');
+        Route::get('/kabid/reports', [\App\Http\Controllers\ReportExportController::class, 'index'])->name('kabid.reports');
+
+        // Dukungan URL lama /executive/* (Alias kompatibilitas)
         Route::get('/executive/dashboard', [KabidController::class, 'dashboard'])->name('executive.dashboard');
         Route::get('/executive/kasi-responsiveness', [KabidController::class, 'kasiResponsiveness'])->name('executive.kasi-responsiveness');
         Route::get('/executive/leaderboard', [KabidController::class, 'leaderboard'])->name('executive.leaderboard');

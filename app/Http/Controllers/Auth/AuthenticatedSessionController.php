@@ -47,7 +47,7 @@ class AuthenticatedSessionController extends Controller
         }
 
         if ($user && in_array((int)$user->role_id, [\App\Models\Role::KEPALA_BIDANG, \App\Models\Role::DIREKTUR])) {
-            return redirect()->intended(route('executive.dashboard', absolute: false));
+            return redirect()->intended(route('kabid.dashboard', absolute: false));
         }
 
         return redirect()->intended(route('dashboard', absolute: false));
