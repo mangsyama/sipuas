@@ -28,10 +28,11 @@ class KasiController extends Controller
         $user = $request->user();
         $userRoomId = $user ? ($user->room_id ?? $user->unit_id) : null;
         $isElevated = $user && ($user->isSuperAdmin() || $user->isDirektur() || $user->isKabid());
+        $canFilterRooms = $isElevated || ($user && empty($userRoomId));
 
         // Selected Room Filter
         $roomId = $request->input('room_id');
-        if (!$isElevated || empty($roomId)) {
+        if (!$canFilterRooms || empty($roomId)) {
             $effectiveRoomId = $userRoomId;
         } else {
             $effectiveRoomId = $roomId;
@@ -176,7 +177,7 @@ class KasiController extends Controller
 
         // Current Unit Info
         $currentRoom = $effectiveRoomId ? Room::find($effectiveRoomId) : null;
-        $rooms = $isElevated ? Room::where('is_active', true)->select(['id', 'name'])->orderBy('name')->get() : [];
+        $rooms = $canFilterRooms ? Room::where('is_active', true)->select(['id', 'name'])->orderBy('name')->get() : [];
 
         // Category Chart Data for horizontal bar chart
         $catLabels = $topCategories->pluck('name')->toArray();
@@ -226,10 +227,11 @@ class KasiController extends Controller
         $user = $request->user();
         $userRoomId = $user ? ($user->room_id ?? $user->unit_id) : null;
         $isElevated = $user && ($user->isSuperAdmin() || $user->isDirektur() || $user->isKabid());
+        $canFilterRooms = $isElevated || ($user && empty($userRoomId));
 
         // Selected Room Filter
         $roomId = $request->input('room_id');
-        if (!$isElevated || empty($roomId)) {
+        if (!$canFilterRooms || empty($roomId)) {
             $effectiveRoomId = $userRoomId;
         } else {
             $effectiveRoomId = $roomId;
@@ -269,7 +271,7 @@ class KasiController extends Controller
         $verifiedReports = $reports->whereIn('status', ['VERIFIED', 'RESOLVED'])->count();
 
         $currentRoom = $effectiveRoomId ? Room::find($effectiveRoomId) : null;
-        $rooms = $isElevated ? Room::where('is_active', true)->select(['id', 'name'])->orderBy('name')->get() : [];
+        $rooms = $canFilterRooms ? Room::where('is_active', true)->select(['id', 'name'])->orderBy('name')->get() : [];
 
         return Inertia::render('Kasi/Feed', [
             'initialReports' => $reports->values()->all(),
@@ -306,6 +308,11 @@ class KasiController extends Controller
 
         if (!$report) {
             $report = Report::with(['room', 'unit', 'attachments', 'staff', 'verifier'])->latest()->first();
+        }
+
+        // Tandai notifikasi laporan ini otomatis terbaca saat dibuka/diverifikasi oleh user secara eksplisit
+        if ($report && $id && !$request->header('X-Inertia-Partial-Data')) {
+            \App\Services\NotificationService::markAsRead('report-' . $report->id, $request);
         }
 
         $roomId = $report ? ($report->room_id ?? $report->unit_id) : null;
@@ -724,27 +731,32 @@ class KasiController extends Controller
                 dispatch(function () use ($reporterPhone, $reporterName, $ticketNumber, $roomName) {
                     try {
                         $hasName = !empty($reporterName) && strtolower(trim($reporterName)) !== 'anonim';
-                        $greeting = $hasName ? "Halo {$reporterName}," : "Halo,";
+                        $greeting = $hasName ? "Halo *{$reporterName}*," : "Halo,";
 
                         $waMsg = "{$greeting}\n\n"
-                            . "Terima kasih atas laporan/aspirasi yang telah Anda sampaikan melalui sistem SIPUAS.\n"
-                            . "Laporan Anda dengan rincian:\n"
-                            . "📋 Nomor Tiket : {$ticketNumber}\n"
-                            . "🏥 Unit/Ruangan : {$roomName}\n"
-                            . "✅ Status : Selesai Ditangani & Diverifikasi\n\n"
+                            . "Terima kasih atas laporan/aspirasi yang telah Anda sampaikan melalui sistem *SIPUAS*.\n\n"
+                            . "Berikut adalah rincian penanganan tiket aduan Anda:\n"
+                            . "*Nomor Tiket :* *{$ticketNumber}*\n"
+                            . "*Ruangan :* {$roomName}\n"
+                            . "*Status :* Selesai Ditangani & Diverifikasi\n\n"
                             . "Laporan Anda telah selesai ditinjau dan divalidasi oleh manajemen pelayanan rumah sakit untuk peningkatan mutu pelayanan rumah sakit.\n\n"
                             . "Setiap masukan dari Anda sangat berarti bagi perbaikan layanan kami.\n\n"
-                            . "Salam sehat,\nTim Manajemen Pelayanan Rumah Sakit";
+                            . "Salam sehat,\n_Tim Manajemen Pelayanan Rumah Sakit_";
 
                         WaGatewayChannel::sendDirect($reporterPhone, $waMsg);
                     } catch (\Throwable $sendErr) {
                         \Illuminate\Support\Facades\Log::warning('WA notification send notice: ' . $sendErr->getMessage());
                     }
-                });
+                })->afterResponse();
             } catch (\Throwable $waErr) {
                 \Illuminate\Support\Facades\Log::info('Reporter completion WA notification notice: ' . $waErr->getMessage());
             }
         }
+
+        // Real-Time Notification Event
+        try {
+            event(new \App\Events\ReportStatusUpdated($report));
+        } catch (\Throwable $bErr) {}
 
         if ($request->wantsJson()) {
             return response()->json([
@@ -853,6 +865,29 @@ class KasiController extends Controller
         return Inertia::render('Kasi/Logbook', [
             'staffLogbooks' => $staffLogbooks,
         ]);
+    }
+
+    /**
+     * Soft delete a report (Administrator only).
+     */
+    public function destroy(Request $request, $id)
+    {
+        $user = $request->user();
+        if (!$user || !$user->isAdministrator()) {
+            abort(403, 'Hanya Administrator yang memiliki wewenang untuk menghapus laporan.');
+        }
+
+        $report = is_numeric($id)
+            ? Report::where('ticket_number', (string)$id)->orWhere('id', (int)$id)->firstOrFail()
+            : Report::where('ticket_number', (string)$id)->firstOrFail();
+
+        $ticket = $report->ticket_number;
+        $report->delete(); // Soft delete via SoftDeletes trait
+
+        // Sinkronkan notifikasi sistem
+        \App\Services\NotificationService::markAsRead('report-' . $report->id, $request);
+
+        return redirect()->back()->with('success', "Laporan dengan No. Tiket {$ticket} berhasil dihapus.");
     }
 }
 

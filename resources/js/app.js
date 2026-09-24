@@ -26,8 +26,7 @@ if (typeof window !== 'undefined') {
     if (appKey) {
         const isHttps = window.location.protocol === 'https:';
         const rawPort = import.meta.env.VITE_REVERB_PORT;
-        const defaultPort = isHttps ? 443 : 80;
-        const portNum = (rawPort && Number(rawPort) !== 8081) ? Number(rawPort) : defaultPort;
+        const portNum = rawPort ? Number(rawPort) : (isHttps ? 443 : 8085);
 
         window.Pusher = Pusher;
         window.Echo = new Echo({
@@ -82,13 +81,13 @@ createInertiaApp({
                         const isToast = opts.toast === true;
 
                         if (isToast) {
-                            window.dispatchEvent(new CustomEvent('show-demo-toast', {
-                                detail: {
-                                    title: opts.title || 'Notifikasi',
-                                    message: opts.text || '',
-                                    type: opts.icon || 'success'
-                                }
-                            }));
+                            const eventDetail = {
+                                title: opts.title || (opts.icon === 'error' ? 'Gagal' : 'Notifikasi'),
+                                message: opts.text || opts.title || '',
+                                type: opts.icon || 'success'
+                            };
+                            window.dispatchEvent(new CustomEvent('show-toast', { detail: eventDetail }));
+                            window.dispatchEvent(new CustomEvent('show-demo-toast', { detail: eventDetail }));
                             return Promise.resolve({ isConfirmed: true });
                         }
 
@@ -110,13 +109,13 @@ createInertiaApp({
                         });
                     },
                     $toast(title, icon = 'success') {
-                        window.dispatchEvent(new CustomEvent('show-demo-toast', {
-                            detail: {
-                                title: icon === 'success' ? 'Sukses' : icon === 'error' ? 'Gagal' : 'Notifikasi',
-                                message: title,
-                                type: icon
-                            }
-                        }));
+                        const eventDetail = {
+                            title: icon === 'success' ? 'Sukses' : icon === 'error' ? 'Gagal' : 'Notifikasi',
+                            message: title,
+                            type: icon
+                        };
+                        window.dispatchEvent(new CustomEvent('show-toast', { detail: eventDetail }));
+                        window.dispatchEvent(new CustomEvent('show-demo-toast', { detail: eventDetail }));
                         return Promise.resolve({ isConfirmed: true });
                     }
                 }

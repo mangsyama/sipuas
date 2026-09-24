@@ -136,6 +136,9 @@ class ReportController extends Controller
                 : (($hour >= 14 && $hour < 21) ? 'Shift Siang (14:00 - 21:00 WITA)' : 'Shift Malam (21:00 - 07:00 WITA)');
 
             $ticketNumber = Report::generateTicketNumber();
+            $clientIp = $request->ip();
+            $clientUserAgent = $request->userAgent();
+            $deviceSummary = self::parseDeviceSummary($clientUserAgent);
 
             // Try creating report record with full fields, with minimal fallback on error
             try {
@@ -153,6 +156,9 @@ class ReportController extends Controller
                     'reporter_name' => mb_substr($validated['reporter_name'] ?? 'Anonim', 0, 140),
                     'reporter_phone' => mb_substr($validated['reporter_phone'] ?? '', 0, 28) ?: null,
                     'is_anonymous' => empty($validated['reporter_name']) || strtolower(trim($validated['reporter_name'])) === 'anonim',
+                    'ip_address' => mb_substr($clientIp ?? '', 0, 45) ?: null,
+                    'user_agent' => mb_substr($clientUserAgent ?? '', 0, 1000) ?: null,
+                    'device_info' => $deviceSummary,
                     'status' => 'PENDING',
                     'priority' => in_array(strtoupper($aiAnalysis['urgency'] ?? ''), ['TINGGI', 'KRITIS']) ? 'HIGH' : 'NORMAL',
                 ]);
@@ -166,6 +172,9 @@ class ReportController extends Controller
                     'reporter_name' => mb_substr($validated['reporter_name'] ?? 'Anonim', 0, 140),
                     'reporter_phone' => mb_substr($validated['reporter_phone'] ?? '', 0, 28) ?: null,
                     'is_anonymous' => empty($validated['reporter_name']) || strtolower(trim($validated['reporter_name'])) === 'anonim',
+                    'ip_address' => mb_substr($clientIp ?? '', 0, 45) ?: null,
+                    'user_agent' => mb_substr($clientUserAgent ?? '', 0, 1000) ?: null,
+                    'device_info' => $deviceSummary,
                     'status' => 'PENDING',
                     'priority' => 'NORMAL',
                     'ai_sentiment' => 'NETRAL',
@@ -193,32 +202,69 @@ class ReportController extends Controller
                 }
             }
 
-            // Kirim Notifikasi WhatsApp secara Asinkron (Non-blocking via Queue)
+            // Real-Time System Notification Broadcast
             try {
-                dispatch(function () use ($room, $ticketNumber, $validated, $sentiment) {
+                event(new \App\Events\NewReportSubmitted($report));
+            } catch (\Throwable $bErr) {
+                \Illuminate\Support\Facades\Log::info('Realtime broadcast notice: ' . $bErr->getMessage());
+            }
+
+            // Kirim Notifikasi WhatsApp secara Asinkron (Non-blocking via Queue / AfterResponse)
+            try {
+                $targetObject = $validated['target_object'] ?? '-';
+                $isiLaporan = $validated['isi_laporan'] ?? '';
+                $reporterPhone = $validated['reporter_phone'] ?? null;
+                $reporterName = $validated['reporter_name'] ?? null;
+                $roomId = $room ? $room->id : null;
+                $roomLabel = $room 
+                    ? ($room->location_info ? "{$room->name} ({$room->location_info})" : $room->name)
+                    : 'Pelayanan Umum / Semua Ruangan';
+                $verifyUrl = url('/kasi/verify/' . $ticketNumber);
+                $trackingUrl = url('/report/track?ticket=' . $ticketNumber);
+                $waktuLaporan = now()->translatedFormat('d F Y, H:i') . ' WITA';
+
+                dispatch(function () use (
+                    $roomId,
+                    $roomLabel,
+                    $ticketNumber,
+                    $targetObject,
+                    $isiLaporan,
+                    $reporterPhone,
+                    $reporterName,
+                    $verifyUrl,
+                    $trackingUrl,
+                    $waktuLaporan
+                ) {
                     try {
-                        if ($room) {
-                            $kasiUsers = \App\Models\User::where('room_id', $room->id)
-                                ->where('role_id', \App\Models\Role::KEPALA_SEKSI)
-                                ->where('is_active', true)
-                                ->whereNotNull('phone_number')
-                                ->get();
-
-                            if ($kasiUsers->isNotEmpty()) {
-                                $waMessage = "🔔 *NOTIFIKASI SIAGA SIPUAS*\n"
-                                    . "Ada laporan pelayanan baru di ruangan Anda:\n\n"
-                                    . "📋 *No. Tiket :* {$ticketNumber}\n"
-                                    . "🏥 *Ruangan :* " . ($room->name ?? 'Umum') . " (" . ($room->location_info ?? '-') . ")\n"
-                                    . "👤 *Sasaran/Staf :* " . ($validated['target_object'] ?? '-') . "\n"
-                                    . "🕒 *Waktu :* " . now()->translatedFormat('d F Y, H:i') . " WITA\n"
-                                    . "📊 *Sentimen AI :* {$sentiment}\n"
-                                    . "📝 *Uraian Singkat :* " . mb_substr($validated['isi_laporan'], 0, 100) . "...\n\n"
-                                    . "Mohon segera buka menu *Feed Aduan Masuk Unit* untuk melakukan verifikasi staf dinas.\n"
-                                    . "🔗 " . url('/kasi/dashboard');
-
-                                foreach ($kasiUsers as $kasi) {
-                                    WaGatewayChannel::sendDirect($kasi->phone_number, $waMessage);
+                        $kasiUsers = \App\Models\User::where('role_id', \App\Models\Role::KEPALA_SEKSI)
+                            ->where('is_active', true)
+                            ->where('wa_notify_enabled', true)
+                            ->whereNotNull('phone_number')
+                            ->where(function ($q) use ($roomId) {
+                                if ($roomId) {
+                                    $q->where('room_id', $roomId)
+                                      ->orWhereNull('room_id');
+                                } else {
+                                    $q->whereNull('room_id');
                                 }
+                            })
+                            ->get();
+
+                        if ($kasiUsers->isNotEmpty()) {
+                            $targetLabel = !empty($targetObject) && $targetObject !== '-' ? $targetObject : '-';
+
+                            $waMessage = "🔔 *NOTIFIKASI SIPUAS*\n"
+                                . "Ada laporan pelayanan baru masuk ke sistem:\n\n"
+                                . "*No. Tiket :* {$ticketNumber}\n"
+                                . "*Ruangan :* {$roomLabel}\n"
+                                . "*Sasaran/Staf :* {$targetLabel}\n"
+                                . "*Waktu :* {$waktuLaporan}\n"
+                                . "*Uraian :* {$isiLaporan}\n\n"
+                                . "Lihat Laporan:\n"
+                                . "{$verifyUrl}";
+
+                            foreach ($kasiUsers as $kasi) {
+                                WaGatewayChannel::sendDirect($kasi->phone_number, $waMessage);
                             }
                         }
                     } catch (\Throwable $e) {
@@ -226,32 +272,28 @@ class ReportController extends Controller
                     }
 
                     // Kirim Notifikasi WhatsApp Konfirmasi & Pengingat Tiket ke Pelapor (jika nomor HP diisi)
-                    if (!empty($validated['reporter_phone'])) {
+                    if (!empty($reporterPhone)) {
                         try {
-                            $hasName = !empty($validated['reporter_name']) && strtolower(trim($validated['reporter_name'])) !== 'anonim';
-                            $greeting = $hasName ? "Halo *{$validated['reporter_name']}*," : "Halo,";
-                            $waktuLaporan = now()->translatedFormat('d F Y, H:i') . ' WITA';
-                            $trackingUrl = url('/report/track?ticket=' . $ticketNumber);
-                            $roomLabel = $room ? ($room->name . ' (' . $room->location_info . ')') : 'Pelayanan Rumah Sakit';
+                            $hasName = !empty($reporterName) && strtolower(trim($reporterName)) !== 'anonim';
+                            $greeting = $hasName ? "Halo *{$reporterName}*," : "Halo,";
 
                             $reporterWaMsg = "{$greeting}\n\n"
                                 . "Terima kasih telah menyampaikan laporan/aspirasi pelayanan Anda melalui sistem *SIPUAS*.\n\n"
                                 . "Berikut adalah rincian tiket aduan Anda:\n"
-                                . "📋 *Nomor Tiket :* *{$ticketNumber}*\n"
-                                . "🏥 *Ruangan :* {$roomLabel}\n"
-                                . "🕒 *Waktu :* {$waktuLaporan}\n"
-                                . "📊 *Status :* Menunggu Verifikasi Kepala Seksi\n\n"
-                                . "Simpan nomor tiket ini untuk memantau proses tindak lanjut penanganan aduan Anda secara berkala melalui tautan berikut:\n"
-                                . "🔗 {$trackingUrl}\n\n"
+                                . "*Nomor Tiket :* *{$ticketNumber}*\n"
+                                . "*Ruangan :* {$roomLabel}\n"
+                                . "*Waktu :* {$waktuLaporan}\n"
+                                . "*Status :* Menunggu Verifikasi Kepala Seksi\n\n"
+                                . "Simpan nomor tiket ini untuk memantau proses tindak lanjut penanganan aduan Anda secara berkala melalui tautan berikut: {$trackingUrl}\n\n"
                                 . "Setiap masukan Anda sangat berarti untuk peningkatan mutu pelayanan kami.\n\n"
                                 . "Salam sehat,\n_Tim Manajemen Pelayanan Rumah Sakit_";
 
-                            WaGatewayChannel::sendDirect($validated['reporter_phone'], $reporterWaMsg);
+                            WaGatewayChannel::sendDirect($reporterPhone, $reporterWaMsg);
                         } catch (\Throwable $e) {
                             \Illuminate\Support\Facades\Log::info('Reporter WA confirmation failed: ' . $e->getMessage());
                         }
                     }
-                });
+                })->afterResponse();
             } catch (\Throwable $dispatchErr) {
                 \Illuminate\Support\Facades\Log::warning('Dispatch WA notice: ' . $dispatchErr->getMessage());
             }
@@ -354,5 +396,59 @@ class ReportController extends Controller
             'report' => $reportData,
             'searched' => $searched,
         ]);
+    }
+
+    /**
+     * Parse User-Agent into a clean, human-readable device and browser summary for IT audit.
+     */
+    public static function parseDeviceSummary(?string $userAgent): ?string
+    {
+        if (empty($userAgent)) {
+            return 'Perangkat Tidak Diketahui';
+        }
+
+        // Detect OS
+        $os = 'OS Lainnya';
+        if (preg_match('/windows nt 10/i', $userAgent)) {
+            $os = 'Windows 10/11';
+        } elseif (preg_match('/windows nt 6\.3/i', $userAgent)) {
+            $os = 'Windows 8.1';
+        } elseif (preg_match('/windows nt 6\.1/i', $userAgent)) {
+            $os = 'Windows 7';
+        } elseif (preg_match('/windows nt/i', $userAgent)) {
+            $os = 'Windows';
+        } elseif (preg_match('/android (\d+(\.\d+)?)/i', $userAgent, $m)) {
+            $os = 'Android ' . $m[1];
+        } elseif (preg_match('/iphone os (\d+(_\d+)?)/i', $userAgent, $m)) {
+            $os = 'iOS ' . str_replace('_', '.', $m[1]);
+        } elseif (preg_match('/ipad/i', $userAgent)) {
+            $os = 'iPadOS';
+        } elseif (preg_match('/macintosh|mac os x/i', $userAgent)) {
+            $os = 'macOS';
+        } elseif (preg_match('/linux/i', $userAgent)) {
+            $os = 'Linux';
+        }
+
+        // Detect Browser
+        $browser = 'Browser Lainnya';
+        if (preg_match('/edg\/([\d\.]+)/i', $userAgent, $m)) {
+            $browser = 'Edge ' . explode('.', $m[1])[0];
+        } elseif (preg_match('/opr\/([\d\.]+)|opera/i', $userAgent, $m)) {
+            $browser = 'Opera';
+        } elseif (preg_match('/crios\/([\d\.]+)/i', $userAgent, $m)) {
+            $browser = 'Chrome iOS ' . explode('.', $m[1])[0];
+        } elseif (preg_match('/chrome\/([\d\.]+)/i', $userAgent, $m)) {
+            $browser = 'Chrome ' . explode('.', $m[1])[0];
+        } elseif (preg_match('/version\/([\d\.]+).*safari/i', $userAgent, $m)) {
+            $browser = 'Safari ' . explode('.', $m[1])[0];
+        } elseif (preg_match('/firefox\/([\d\.]+)/i', $userAgent, $m)) {
+            $browser = 'Firefox ' . explode('.', $m[1])[0];
+        }
+
+        // Detect Device Type
+        $isMobile = preg_match('/mobile|android|iphone|ipad|phone/i', $userAgent);
+        $type = $isMobile ? 'Mobile' : 'Desktop';
+
+        return "{$browser} on {$os} ({$type})";
     }
 }

@@ -88,6 +88,12 @@ class RegisteredUserController extends Controller
 
         event(new Registered($user));
 
+        try {
+            event(new \App\Events\NewUserRegistered($user));
+        } catch (\Throwable $bErr) {
+            \Illuminate\Support\Facades\Log::info('Realtime broadcast notice: ' . $bErr->getMessage());
+        }
+
         return redirect()->route('login')->with('status', 'Pendaftaran berhasil! Akun Anda sedang menunggu proses verifikasi dan persetujuan dari Administrator.');
     }
 }

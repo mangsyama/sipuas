@@ -50,9 +50,15 @@ const closeSidebar = () => {
 };
 
 const handleDemoToast = (event) => {
-    if (event.detail) {
-        showNotificationToast(event.detail);
-    }
+    if (!event.detail) return;
+    const d = event.detail;
+    showNotificationToast({
+        title: d.title || (d.type === 'error' || d.icon === 'error' ? 'Gagal' : 'Notifikasi'),
+        message: d.message || d.text || '',
+        type: d.type || d.icon || 'success',
+        route: d.route || null,
+        priority: d.priority || 'NORMAL'
+    });
 };
 
 const customAlert = ref({
@@ -138,7 +144,18 @@ onMounted(() => {
     }
 
     registerNotificationListeners();
+    startHeartbeatPoller();
+    window.addEventListener('show-toast', handleDemoToast);
     window.addEventListener('show-demo-toast', handleDemoToast);
+    if (typeof window !== 'undefined') {
+        window.$toast = (message, type = 'success', title = null) => {
+            showNotificationToast({
+                title: title || (type === 'error' ? 'Gagal' : 'Notifikasi'),
+                message: message,
+                type: type
+            });
+        };
+    }
     window.addEventListener('trigger-custom-alert', handleCustomAlert);
     window.addEventListener('keydown', handleCustomAlertKeyDown);
     window.addEventListener('popstate', handleCustomAlertPopState);
@@ -146,6 +163,8 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+    stopHeartbeatPoller();
+    window.removeEventListener('show-toast', handleDemoToast);
     window.removeEventListener('show-demo-toast', handleDemoToast);
     window.removeEventListener('trigger-custom-alert', handleCustomAlert);
     window.removeEventListener('keydown', handleCustomAlertKeyDown);
@@ -538,8 +557,8 @@ watch(
     }
 );
 
-const unreadCount = computed(() => Math.max(totalUnreadCount.value, unreadNotifications.value.length));
-const hiddenNotificationsCount = computed(() => Math.max(0, unreadCount.value - unreadNotifications.value.length));
+const unreadCount = computed(() => notifications.value.filter(n => !n.read_at).length);
+const hiddenNotificationsCount = computed(() => 0);
 
 const normalizeNotificationPayload = (notification) => {
     const title = notification.title ?? notification.data?.title ?? null;
@@ -572,14 +591,15 @@ const removeToast = (id) => {
 };
 
 const showNotificationToast = (normalized) => {
+    if (!normalized) return;
     const id = Date.now() + Math.random();
     toasts.value.push({
         id,
-        title: normalized.title,
-        message: normalized.message,
-        type: normalized.type,
-        route: normalized.route,
-        priority: normalized.priority
+        title: normalized.title || (normalized.type === 'error' ? 'Peringatan' : 'Berhasil'),
+        message: normalized.message || normalized.text || '',
+        type: normalized.type || 'success',
+        route: normalized.route || null,
+        priority: normalized.priority || 'NORMAL'
     });
 
     // Auto-remove after 6 seconds
@@ -588,45 +608,180 @@ const showNotificationToast = (normalized) => {
     }, 6000);
 };
 
+// Global watcher for backend flash messages (redirect()->with('success', '...') or with('error', '...'))
+let lastFlashSuccess = null;
+let lastFlashError = null;
+
+watch(
+    () => page.props.flash,
+    (flash) => {
+        if (!flash) return;
+        if (flash.success && flash.success !== lastFlashSuccess) {
+            lastFlashSuccess = flash.success;
+            showNotificationToast({
+                title: 'Berhasil',
+                message: flash.success,
+                type: 'success'
+            });
+        } else if (!flash.success) {
+            lastFlashSuccess = null;
+        }
+
+        if (flash.error && flash.error !== lastFlashError) {
+            lastFlashError = flash.error;
+            showNotificationToast({
+                title: 'Perhatian / Terjadi Kesalahan',
+                message: flash.error,
+                type: 'error'
+            });
+        } else if (!flash.error) {
+            lastFlashError = null;
+        }
+    },
+    { deep: true, immediate: true }
+);
+
 const registerNotificationListeners = () => {
-    if (typeof window !== 'undefined' && window.Echo && page.props.auth?.user?.id) {
-        const channelName = `App.Models.User.${page.props.auth.user.id}`;
+    if (typeof window !== 'undefined' && window.Echo) {
+        if (page.props.auth?.user?.id) {
+            const channelName = `App.Models.User.${page.props.auth.user.id}`;
+            window.Echo.private(channelName)
+                .notification((notification) => {
+                    const normalized = normalizeNotificationPayload(notification);
+                    notifications.value.unshift(normalized);
+                    totalUnreadCount.value += 1;
 
-        window.Echo.private(channelName)
-            .notification((notification) => {
-                const normalized = normalizeNotificationPayload(notification);
-                notifications.value.unshift(normalized);
-                totalUnreadCount.value += 1;
+                    // Show real-time visual toast
+                    showNotificationToast(normalized);
 
-                // Show real-time visual toast
-                showNotificationToast(normalized);
+                    if (normalized.type === 'user' || (normalized.route && normalized.route.includes('users.approvals'))) {
+                        pendingApprovalsCount.value += 1;
+                    } else if (normalized.type === 'ticket' || (normalized.route && (normalized.route.includes('kasi.feed') || normalized.route.includes('reports')))) {
+                        pendingReportsCount.value += 1;
+                    }
 
-                if (normalized.type === 'user' || (normalized.route && normalized.route.includes('users.approvals'))) {
-                    pendingApprovalsCount.value += 1;
-                } else if (normalized.type === 'ticket' || (normalized.route && normalized.route.includes('reports-management'))) {
+                    // Auto-refresh active Inertia page data silently without page reload
+                    router.reload({ preserveScroll: true, only: ['auth', 'notifications', 'unread_notifications_count'] });
+                });
+        }
+
+        // Dedicated universal SIPUAS Realtime Notifications
+        window.Echo.channel('sipuas-notifications')
+            .listen('.NewReportSubmitted', (e) => {
+                const rep = e.report;
+                const userRoomId = page.props.auth?.user?.room_id;
+                // If user is locked to a specific room and report is for another room, skip
+                if (userRoomId && rep.room_id && rep.room_id !== userRoomId) {
+                    return;
+                }
+
+                const notif = {
+                    id: 'report-' + rep.id,
+                    type: 'ticket',
+                    title: 'Aduan: ' + rep.ticket_number,
+                    message: (rep.room_name || 'Unit Pelayanan') + ' — ' + (rep.isi_laporan || ''),
+                    route: route('kasi.verify', rep.ticket_number),
+                    read_at: null,
+                    created_at: rep.created_at,
+                    time: 'Baru saja',
+                    priority: rep.priority || 'NORMAL',
+                };
+
+                if (!notifications.value.some(n => n.id === notif.id)) {
+                    notifications.value.unshift(notif);
+                    totalUnreadCount.value += 1;
                     pendingReportsCount.value += 1;
                 }
 
-                // Auto-refresh active Inertia page data silently without page reload
-                router.reload({ preserveScroll: true });
+                showNotificationToast(notif);
+                router.reload({ preserveScroll: true, only: ['auth', 'notifications', 'unread_notifications_count', 'initialReports', 'reports'] });
+            })
+            .listen('.NewUserRegistered', (e) => {
+                const u = e.user;
+                const canApprove = page.props.auth?.user?.role_id === 1 || page.props.auth?.page_permissions?.includes('users.approvals');
+                if (!canApprove) return;
+
+                const notif = {
+                    id: 'user-' + u.id,
+                    type: 'user',
+                    title: 'Pendaftaran Pengguna Baru',
+                    message: u.name + (u.nip ? ' (NIP: ' + u.nip + ')' : '') + ' menunggu persetujuan akun.',
+                    route: route('users.approvals'),
+                    read_at: null,
+                    created_at: u.created_at,
+                    time: 'Baru saja',
+                    priority: 'NORMAL',
+                };
+
+                if (!notifications.value.some(n => n.id === notif.id)) {
+                    notifications.value.unshift(notif);
+                    totalUnreadCount.value += 1;
+                    pendingApprovalsCount.value += 1;
+                }
+
+                showNotificationToast(notif);
+                router.reload({ preserveScroll: true, only: ['auth', 'notifications', 'unread_notifications_count', 'pendingUsers'] });
+            })
+            .listen('.ReportStatusUpdated', () => {
+                router.reload({ preserveScroll: true, only: ['auth', 'notifications', 'unread_notifications_count'] });
+            })
+            .listen('.UserApprovalUpdated', () => {
+                router.reload({ preserveScroll: true, only: ['auth', 'notifications', 'unread_notifications_count'] });
             });
 
         window.Echo.channel('tickets')
-            .listen('.TicketRealtimeUpdated', (e) => {
-                // Auto-refresh active Inertia page data silently when ticket events occur
+            .listen('.TicketRealtimeUpdated', () => {
                 router.reload({ preserveScroll: true });
             });
     }
 };
 
-const markAsRead = (notif) => {
-    if (!notif.id) return;
+let heartbeatInterval = null;
+const handleWindowFocus = () => {
+    router.reload({
+        only: ['auth', 'notifications', 'unread_notifications_count'],
+        preserveScroll: true,
+        preserveState: true,
+    });
+};
 
-    // Mark locally first for instant UI feedback
-    const idx = notifications.value.findIndex(n => n.id === notif.id);
-    if (idx !== -1 && !notifications.value[idx].read_at) {
-        notifications.value[idx].read_at = new Date().toISOString();
-        totalUnreadCount.value = Math.max(0, totalUnreadCount.value - 1);
+const startHeartbeatPoller = () => {
+    if (typeof window === 'undefined') return;
+    heartbeatInterval = setInterval(() => {
+        if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+            router.reload({
+                only: ['auth', 'notifications', 'unread_notifications_count'],
+                preserveScroll: true,
+                preserveState: true,
+            });
+        }
+    }, 20000);
+
+    window.addEventListener('focus', handleWindowFocus);
+};
+
+const stopHeartbeatPoller = () => {
+    if (heartbeatInterval) {
+        clearInterval(heartbeatInterval);
+        heartbeatInterval = null;
+    }
+    if (typeof window !== 'undefined') {
+        window.removeEventListener('focus', handleWindowFocus);
+    }
+};
+
+const markAsRead = async (notif) => {
+    if (!notif || !notif.id) return;
+
+    // Langsung hapus dari daftar notifikasi dropdown untuk feedback instan
+    notifications.value = notifications.value.filter(n => n.id !== notif.id);
+    if (totalUnreadCount.value > 0) {
+        totalUnreadCount.value -= 1;
+    }
+    if (notif.id && String(notif.id).startsWith('report-') && pendingReportsCount.value > 0) {
+        pendingReportsCount.value -= 1;
+    } else if (notif.id && String(notif.id).startsWith('user-') && pendingApprovalsCount.value > 0) {
+        pendingApprovalsCount.value -= 1;
     }
 
     showDesktopNotifications.value = false;
@@ -634,35 +789,108 @@ const markAsRead = (notif) => {
 
     let targetRoute = notif.route;
     if (targetRoute && typeof targetRoute === 'string') {
-        // Fix any old notification payload created with 127.0.0.1:8000
-        targetRoute = targetRoute.replace('http://127.0.0.1:8000', window.location.origin);
+        try {
+            if (targetRoute.startsWith('http://') || targetRoute.startsWith('https://')) {
+                const parsed = new URL(targetRoute);
+                targetRoute = parsed.pathname + parsed.search + parsed.hash;
+            }
+        } catch (e) {
+            targetRoute = targetRoute.replace(/^https?:\/\/[^\/]+/, '');
+        }
     }
 
-    // Fire & forget markAsRead request so page navigation is never blocked
-    router.post(route('notifications.markAsRead', { id: notif.id }), {}, {
-        preserveScroll: true,
-        preserveState: true,
-    });
+    if (!targetRoute && notif.id && String(notif.id).startsWith('report-')) {
+        const reportId = String(notif.id).replace('report-', '');
+        targetRoute = `/kasi/verify/${reportId}`;
+    } else if (!targetRoute && notif.id && String(notif.id).startsWith('user-')) {
+        targetRoute = '/users-approvals';
+    }
+
+    // Persist to server asynchronously (non-blocking so navigation is instant)
+    try {
+        const markUrl = route('notifications.markAsRead', { id: notif.id });
+        if (typeof window !== 'undefined' && window.axios) {
+            window.axios.post(markUrl).catch(() => {});
+        } else if (typeof fetch !== 'undefined') {
+            fetch(markUrl, {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                keepalive: true
+            }).catch(() => {});
+        }
+    } catch (e) {
+        console.warn('Gagal menandai notifikasi sebagai dibaca:', e);
+    }
 
     if (targetRoute) {
         router.visit(targetRoute);
     }
 };
 
-const markAllAsRead = () => {
-    // Mark all locally first
-    notifications.value.forEach(n => {
-        if (!n.read_at) {
-            n.read_at = new Date().toISOString();
-        }
-    });
-    totalUnreadCount.value = 0;
+const quickMarkAsRead = async (notif) => {
+    if (!notif || !notif.id) return;
 
-    // Send to server
-    router.post(route('notifications.markAllAsRead'), {}, {
-        preserveScroll: true,
-        preserveState: true,
-    });
+    // Langsung hapus dari daftar notifikasi dropdown untuk feedback instan
+    notifications.value = notifications.value.filter(n => n.id !== notif.id);
+    if (totalUnreadCount.value > 0) {
+        totalUnreadCount.value -= 1;
+    }
+    if (notif.id && String(notif.id).startsWith('report-') && pendingReportsCount.value > 0) {
+        pendingReportsCount.value -= 1;
+    } else if (notif.id && String(notif.id).startsWith('user-') && pendingApprovalsCount.value > 0) {
+        pendingApprovalsCount.value -= 1;
+    }
+
+    try {
+        if (typeof window !== 'undefined' && window.axios) {
+            await window.axios.post(route('notifications.markAsRead', { id: notif.id }));
+        } else if (typeof fetch !== 'undefined') {
+            await fetch(route('notifications.markAsRead', { id: notif.id }), {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                }
+            });
+        }
+    } catch (e) {
+        console.warn('Gagal menandai notifikasi sebagai dibaca:', e);
+    }
+};
+
+const markAllAsRead = async () => {
+    const unreadIds = notifications.value.map(n => n.id);
+    if (unreadIds.length === 0) return;
+
+    // Langsung kosongkan daftar notifikasi dropdown
+    notifications.value = [];
+    totalUnreadCount.value = 0;
+    pendingReportsCount.value = 0;
+    pendingApprovalsCount.value = 0;
+
+    // Persist to server
+    try {
+        if (typeof window !== 'undefined' && window.axios) {
+            await window.axios.post(route('notifications.markAllAsRead'), { ids: unreadIds });
+        } else if (typeof fetch !== 'undefined') {
+            await fetch(route('notifications.markAllAsRead'), {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({ ids: unreadIds })
+            });
+        }
+    } catch (e) {
+        console.warn('Gagal menandai semua notifikasi dibaca:', e);
+    }
 };
 
 const goToMobileNotifications = () => {
@@ -963,7 +1191,7 @@ const getGroupInitials = (title) => {
                                      <!-- Notification List -->
                                      <div class="max-h-80 overflow-y-auto">
                                          <div v-if="unreadNotifications.length === 0" class="py-12 text-center text-xs text-slate-400 dark:text-slate-500 font-medium">
-                                             Tidak ada notifikasi baru
+                                             Tidak ada notifikasi
                                          </div>
                                          <template v-else>
                                              <NotificationItem
@@ -972,6 +1200,7 @@ const getGroupInitials = (title) => {
                                                  :notification="notif"
                                                  variant="dropdown"
                                                  @click="markAsRead(notif)"
+                                                 @mark-read="quickMarkAsRead"
                                              />
 
                                              <!-- Hidden Notifications Count Notice -->
@@ -1185,7 +1414,7 @@ const getGroupInitials = (title) => {
                                      </div>
                                      <div class="max-h-80 overflow-y-auto">
                                          <div v-if="unreadNotifications.length === 0" class="py-12 text-center text-xs text-slate-400 dark:text-slate-500 font-medium">
-                                             Tidak ada notifikasi baru
+                                             Tidak ada notifikasi
                                          </div>
                                          <template v-else>
                                              <NotificationItem
@@ -1194,6 +1423,7 @@ const getGroupInitials = (title) => {
                                                  :notification="notif"
                                                  variant="dropdown"
                                                  @click="markAsRead(notif)"
+                                                 @mark-read="quickMarkAsRead"
                                              />
 
                                              <!-- Hidden Notifications Count Notice -->
@@ -1254,18 +1484,23 @@ const getGroupInitials = (title) => {
                 <div
                     v-for="toast in toasts"
                     :key="toast.id"
-                    @click="toast.route ? router.visit(toast.route) : null"
-                    class="pointer-events-auto flex items-start gap-3.5 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md shadow-xl cursor-pointer transition-all duration-200 hover:scale-[1.02] hover:border-emerald-500/50 dark:hover:border-emerald-400/50"
+                    @click="toast.route ? router.visit(toast.route) : removeToast(toast.id)"
+                    :class="[
+                        'pointer-events-auto flex items-start gap-3.5 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md shadow-xl transition-all duration-200 hover:scale-[1.02]',
+                        toast.route ? 'cursor-pointer hover:border-emerald-500/50 dark:hover:border-emerald-400/50' : 'cursor-pointer hover:border-slate-300 dark:hover:border-slate-700'
+                    ]"
                 >
                     <!-- Icon -->
                     <div :class="[
                         'h-9 w-9 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5',
                         toast.priority === 'URGENT' || toast.type === 'error' ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-500 border border-rose-200/50 dark:border-rose-900/50' :
+                        toast.type === 'warning' ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border border-amber-200/50 dark:border-amber-900/50' :
                         (toast.type === 'success' || toast.type === 'done') ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/50' :
                         'bg-slate-100 dark:bg-white/10 text-slate-600 dark:text-white border border-slate-200/50 dark:border-white/10'
                     ]">
                         <CheckCircle2 v-if="toast.type === 'success' || toast.type === 'done'" class="h-4.5 w-4.5" />
                         <ShieldAlert v-else-if="toast.type === 'error'" class="h-4.5 w-4.5" />
+                        <AlertTriangle v-else-if="toast.type === 'warning'" class="h-4.5 w-4.5" />
                         <Bell v-else-if="toast.type === 'ticket' || (typeof toast.type === 'string' && toast.type.includes('Ticket'))" class="h-4.5 w-4.5" />
                         <Clock v-else-if="toast.type === 'progress'" class="h-4.5 w-4.5" />
                         <User v-else-if="toast.type === 'user'" class="h-4.5 w-4.5" />
@@ -1651,9 +1886,9 @@ const getGroupInitials = (title) => {
                                 
                                 <!-- Badge/Icon Container for regular link -->
                                 <div v-if="!sidebarCollapsed" class="relative w-5 h-5 flex items-center justify-center ml-auto flex-shrink-0">
-                                    <!-- Badge for reports management -->
+                                    <!-- Badge for reports / Aduan & Verifikasi -->
                                     <span 
-                                        v-if="item.routeName === 'reports-management.index' && pendingReportsCount > 0"
+                                        v-if="(item.routeName === 'kasi.feed' || item.routeName === 'reports-management.index') && pendingReportsCount > 0"
                                         :class="[
                                             'w-5 h-5 flex items-center justify-center rounded-full text-[10px] font-extrabold bg-amber-500 text-white shadow-sm absolute transition-all duration-200',
                                             isRouteActive(item, group) ? 'opacity-100 scale-100 group-hover:opacity-0 group-hover:scale-75' : 'opacity-100 scale-100'
@@ -1678,14 +1913,14 @@ const getGroupInitials = (title) => {
                                         v-if="isRouteActive(item, group)"
                                         :class="[
                                             'h-3.5 w-3.5 text-white dark:text-white absolute transition-all duration-200',
-                                            ((item.routeName === 'reports-management.index' && pendingReportsCount > 0) || (item.routeName === 'users.approvals' && pendingApprovalsCount > 0)) ? 'opacity-0 scale-75 group-hover:opacity-100 group-hover:scale-100' : 'opacity-100'
+                                            (((item.routeName === 'kasi.feed' || item.routeName === 'reports-management.index') && pendingReportsCount > 0) || (item.routeName === 'users.approvals' && pendingApprovalsCount > 0)) ? 'opacity-0 scale-75 group-hover:opacity-100 group-hover:scale-100' : 'opacity-100'
                                         ]"
                                     />
                                 </div>
 
                                 <!-- Tiny dot when collapsed -->
                                 <span 
-                                    v-if="((item.routeName === 'reports-management.index' && pendingReportsCount > 0) || (item.routeName === 'users.approvals' && pendingApprovalsCount > 0)) && sidebarCollapsed"
+                                    v-if="(((item.routeName === 'kasi.feed' || item.routeName === 'reports-management.index') && pendingReportsCount > 0) || (item.routeName === 'users.approvals' && pendingApprovalsCount > 0)) && sidebarCollapsed"
                                     class="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-amber-500 ring-2 ring-white dark:ring-slate-900"
                                 />
                             </Link>

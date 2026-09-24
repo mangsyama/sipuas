@@ -45,6 +45,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/kasi/verify/{id}/process', [KasiController::class, 'processVerification'])->name('kasi.verify.process');
         Route::get('/kasi/logbook', [KasiController::class, 'logbook'])->name('kasi.logbook');
         Route::get('/kasi/reports', [\App\Http\Controllers\ReportExportController::class, 'index'])->name('kasi.reports');
+        Route::delete('/kasi/reports/{id}', [KasiController::class, 'destroy'])->name('kasi.reports.destroy');
     });
 
     // Modul Kabid Pelayanan — PRD System
@@ -78,10 +79,15 @@ Route::middleware('auth')->group(function () {
     Route::get('/notifications', function () {
         return redirect()->route('dashboard');
     })->name('notifications.index');
-    Route::post('/notifications/mark-as-read/{id?}', function () {
+    Route::post('/notifications/mark-as-read/{id?}', function (\Illuminate\Http\Request $request, $id = null) {
+        if ($id) {
+            \App\Services\NotificationService::markAsRead($id, $request);
+        }
         return response()->json(['success' => true]);
     })->name('notifications.markAsRead');
-    Route::post('/notifications/mark-all-as-read', function () {
+    Route::post('/notifications/mark-all-as-read', function (\Illuminate\Http\Request $request) {
+        $ids = $request->input('ids', []);
+        \App\Services\NotificationService::markAllAsRead((array)$ids, $request);
         return response()->json(['success' => true]);
     })->name('notifications.markAllAsRead');
 

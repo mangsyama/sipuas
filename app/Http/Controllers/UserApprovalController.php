@@ -92,6 +92,10 @@ class UserApprovalController extends Controller
      */
     public function show(User $user): Response
     {
+        if (!request()->header('X-Inertia-Partial-Data')) {
+            \App\Services\NotificationService::markAsRead('user-' . $user->id, request());
+        }
+
         $user->load('room');
         $units = Room::where('is_active', true)->orderBy('name')->get(['id', 'name', 'building_name', 'location_floor'])->map(function ($r) {
             return [
@@ -191,24 +195,31 @@ class UserApprovalController extends Controller
         // Auto-send WhatsApp activation confirmation if phone number is present
         if (!empty($user->phone_number)) {
             try {
-                $user->load('room');
-                $unitName = $user->room ? ($user->room->name . ' (' . $user->room->location_info . ')') : 'Pelayanan Rumah Sakit';
-                $waMsg = "Halo *{$user->name}*,\n\n"
+                $user->loadMissing('room');
+                $userPhone = $user->phone_number;
+                $userName = $user->name;
+                $userUsername = $user->username;
+                $unitName = $user->room ? ($user->room->location_info ? "{$user->room->name} ({$user->room->location_info})" : $user->room->name) : 'Pelayanan Rumah Sakit';
+
+                $waMsg = "Halo *{$userName}*,\n\n"
                     . "Akun Anda di sistem *SIPUAS* telah *DISETUJUI & DIAKTIFKAN* oleh Administrator.\n\n"
-                    . "🏥 *Ruangan :* {$unitName}\n"
-                    . "👤 *Username :* {$user->username}\n\n"
+                    . "*Ruangan :* {$unitName}\n"
+                    . "*Username :* {$userUsername}\n\n"
                     . "Silakan login menggunakan akun Pesu Peluh Anda dan pastikan melakukan Presensi dinas harian (Clock-In) saat bertugas.\n\n"
                     . "Salam hangat,\n_Tim Manajemen Pelayanan SIPUAS_";
 
-                $channel = new WaGatewayChannel();
-                $channel->send($user->phone_number, new class($waMsg) extends \Illuminate\Notifications\Notification {
-                    public function __construct(public string $msg) {}
-                    public function toWaGateway($notifiable) { return $this->msg; }
-                });
+                dispatch(function () use ($userPhone, $waMsg) {
+                    WaGatewayChannel::sendDirect($userPhone, $waMsg);
+                })->afterResponse();
             } catch (\Throwable $e) {
-                // Silently log or ignore if WA gateway microservice is offline
+                \Illuminate\Support\Facades\Log::info('User approval WA notification notice: ' . $e->getMessage());
             }
         }
+
+        // Real-Time Notification Broadcast
+        try {
+            event(new \App\Events\UserApprovalUpdated($user));
+        } catch (\Throwable $bErr) {}
 
         return redirect()->route('users.approvals')->with('success', "Akun {$user->name} berhasil disetujui dan diaktifkan.");
     }
@@ -219,6 +230,12 @@ class UserApprovalController extends Controller
     public function reject(User $user)
     {
         $userName = $user->name;
+
+        // Real-Time Notification Broadcast
+        try {
+            event(new \App\Events\UserApprovalUpdated($user));
+        } catch (\Throwable $bErr) {}
+
         $user->forceDelete();
 
         return redirect()->route('users.approvals')->with('success', "Pendaftaran akun {$userName} telah ditolak dan dihapus.");

@@ -79,19 +79,19 @@ class PasswordResetLinkController extends Controller
             ? substr($rawPhone, 0, 4) . '••••' . substr($rawPhone, -3)
             : $rawPhone;
 
-        $waMsg = "Halo *{$user->name}*,\n\n"
+        $userPhone = $user->phone_number;
+        $userName = $user->name;
+
+        $waMsg = "Halo *{$userName}*,\n\n"
             . "Kami menerima permintaan untuk mengatur ulang kata sandi akun *SIPUAS* Anda.\n\n"
-            . "Silakan klik tautan resmi berikut untuk membuat kata sandi baru:\n"
-            . "🔗 {$resetUrl}\n\n"
-            . "⚠️ Tautan ini bersifat rahasia dan berlaku selama 60 menit. Abaikan pesan ini jika Anda tidak merasa melakukan permintaan ini.\n\n"
+            . "Silakan klik tautan resmi berikut untuk membuat kata sandi baru: {$resetUrl}\n\n"
+            . "Tautan ini bersifat rahasia dan berlaku selama 60 menit. Abaikan pesan ini jika Anda tidak merasa melakukan permintaan ini.\n\n"
             . "Salam hangat,\n_Tim Manajemen Pelayanan SIPUAS_";
 
         try {
-            $channel = new WaGatewayChannel();
-            $channel->send($user->phone_number, new class($waMsg) extends Notification {
-                public function __construct(public string $msg) {}
-                public function toWaGateway($notifiable) { return $this->msg; }
-            });
+            dispatch(function () use ($userPhone, $waMsg) {
+                WaGatewayChannel::sendDirect($userPhone, $waMsg);
+            })->afterResponse();
         } catch (\Throwable $e) {
             Log::error('Password reset WhatsApp failed: ' . $e->getMessage());
         }

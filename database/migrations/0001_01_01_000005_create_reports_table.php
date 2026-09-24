@@ -28,6 +28,9 @@ return new class extends Migration
             $table->string('reporter_name', 150)->nullable();
             $table->string('reporter_phone', 30)->nullable();
             $table->boolean('is_anonymous')->default(false);
+            $table->string('ip_address', 45)->nullable();
+            $table->text('user_agent')->nullable();
+            $table->string('device_info', 150)->nullable();
             $table->string('status', 30)->default('PENDING'); // PENDING, VERIFIED, IN_PROGRESS, RESOLVED, REJECTED
             $table->string('priority', 30)->default('NORMAL'); // LOW, NORMAL, HIGH, URGENT
             $table->foreignId('verified_by')->nullable()->constrained('users')->nullOnDelete();
@@ -41,6 +44,7 @@ return new class extends Migration
             $table->string('pesupeluh_ticket_number', 50)->nullable();
             $table->timestampTz('dispatched_to_pesupeluh_at')->nullable();
             $table->timestampsTz();
+            $table->softDeletes();
         });
     }
 

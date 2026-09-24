@@ -512,45 +512,12 @@ class DummyDataSeeder extends Seeder
         }
 
         // 2. Kepala Seksi (Kasi) Accounts (Password: 12345678)
+        // Kasi tidak terikat dengan ruangan manapun (room_id = null) sehingga mengawasi seluruh unit rumah sakit
         $kasiUsersData = [
-            ['username' => 'kasi_areapublik', 'name' => 'I Wayan Sudarma, S.AP', 'nip' => '198205142008011002', 'phone_number' => '081200000001', 'email' => 'kasi.areapublik@sipuas.local', 'room_id' => 1],
-            ['username' => 'kasi_farmasi', 'name' => 'Apt. Ni Nyoman Sariani, S.Si', 'nip' => '198302142009012004', 'phone_number' => '081200000002', 'email' => 'kasi.farmasi@sipuas.local', 'room_id' => 2],
-            ['username' => 'kasi_hcu', 'name' => 'Ns. Ni Made Rai Widiastuti, S.Kep', 'nip' => '198507192010012003', 'phone_number' => '081200000003', 'email' => 'kasi.hcu@sipuas.local', 'room_id' => 3],
-            ['username' => 'kasi_icu', 'name' => 'dr. I Putu Gede Sanjaya, Sp.An', 'nip' => '198003252006041002', 'phone_number' => '081200000004', 'email' => 'kasi.icu@sipuas.local', 'room_id' => 4],
-            ['username' => 'kasi_igd', 'name' => 'dr. I Ketut Widiana, Sp.B', 'nip' => '198104102008011003', 'phone_number' => '081200000005', 'email' => 'kasi.igd@sipuas.local', 'room_id' => 5],
-            ['username' => 'kasi_bedah', 'name' => 'dr. I Nyoman Sastrawan, Sp.B', 'nip' => '197911122005011004', 'phone_number' => '081200000006', 'email' => 'kasi.bedah@sipuas.local', 'room_id' => 6],
-            ['username' => 'kasi_bersalin', 'name' => 'Bd. Ni Luh Putu Mirah, S.Tr.Keb', 'nip' => '198409082008012005', 'phone_number' => '081200000007', 'email' => 'kasi.bersalin@sipuas.local', 'room_id' => 7],
-            ['username' => 'kasi_lab', 'name' => 'dr. Ni Kadek Dwipayani, Sp.PK', 'nip' => '198206172009022003', 'phone_number' => '081200000008', 'email' => 'kasi.lab@sipuas.local', 'room_id' => 8],
-            ['username' => 'kasi_kasir', 'name' => 'I Gusti Ayu Mas Trisna, SE', 'nip' => '198612032010012004', 'phone_number' => '081200000009', 'email' => 'kasi.kasir@sipuas.local', 'room_id' => 9],
-            ['username' => 'kasi_pendaftaran', 'name' => 'I Gede Yudiartawan, S.Kom', 'nip' => '198801152011011003', 'phone_number' => '081200000010', 'email' => 'kasi.pendaftaran@sipuas.local', 'room_id' => 10],
-            ['username' => 'kasi_perinatologi', 'name' => 'Bd. Ni Ketut Supartini, S.Tr.Keb', 'nip' => '198304202007012004', 'phone_number' => '081200000011', 'email' => 'kasi.perinatologi@sipuas.local', 'room_id' => 11],
-            ['username' => 'kasi_picu', 'name' => 'dr. I Made Sukadana, Sp.A', 'nip' => '198108162007011002', 'phone_number' => '081200000012', 'email' => 'kasi.picu@sipuas.local', 'room_id' => 12],
-            ['username' => 'kasi_polianak', 'name' => 'dr. Ni Wayan Murti, Sp.A', 'nip' => '198203112008012003', 'phone_number' => '081200000013', 'email' => 'kasi.polianak@sipuas.local', 'room_id' => $roomAnak->id],
-            ['username' => 'kasi_polibedah', 'name' => 'dr. I Ketut Agus Darmayasa, Sp.B', 'nip' => '198010052006041003', 'phone_number' => '081200000014', 'email' => 'kasi.polibedah@sipuas.local', 'room_id' => $roomBedah->id],
-            ['username' => 'kasi_polifisioterapi', 'name' => 'I Wayan Balik, S.Ft, Ftr', 'nip' => '198504122010011006', 'phone_number' => '081200000051', 'email' => 'kasi.polifisioterapi@sipuas.local', 'room_id' => $roomFisioterapi->id],
-            ['username' => 'kasi_rehabmedik', 'name' => 'dr. I Dewa Gede Alit, Sp.KFR', 'nip' => '198306282009031002', 'phone_number' => '081200000015', 'email' => 'kasi.rehabmedik@sipuas.local', 'room_id' => $roomRehabMedik->id],
-            ['username' => 'kasi_polirehabmedik', 'name' => 'dr. I Dewa Gede Alit, Sp.KFR', 'nip' => '198306282009031002', 'phone_number' => '081200000015', 'email' => 'kasi.polirehabmedik@sipuas.local', 'room_id' => $roomRehabMedik->id],
-            ['username' => 'kasi_poligigi', 'name' => 'drg. Ni Made Anggreni, Sp.KG', 'nip' => '198411092010012005', 'phone_number' => '081200000016', 'email' => 'kasi.poligigi@sipuas.local', 'room_id' => 16],
-            ['username' => 'kasi_polijantung', 'name' => 'dr. I Wayan Wita, Sp.JP(K)', 'nip' => '197804142003121001', 'phone_number' => '081200000017', 'email' => 'kasi.polijantung@sipuas.local', 'room_id' => $roomJantung->id],
-            ['username' => 'kasi_polijiwa', 'name' => 'dr. Ni Luh Sukmawati, Sp.KJ', 'nip' => '198502182010012004', 'phone_number' => '081200000018', 'email' => 'kasi.polijiwa@sipuas.local', 'room_id' => $roomJiwa->id],
-            ['username' => 'kasi_poliobgyn', 'name' => 'dr. I Made Dwi Artha, Sp.OG', 'nip' => '198109222008011004', 'phone_number' => '081200000019', 'email' => 'kasi.poliobgyn@sipuas.local', 'room_id' => $roomObgyn->id],
-            ['username' => 'kasi_polikulit', 'name' => 'dr. Ni Kadek Dwi Jayanthi, Sp.DV', 'nip' => '198605172011012003', 'phone_number' => '081200000020', 'email' => 'kasi.polikulit@sipuas.local', 'room_id' => $roomKulit->id],
-            ['username' => 'kasi_polimata', 'name' => 'dr. I Gede Eka Putra, Sp.M', 'nip' => '198312012009021002', 'phone_number' => '081200000021', 'email' => 'kasi.polimata@sipuas.local', 'room_id' => 21],
-            ['username' => 'kasi_poliparu', 'name' => 'dr. I Nyoman Sumartana, Sp.P', 'nip' => '198207102008011003', 'phone_number' => '081200000022', 'email' => 'kasi.poliparu@sipuas.local', 'room_id' => 22],
-            ['username' => 'kasi_polipd', 'name' => 'dr. I Gusti Agung Bagus Krisna, Sp.PD', 'nip' => '198005122006041004', 'phone_number' => '081200000023', 'email' => 'kasi.polipd@sipuas.local', 'room_id' => $roomInterna->id],
-            ['username' => 'kasi_poliinterna', 'name' => 'dr. I Gusti Agung Bagus Krisna, Sp.PD', 'nip' => '198005122006041004', 'phone_number' => '081200000023', 'email' => 'kasi.poliinterna@sipuas.local', 'room_id' => $roomInterna->id],
-            ['username' => 'kasi_polisaraf', 'name' => 'dr. Ni Putu Ayu Lestari, Sp.S', 'nip' => '198408232010012004', 'phone_number' => '081200000024', 'email' => 'kasi.polisaraf@sipuas.local', 'room_id' => $roomSaraf->id],
-            ['username' => 'kasi_politht', 'name' => 'dr. I Komang Adi Wiratama, Sp.THT-BKL', 'nip' => '198301142008011002', 'phone_number' => '081200000025', 'email' => 'kasi.politht@sipuas.local', 'room_id' => $roomTht->id],
-            // 5 Poli Baru Kasi
-            ['username' => 'kasi_poliorthopaedi', 'name' => 'dr. I Wayan Arya, Sp.OT', 'nip' => '197908152005011005', 'phone_number' => '081200000052', 'email' => 'kasi.poliorthopaedi@sipuas.local', 'room_id' => $roomOrthopaedi->id],
-            ['username' => 'kasi_polimcu', 'name' => 'dr. Ni Made Indah Sari', 'nip' => '198604112011012004', 'phone_number' => '081200000053', 'email' => 'kasi.polimcu@sipuas.local', 'room_id' => $roomMcu->id],
-            ['username' => 'kasi_polivct', 'name' => 'dr. I Ketut Darmawan, Sp.PD', 'nip' => '198112082007011004', 'phone_number' => '081200000054', 'email' => 'kasi.polivct@sipuas.local', 'room_id' => $roomVct->id],
-            ['username' => 'kasi_politbc', 'name' => 'dr. Ni Luh Putu Ratih, Sp.P', 'nip' => '198407222009022005', 'phone_number' => '081200000055', 'email' => 'kasi.politbc@sipuas.local', 'room_id' => $roomTbc->id],
-            ['username' => 'kasi_poliumum', 'name' => 'dr. I Made Pasek Adiputra', 'nip' => '198709192012011003', 'phone_number' => '081200000026', 'email' => 'kasi.poliumum@sipuas.local', 'room_id' => 26],
-            ['username' => 'kasi_radiologi', 'name' => 'dr. Ni Wayan Candrawati, Sp.Rad', 'nip' => '198210152008012004', 'phone_number' => '081200000027', 'email' => 'kasi.radiologi@sipuas.local', 'room_id' => 27],
-            ['username' => 'kasi_ranap', 'name' => 'Ns. I Komang Yudi, M.Kep', 'nip' => '198406182010011005', 'phone_number' => '081200000028', 'email' => 'kasi.ranap@sipuas.local', 'room_id' => 28],
-            ['username' => 'kasi_ranapkasuari', 'name' => 'Ns. Ni Ketut Astini, S.Kep', 'nip' => '198511202010012006', 'phone_number' => '081200000029', 'email' => 'kasi.ranapkasuari@sipuas.local', 'room_id' => 29],
-            ['username' => 'kasi_ranapmerpati', 'name' => 'Ns. I Putu Agus Sudarma, S.Kep', 'nip' => '198603092011011004', 'phone_number' => '081200000030', 'email' => 'kasi.ranapmerpati@sipuas.local', 'room_id' => 30],
+            ['username' => 'kasi', 'name' => 'dr. I Made Sukadana, Sp.A', 'nip' => '198108162007011002', 'phone_number' => '081200000012', 'email' => 'kasi@sipuas.local'],
+            ['username' => 'kasi_pelayanan', 'name' => 'dr. I Ketut Widiana, Sp.B', 'nip' => '198104102008011003', 'phone_number' => '081200000005', 'email' => 'kasi.pelayanan@sipuas.local'],
+            ['username' => 'kasi_keperawatan', 'name' => 'Ns. Ni Made Rai Widiastuti, S.Kep', 'nip' => '198507192010012003', 'phone_number' => '081200000003', 'email' => 'kasi.keperawatan@sipuas.local'],
+            ['username' => 'kasi_penunjang', 'name' => 'Apt. Ni Nyoman Sariani, S.Si', 'nip' => '198302142009012004', 'phone_number' => '081200000002', 'email' => 'kasi.penunjang@sipuas.local'],
         ];
 
         $createdKasiUsers = [];
@@ -564,8 +531,9 @@ class DummyDataSeeder extends Seeder
                     'phone_number' => $kasi['phone_number'],
                     'password' => Hash::make('12345678'),
                     'role_id' => Role::KEPALA_SEKSI,
-                    'room_id' => $kasi['room_id'],
+                    'room_id' => null,
                     'is_active' => true,
+                    'wa_notify_enabled' => false,
                     'total_points' => 100,
                 ]
             );
@@ -734,9 +702,44 @@ class DummyDataSeeder extends Seeder
             ],
         ];
 
+        // Pool data audit dummy (IP, User Agent & Device info) untuk pelapor
+        $auditClients = [
+            [
+                'ip_address' => '180.252.164.88',
+                'user_agent' => 'Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.6613.88 Mobile Safari/537.36',
+                'device_info' => 'Chrome 128 on Android 14 (Mobile)',
+            ],
+            [
+                'ip_address' => '114.122.35.42',
+                'user_agent' => 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
+                'device_info' => 'Safari 17 on iOS 17.5 (Mobile)',
+            ],
+            [
+                'ip_address' => '182.1.204.115',
+                'user_agent' => 'Mozilla/5.0 (Linux; Android 13; 2201117PG) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.6533.103 Mobile Safari/537.36',
+                'device_info' => 'Chrome 127 on Android 13 (Mobile)',
+            ],
+            [
+                'ip_address' => '36.85.120.91',
+                'user_agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+                'device_info' => 'Chrome 128 on Windows 10/11 (Desktop)',
+            ],
+            [
+                'ip_address' => '103.147.9.60',
+                'user_agent' => 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15',
+                'device_info' => 'Safari 17 on macOS (Desktop)',
+            ],
+            [
+                'ip_address' => '140.213.18.230',
+                'user_agent' => 'Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.6613.88 Mobile Safari/537.36',
+                'device_info' => 'Chrome 128 on Android 14 (Mobile)',
+            ],
+        ];
+
         foreach ($pendingReportsData as $idx => $repData) {
             $ticketNumber = 'LP-' . $now->format('Y-m') . '-' . str_pad(100 + $idx, 4, '0', STR_PAD_LEFT);
             $createdAt = $now->copy()->subMinutes($repData['minutes_ago']);
+            $client = $auditClients[$idx % count($auditClients)];
 
             Report::updateOrCreate(
                 ['ticket_number' => $ticketNumber],
@@ -758,6 +761,9 @@ class DummyDataSeeder extends Seeder
                     'reporter_name' => $repData['reporter_name'],
                     'reporter_phone' => $repData['reporter_phone'],
                     'is_anonymous' => false,
+                    'ip_address' => $client['ip_address'],
+                    'user_agent' => $client['user_agent'],
+                    'device_info' => $client['device_info'],
                     'status' => 'PENDING',
                     'priority' => $repData['priority'],
                     'verified_by' => null,
@@ -805,6 +811,7 @@ class DummyDataSeeder extends Seeder
                 $ticketNum = 'LP-' . $reportDate->format('Y-m') . '-' . str_pad((200 + ($day * 10) + $i), 4, '0', STR_PAD_LEFT);
                 $createdAt = $reportDate->copy()->setHour(rand(8, 16))->setMinute(rand(0, 59));
                 $verifiedAt = $createdAt->copy()->addMinutes(rand(30, 150));
+                $client = $auditClients[array_rand($auditClients)];
 
                 Report::updateOrCreate(
                     ['ticket_number' => $ticketNum],
@@ -826,6 +833,9 @@ class DummyDataSeeder extends Seeder
                         'reporter_name' => 'Keluarga Pasien ' . $rRoom->name,
                         'reporter_phone' => '0812' . rand(10000000, 99999999),
                         'is_anonymous' => false,
+                        'ip_address' => $client['ip_address'],
+                        'user_agent' => $client['user_agent'],
+                        'device_info' => $client['device_info'],
                         'status' => 'VERIFIED',
                         'priority' => 'NORMAL',
                         'verified_by' => $verifierId,

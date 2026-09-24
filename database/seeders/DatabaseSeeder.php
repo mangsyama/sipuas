@@ -258,9 +258,9 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
-        // 5. Seed Dummy Data (Disabled for clean production/initial state)
-        // if (!app()->runningUnitTests()) {
-        //     $this->call(DummyDataSeeder::class);
-        // }
+        // 5. Seed Dummy Data
+        if (!app()->runningUnitTests()) {
+            $this->call(DummyDataSeeder::class);
+        }
     }
 }

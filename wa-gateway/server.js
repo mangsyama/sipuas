@@ -228,8 +228,8 @@ const handleSendMessage = async (req, res) => {
             // Ignore presence errors if jid is not active
         }
 
-        // Calculate dynamic human typing delay based on message length (1.2s - 2.5s)
-        const delayMs = Math.min(2500, Math.max(1200, Math.floor(message.length * 15)));
+        // Calculate dynamic typing delay (250ms - 800ms) to ensure fast delivery while maintaining presence simulation
+        const delayMs = Math.min(800, Math.max(250, Math.floor(message.length * 2)));
         await new Promise(resolve => setTimeout(resolve, delayMs));
 
         try {

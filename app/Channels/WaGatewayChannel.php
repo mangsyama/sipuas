@@ -50,7 +50,7 @@ class WaGatewayChannel
         $secretKey = config('services.wa_gateway.secret_key');
 
         try {
-            $client = Http::timeout(2)->withoutVerifying();
+            $client = Http::timeout(10)->connectTimeout(3)->withoutVerifying();
             if (!empty($secretKey)) {
                 $client = $client->withHeaders(['X-Api-Key' => $secretKey]);
             }
@@ -81,6 +81,9 @@ class WaGatewayChannel
         // Extract phone number from notifiable target
         $phone = null;
         if ($notifiable instanceof User) {
+            if ($notifiable->wa_notify_enabled === false) {
+                return;
+            }
             $phone = $notifiable->phone_number;
         } elseif (is_object($notifiable)) {
             $phone = $notifiable->phone_number ?? $notifiable->phone ?? null;
