@@ -51,6 +51,37 @@ const effectiveSupervisorNotes = computed(() => {
 const isImage = (att) => {
     return att?.mime_type?.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif)$/i.test(att?.file_name || '');
 };
+
+const getCategoryLabel = (kpi) => {
+    if (!kpi) return null;
+    const raw = kpi.kpi_category;
+    if (raw) {
+        const upper = String(raw).toUpperCase();
+        const map = {
+            'KERAMAHAN': 'Keramahan',
+            'KEDISIPLINAN': 'Kedisiplinan',
+            'SOP_PELAYANAN': 'Kepatuhan SOP',
+            'INTEGRITAS': 'Integritas',
+        };
+        return map[upper] || raw;
+    }
+    return null;
+};
+
+const getSeverityLabel = (severity) => {
+    if (!severity) return '';
+    const upper = String(severity).toUpperCase();
+    const map = {
+        'BINTANG': 'Bintang Layanan',
+        'APRESIASI': 'Apresiasi Ramah',
+        'TELADAN': 'Kinerja Teladan',
+        'RINGAN': 'Ringan',
+        'SEDANG': 'Sedang',
+        'BERAT': 'Berat',
+        'CUSTOM': 'Kustom',
+    };
+    return map[upper] || severity;
+};
 </script>
 
 <template>
@@ -237,7 +268,19 @@ const isImage = (att) => {
                     </div>
 
                     <!-- Grid Data Verifikator & Waktu Eksekusi -->
-                    <div v-if="kpiInfo" class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    <div v-if="kpiInfo" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                        <div v-if="getCategoryLabel(kpiInfo)">
+                            <span class="text-slate-400 font-medium block text-[11px]">Kategori KPI:</span>
+                            <p class="font-bold text-slate-800 dark:text-slate-200 mt-0.5 font-['Poppins',sans-serif]">
+                                {{ getCategoryLabel(kpiInfo) }}
+                            </p>
+                        </div>
+                        <div v-if="kpiInfo.severity_level">
+                            <span class="text-slate-400 font-medium block text-[11px]">Tingkat / Templat:</span>
+                            <p class="font-bold text-slate-800 dark:text-slate-200 mt-0.5 font-['Poppins',sans-serif]">
+                                {{ getSeverityLabel(kpiInfo.severity_level) }}
+                            </p>
+                        </div>
                         <div>
                             <span class="text-slate-400 font-medium block text-[11px]">Verifikator:</span>
                             <p class="font-bold text-slate-800 dark:text-slate-200 mt-0.5 font-['Poppins',sans-serif]">

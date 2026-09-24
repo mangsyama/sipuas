@@ -16,7 +16,9 @@ return new class extends Migration
             $table->foreignId('user_id')->constrained('users')->cascadeOnDelete();
             $table->foreignId('report_id')->nullable()->constrained('reports')->nullOnDelete();
             $table->foreignId('verified_by')->nullable()->constrained('users');
-            $table->string('action_type', 30); // PENAMBAHAN, PEMOTONGAN, NETRAL
+            $table->string('action_type', 30); // PENAMBAHAN, PEMOTONGAN, NETRAL, DIBATALKAN
+            $table->string('kpi_category', 50)->nullable(); // KERAMAHAN, KEDISIPLINAN, SOP_PELAYANAN, INTEGRITAS
+            $table->string('severity_level', 50)->nullable(); // RINGAN, SEDANG, BERAT, APRESIASI, CUSTOM
             $table->integer('points'); // e.g. 5 or -5
             $table->text('note')->nullable();
             $table->timestampTz('logged_at')->useCurrent();

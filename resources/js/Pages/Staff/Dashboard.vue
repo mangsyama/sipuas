@@ -48,6 +48,24 @@ const openReportDetail = (log) => {
     showDetailModal.value = true;
 };
 
+const getCategoryLabel = (log) => {
+    if (!log) return 'Penilaian Kinerja';
+    const raw = log.kpi_category;
+    if (raw) {
+        const upper = String(raw).toUpperCase();
+        const map = {
+            'KERAMAHAN': 'Keramahan',
+            'KEDISIPLINAN': 'Kedisiplinan',
+            'SOP_PELAYANAN': 'Kepatuhan SOP',
+            'INTEGRITAS': 'Integritas',
+        };
+        return map[upper] || raw;
+    }
+    if (log.points > 0) return 'Apresiasi Pelayanan';
+    if (log.points < 0) return 'Evaluasi Pelayanan';
+    return 'Penilaian Kinerja';
+};
+
 const isImage = (att) => {
     return att?.mime_type?.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif)$/i.test(att?.file_name || '');
 };
@@ -238,9 +256,9 @@ const isImage = (att) => {
 
                                 <!-- Informasi & Detail Catatan -->
                                 <div class="min-w-0 flex-1 space-y-0.5">
-                                    <p class="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100 truncate" :title="log.note || 'Penilaian verifikasi kinerja staf pelayanan'">
-                                        {{ log.note || 'Penilaian verifikasi kinerja staf pelayanan' }}
-                                    </p>
+                                    <h4 class="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100 truncate" :title="getCategoryLabel(log)">
+                                        {{ getCategoryLabel(log) }}
+                                    </h4>
 
                                     <p class="text-[10.5px] sm:text-[11px] text-slate-400 truncate">
                                         <span>Diverifikasi: <strong class="text-slate-600 dark:text-slate-300 font-medium">{{ log.verifier_name || 'Supervisor Kasi' }}</strong></span>

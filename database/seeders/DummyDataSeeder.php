@@ -22,7 +22,27 @@ class DummyDataSeeder extends Seeder
         $now = Carbon::now();
         $today = Carbon::today();
 
-        // Get Room mappings
+        // Helper untuk mencari ID ruangan berdasarkan nama
+        $getRoomId = fn(string $name, $default = 1) => Room::where('name', $name)->value('id') ?: $default;
+        $getRoom = fn(string $name) => Room::where('name', $name)->first() ?: Room::first();
+
+        // Get Room mappings (15 Poli Aktif & Ruang Penunjang)
+        $roomBedah = $getRoom('Poli Bedah');
+        $roomOrthopaedi = $getRoom('Poli Orthopaedi');
+        $roomJantung = $getRoom('Poli Jantung');
+        $roomMcu = $getRoom('Poli MCU');
+        $roomInterna = $getRoom('Poli Interna');
+        $roomAnak = $getRoom('Poli Anak');
+        $roomKulit = $getRoom('Poli Kulit');
+        $roomObgyn = $getRoom('Poli Obgyn');
+        $roomTht = $getRoom('Poli THT');
+        $roomFisioterapi = $getRoom('Poli Fisioterapi');
+        $roomRehabMedik = $getRoom('Poli Rehab Medik');
+        $roomSaraf = $getRoom('Poli Saraf');
+        $roomJiwa = $getRoom('Poli Jiwa');
+        $roomVct = $getRoom('Poli VCT');
+        $roomTbc = $getRoom('Poli TBC');
+
         $roomFarmasi = Room::where('name', 'like', '%Farmasi%')->first() ?: Room::first();
         $roomIgd = Room::where('name', 'like', '%IGD%')->first() ?: Room::first();
         $roomLab = Room::where('name', 'like', '%Laboratorium%')->first() ?: Room::first();
@@ -199,7 +219,7 @@ class DummyDataSeeder extends Seeder
                 'nip' => '199303102018012015',
                 'email' => 'ariani.anak@sipuas.local',
                 'phone_number' => '081234560018',
-                'room_id' => 13, // Poli Anak
+                'room_id' => $roomAnak->id, // Poli Anak
                 'total_points' => 120,
                 'praise_count' => 4,
                 'complaint_count' => 0,
@@ -210,7 +230,7 @@ class DummyDataSeeder extends Seeder
                 'nip' => '199105282016011016',
                 'email' => 'agus.polibedah@sipuas.local',
                 'phone_number' => '081234560019',
-                'room_id' => 14, // Poli Bedah
+                'room_id' => $roomBedah->id, // Poli Bedah
                 'total_points' => 105,
                 'praise_count' => 2,
                 'complaint_count' => 0,
@@ -221,7 +241,7 @@ class DummyDataSeeder extends Seeder
                 'nip' => '199008152015011017',
                 'email' => 'triadi.fisio@sipuas.local',
                 'phone_number' => '081234560021',
-                'room_id' => 15, // Poli Fisioterapi
+                'room_id' => $roomFisioterapi->id, // Poli Fisioterapi
                 'total_points' => 115,
                 'praise_count' => 3,
                 'complaint_count' => 0,
@@ -243,7 +263,7 @@ class DummyDataSeeder extends Seeder
                 'nip' => '199207112017012019',
                 'email' => 'dian.jantung@sipuas.local',
                 'phone_number' => '081234560023',
-                'room_id' => 17, // Poli Jantung
+                'room_id' => $roomJantung->id, // Poli Jantung
                 'total_points' => 130,
                 'praise_count' => 6,
                 'complaint_count' => 0,
@@ -254,7 +274,7 @@ class DummyDataSeeder extends Seeder
                 'nip' => '198910052014011020',
                 'email' => 'surya.jiwa@sipuas.local',
                 'phone_number' => '081234560024',
-                'room_id' => 18, // Poli Jiwa
+                'room_id' => $roomJiwa->id, // Poli Jiwa
                 'total_points' => 110,
                 'praise_count' => 2,
                 'complaint_count' => 0,
@@ -265,7 +285,7 @@ class DummyDataSeeder extends Seeder
                 'nip' => '199402182019012021',
                 'email' => 'damayanti.obgyn@sipuas.local',
                 'phone_number' => '081234560025',
-                'room_id' => 19, // Poli Kebidanan (Obgyn)
+                'room_id' => $roomObgyn->id, // Poli Obgyn
                 'total_points' => 120,
                 'praise_count' => 4,
                 'complaint_count' => 0,
@@ -276,7 +296,7 @@ class DummyDataSeeder extends Seeder
                 'nip' => '199306232018012022',
                 'email' => 'ratna.kulit@sipuas.local',
                 'phone_number' => '081234560026',
-                'room_id' => 20, // Poli Kulit
+                'room_id' => $roomKulit->id, // Poli Kulit
                 'total_points' => 115,
                 'praise_count' => 3,
                 'complaint_count' => 0,
@@ -309,7 +329,7 @@ class DummyDataSeeder extends Seeder
                 'nip' => '199201202017011025',
                 'email' => 'artawan.pd@sipuas.local',
                 'phone_number' => '081234560029',
-                'room_id' => 23, // Poli Penyakit Dalam
+                'room_id' => $roomInterna->id, // Poli Interna
                 'total_points' => 135,
                 'praise_count' => 7,
                 'complaint_count' => 0,
@@ -320,7 +340,7 @@ class DummyDataSeeder extends Seeder
                 'nip' => '199407152019012026',
                 'email' => 'kusuma.saraf@sipuas.local',
                 'phone_number' => '081234560030',
-                'room_id' => 24, // Poli Saraf
+                'room_id' => $roomSaraf->id, // Poli Saraf
                 'total_points' => 115,
                 'praise_count' => 3,
                 'complaint_count' => 0,
@@ -331,9 +351,65 @@ class DummyDataSeeder extends Seeder
                 'nip' => '199311022018011027',
                 'email' => 'sujana.tht@sipuas.local',
                 'phone_number' => '081234560031',
-                'room_id' => 25, // Poli THT
+                'room_id' => $roomTht->id, // Poli THT
                 'total_points' => 120,
                 'praise_count' => 4,
+                'complaint_count' => 0,
+            ],
+            // 5 Poli Baru yang diaktifkan
+            [
+                'username' => 'staff_orthopaedi',
+                'name' => 'Ns. I Gede Arya Putra, S.Kep',
+                'nip' => '199308122018011028',
+                'email' => 'arya.ortho@sipuas.local',
+                'phone_number' => '081234560041',
+                'room_id' => $roomOrthopaedi->id, // Poli Orthopaedi
+                'total_points' => 115,
+                'praise_count' => 3,
+                'complaint_count' => 0,
+            ],
+            [
+                'username' => 'staff_mcu',
+                'name' => 'Ns. Ni Made Sintia Dewi, S.Kep',
+                'nip' => '199405202019012029',
+                'email' => 'sintia.mcu@sipuas.local',
+                'phone_number' => '081234560042',
+                'room_id' => $roomMcu->id, // Poli MCU
+                'total_points' => 120,
+                'praise_count' => 4,
+                'complaint_count' => 0,
+            ],
+            [
+                'username' => 'staff_rehabmedik',
+                'name' => 'I Wayan Gede Mahardika, A.Md.Ft',
+                'nip' => '199203172017011030',
+                'email' => 'mahardika.rehab@sipuas.local',
+                'phone_number' => '081234560043',
+                'room_id' => $roomRehabMedik->id, // Poli Rehab Medik
+                'total_points' => 110,
+                'praise_count' => 2,
+                'complaint_count' => 0,
+            ],
+            [
+                'username' => 'staff_vct',
+                'name' => 'Ns. Ni Ketut Ayu Wardani, S.Kep',
+                'nip' => '199111052016012031',
+                'email' => 'ayu.vct@sipuas.local',
+                'phone_number' => '081234560044',
+                'room_id' => $roomVct->id, // Poli VCT
+                'total_points' => 125,
+                'praise_count' => 5,
+                'complaint_count' => 0,
+            ],
+            [
+                'username' => 'staff_tbc',
+                'name' => 'Ns. I Made Bayu Pradana, S.Kep',
+                'nip' => '199304252018011032',
+                'email' => 'bayu.tbc@sipuas.local',
+                'phone_number' => '081234560045',
+                'room_id' => $roomTbc->id, // Poli TBC
+                'total_points' => 115,
+                'praise_count' => 3,
                 'complaint_count' => 0,
             ],
             [
@@ -449,19 +525,27 @@ class DummyDataSeeder extends Seeder
             ['username' => 'kasi_pendaftaran', 'name' => 'I Gede Yudiartawan, S.Kom', 'nip' => '198801152011011003', 'phone_number' => '081200000010', 'email' => 'kasi.pendaftaran@sipuas.local', 'room_id' => 10],
             ['username' => 'kasi_perinatologi', 'name' => 'Bd. Ni Ketut Supartini, S.Tr.Keb', 'nip' => '198304202007012004', 'phone_number' => '081200000011', 'email' => 'kasi.perinatologi@sipuas.local', 'room_id' => 11],
             ['username' => 'kasi_picu', 'name' => 'dr. I Made Sukadana, Sp.A', 'nip' => '198108162007011002', 'phone_number' => '081200000012', 'email' => 'kasi.picu@sipuas.local', 'room_id' => 12],
-            ['username' => 'kasi_polianak', 'name' => 'dr. Ni Wayan Murti, Sp.A', 'nip' => '198203112008012003', 'phone_number' => '081200000013', 'email' => 'kasi.polianak@sipuas.local', 'room_id' => 13],
-            ['username' => 'kasi_polibedah', 'name' => 'dr. I Ketut Agus Darmayasa, Sp.B', 'nip' => '198010052006041003', 'phone_number' => '081200000014', 'email' => 'kasi.polibedah@sipuas.local', 'room_id' => 14],
-            ['username' => 'kasi_rehabmedik', 'name' => 'dr. I Dewa Gede Alit, Sp.KFR', 'nip' => '198306282009031002', 'phone_number' => '081200000015', 'email' => 'kasi.rehabmedik@sipuas.local', 'room_id' => 15],
+            ['username' => 'kasi_polianak', 'name' => 'dr. Ni Wayan Murti, Sp.A', 'nip' => '198203112008012003', 'phone_number' => '081200000013', 'email' => 'kasi.polianak@sipuas.local', 'room_id' => $roomAnak->id],
+            ['username' => 'kasi_polibedah', 'name' => 'dr. I Ketut Agus Darmayasa, Sp.B', 'nip' => '198010052006041003', 'phone_number' => '081200000014', 'email' => 'kasi.polibedah@sipuas.local', 'room_id' => $roomBedah->id],
+            ['username' => 'kasi_polifisioterapi', 'name' => 'I Wayan Balik, S.Ft, Ftr', 'nip' => '198504122010011006', 'phone_number' => '081200000051', 'email' => 'kasi.polifisioterapi@sipuas.local', 'room_id' => $roomFisioterapi->id],
+            ['username' => 'kasi_rehabmedik', 'name' => 'dr. I Dewa Gede Alit, Sp.KFR', 'nip' => '198306282009031002', 'phone_number' => '081200000015', 'email' => 'kasi.rehabmedik@sipuas.local', 'room_id' => $roomRehabMedik->id],
+            ['username' => 'kasi_polirehabmedik', 'name' => 'dr. I Dewa Gede Alit, Sp.KFR', 'nip' => '198306282009031002', 'phone_number' => '081200000015', 'email' => 'kasi.polirehabmedik@sipuas.local', 'room_id' => $roomRehabMedik->id],
             ['username' => 'kasi_poligigi', 'name' => 'drg. Ni Made Anggreni, Sp.KG', 'nip' => '198411092010012005', 'phone_number' => '081200000016', 'email' => 'kasi.poligigi@sipuas.local', 'room_id' => 16],
-            ['username' => 'kasi_polijantung', 'name' => 'dr. I Wayan Wita, Sp.JP(K)', 'nip' => '197804142003121001', 'phone_number' => '081200000017', 'email' => 'kasi.polijantung@sipuas.local', 'room_id' => 17],
-            ['username' => 'kasi_polijiwa', 'name' => 'dr. Ni Luh Sukmawati, Sp.KJ', 'nip' => '198502182010012004', 'phone_number' => '081200000018', 'email' => 'kasi.polijiwa@sipuas.local', 'room_id' => 18],
-            ['username' => 'kasi_poliobgyn', 'name' => 'dr. I Made Dwi Artha, Sp.OG', 'nip' => '198109222008011004', 'phone_number' => '081200000019', 'email' => 'kasi.poliobgyn@sipuas.local', 'room_id' => 19],
-            ['username' => 'kasi_polikulit', 'name' => 'dr. Ni Kadek Dwi Jayanthi, Sp.DV', 'nip' => '198605172011012003', 'phone_number' => '081200000020', 'email' => 'kasi.polikulit@sipuas.local', 'room_id' => 20],
+            ['username' => 'kasi_polijantung', 'name' => 'dr. I Wayan Wita, Sp.JP(K)', 'nip' => '197804142003121001', 'phone_number' => '081200000017', 'email' => 'kasi.polijantung@sipuas.local', 'room_id' => $roomJantung->id],
+            ['username' => 'kasi_polijiwa', 'name' => 'dr. Ni Luh Sukmawati, Sp.KJ', 'nip' => '198502182010012004', 'phone_number' => '081200000018', 'email' => 'kasi.polijiwa@sipuas.local', 'room_id' => $roomJiwa->id],
+            ['username' => 'kasi_poliobgyn', 'name' => 'dr. I Made Dwi Artha, Sp.OG', 'nip' => '198109222008011004', 'phone_number' => '081200000019', 'email' => 'kasi.poliobgyn@sipuas.local', 'room_id' => $roomObgyn->id],
+            ['username' => 'kasi_polikulit', 'name' => 'dr. Ni Kadek Dwi Jayanthi, Sp.DV', 'nip' => '198605172011012003', 'phone_number' => '081200000020', 'email' => 'kasi.polikulit@sipuas.local', 'room_id' => $roomKulit->id],
             ['username' => 'kasi_polimata', 'name' => 'dr. I Gede Eka Putra, Sp.M', 'nip' => '198312012009021002', 'phone_number' => '081200000021', 'email' => 'kasi.polimata@sipuas.local', 'room_id' => 21],
             ['username' => 'kasi_poliparu', 'name' => 'dr. I Nyoman Sumartana, Sp.P', 'nip' => '198207102008011003', 'phone_number' => '081200000022', 'email' => 'kasi.poliparu@sipuas.local', 'room_id' => 22],
-            ['username' => 'kasi_polipd', 'name' => 'dr. I Gusti Agung Bagus Krisna, Sp.PD', 'nip' => '198005122006041004', 'phone_number' => '081200000023', 'email' => 'kasi.polipd@sipuas.local', 'room_id' => 23],
-            ['username' => 'kasi_polisaraf', 'name' => 'dr. Ni Putu Ayu Lestari, Sp.S', 'nip' => '198408232010012004', 'phone_number' => '081200000024', 'email' => 'kasi.polisaraf@sipuas.local', 'room_id' => 24],
-            ['username' => 'kasi_politht', 'name' => 'dr. I Komang Adi Wiratama, Sp.THT-BKL', 'nip' => '198301142008011002', 'phone_number' => '081200000025', 'email' => 'kasi.politht@sipuas.local', 'room_id' => 25],
+            ['username' => 'kasi_polipd', 'name' => 'dr. I Gusti Agung Bagus Krisna, Sp.PD', 'nip' => '198005122006041004', 'phone_number' => '081200000023', 'email' => 'kasi.polipd@sipuas.local', 'room_id' => $roomInterna->id],
+            ['username' => 'kasi_poliinterna', 'name' => 'dr. I Gusti Agung Bagus Krisna, Sp.PD', 'nip' => '198005122006041004', 'phone_number' => '081200000023', 'email' => 'kasi.poliinterna@sipuas.local', 'room_id' => $roomInterna->id],
+            ['username' => 'kasi_polisaraf', 'name' => 'dr. Ni Putu Ayu Lestari, Sp.S', 'nip' => '198408232010012004', 'phone_number' => '081200000024', 'email' => 'kasi.polisaraf@sipuas.local', 'room_id' => $roomSaraf->id],
+            ['username' => 'kasi_politht', 'name' => 'dr. I Komang Adi Wiratama, Sp.THT-BKL', 'nip' => '198301142008011002', 'phone_number' => '081200000025', 'email' => 'kasi.politht@sipuas.local', 'room_id' => $roomTht->id],
+            // 5 Poli Baru Kasi
+            ['username' => 'kasi_poliorthopaedi', 'name' => 'dr. I Wayan Arya, Sp.OT', 'nip' => '197908152005011005', 'phone_number' => '081200000052', 'email' => 'kasi.poliorthopaedi@sipuas.local', 'room_id' => $roomOrthopaedi->id],
+            ['username' => 'kasi_polimcu', 'name' => 'dr. Ni Made Indah Sari', 'nip' => '198604112011012004', 'phone_number' => '081200000053', 'email' => 'kasi.polimcu@sipuas.local', 'room_id' => $roomMcu->id],
+            ['username' => 'kasi_polivct', 'name' => 'dr. I Ketut Darmawan, Sp.PD', 'nip' => '198112082007011004', 'phone_number' => '081200000054', 'email' => 'kasi.polivct@sipuas.local', 'room_id' => $roomVct->id],
+            ['username' => 'kasi_politbc', 'name' => 'dr. Ni Luh Putu Ratih, Sp.P', 'nip' => '198407222009022005', 'phone_number' => '081200000055', 'email' => 'kasi.politbc@sipuas.local', 'room_id' => $roomTbc->id],
             ['username' => 'kasi_poliumum', 'name' => 'dr. I Made Pasek Adiputra', 'nip' => '198709192012011003', 'phone_number' => '081200000026', 'email' => 'kasi.poliumum@sipuas.local', 'room_id' => 26],
             ['username' => 'kasi_radiologi', 'name' => 'dr. Ni Wayan Candrawati, Sp.Rad', 'nip' => '198210152008012004', 'phone_number' => '081200000027', 'email' => 'kasi.radiologi@sipuas.local', 'room_id' => 27],
             ['username' => 'kasi_ranap', 'name' => 'Ns. I Komang Yudi, M.Kep', 'nip' => '198406182010011005', 'phone_number' => '081200000028', 'email' => 'kasi.ranap@sipuas.local', 'room_id' => 28],
@@ -509,9 +593,9 @@ class DummyDataSeeder extends Seeder
         // 4. Exactly 10 PENDING Reports (Menunggu Verifikasi untuk Kasi Feed & Verify)
         $pendingReportsData = [
             [
-                'room_id' => $roomFarmasi->id,
-                'target_object' => 'Loket Penyerahan Obat Farmasi',
-                'isi_laporan' => 'Antrean pengambilan obat racikan anak siang ini agak tersendat, sudah menunggu sekitar 45 menit belum dipanggil.',
+                'room_id' => $roomInterna->id,
+                'target_object' => 'Antrean Dokter Poli Interna',
+                'isi_laporan' => 'Antrean konsultasi dokter spesialis penyakit dalam siang ini agak tersendat, sudah menunggu sekitar 45 menit belum dipanggil.',
                 'ai_sentiment' => 'NEGATIF',
                 'ai_category' => 'Waktu Tunggu & Antrean',
                 'ai_score' => -5,
@@ -523,9 +607,9 @@ class DummyDataSeeder extends Seeder
                 'minutes_ago' => 25,
             ],
             [
-                'room_id' => $roomIgd->id,
-                'target_object' => 'Perawat Triase IGD',
-                'isi_laporan' => 'Pelayanan di IGD sangat cekatan dan sigap, perawat jaga langsung sigap memasang infus dan menenangkan pasien yang cemas.',
+                'room_id' => $roomBedah->id,
+                'target_object' => 'Perawat Poli Bedah',
+                'isi_laporan' => 'Pelayanan di Poli Bedah sangat cekatan dan sigap, perawat jaga langsung sigap mendampingi dan menenangkan pasien pasca tindakan.',
                 'ai_sentiment' => 'POSITIF',
                 'ai_category' => 'Sikap & Keramahan Staf',
                 'ai_score' => 5,
@@ -537,9 +621,9 @@ class DummyDataSeeder extends Seeder
                 'minutes_ago' => 45,
             ],
             [
-                'room_id' => $roomPendaftaran->id,
-                'target_object' => 'AC Ruang Tunggu Pendaftaran',
-                'isi_laporan' => 'Suhu AC di ruang tunggu pendaftaran terasa agak panas saat pengunjung sedang ramai siang hari, mohon dicek perawatannya.',
+                'room_id' => $roomOrthopaedi->id,
+                'target_object' => 'AC Ruang Tunggu Poli Orthopaedi',
+                'isi_laporan' => 'Suhu pendingin ruangan di ruang tunggu Poli Orthopaedi terasa agak hangat saat pengunjung ramai, mohon dicek pengaturannya.',
                 'ai_sentiment' => 'NEGATIF',
                 'ai_category' => 'Sarana & Prasarana',
                 'ai_score' => -3,
@@ -551,9 +635,9 @@ class DummyDataSeeder extends Seeder
                 'minutes_ago' => 70,
             ],
             [
-                'room_id' => $roomKasir->id,
-                'target_object' => 'Petugas Kasir Pembayaran',
-                'isi_laporan' => 'Petugas loket kasir menjelaskan rincian biaya pengobatan dan klaim BPJS dengan sangat sabar, ramah, dan transparan.',
+                'room_id' => $roomJantung->id,
+                'target_object' => 'Konsultasi Poli Jantung',
+                'isi_laporan' => 'Dokter spesialis jantung menjelaskan hasil rekam EKG dengan sangat sabar, ramah, dan transparan.',
                 'ai_sentiment' => 'POSITIF',
                 'ai_category' => 'Komunikasi & Informasi',
                 'ai_score' => 5,
@@ -565,9 +649,9 @@ class DummyDataSeeder extends Seeder
                 'minutes_ago' => 95,
             ],
             [
-                'room_id' => $roomRanap->id,
-                'target_object' => 'Kamar Mandi Rawat Inap',
-                'isi_laporan' => 'Kamar rawat inap sangat bersih dan wangi, sprei tempat tidur pasien diganti tepat waktu setiap pagi oleh perawat.',
+                'room_id' => $roomAnak->id,
+                'target_object' => 'Ruang Pemeriksaan Poli Anak',
+                'isi_laporan' => 'Ruang periksa Poli Anak sangat bersih, ceria, dan perawat sangat terampil membujuk balita agar tenang saat pemeriksaan.',
                 'ai_sentiment' => 'POSITIF',
                 'ai_category' => 'Kebersihan & Kenyamanan',
                 'ai_score' => 5,
@@ -579,9 +663,9 @@ class DummyDataSeeder extends Seeder
                 'minutes_ago' => 120,
             ],
             [
-                'room_id' => $roomLab->id,
-                'target_object' => 'Layanan Tes Darah Lab',
-                'isi_laporan' => 'Hasil laboratorium darah rutin keluar lebih dari 2 jam dari estimasi 1 jam yang dijanjikan di awal, mohon percepatannya.',
+                'room_id' => $roomObgyn->id,
+                'target_object' => 'Layanan USG Poli Obgyn',
+                'isi_laporan' => 'Jadwal panggilan USG kehamilan agak tertunda dari estimasi waktu antrean di awal, mohon percepatannya.',
                 'ai_sentiment' => 'NEGATIF',
                 'ai_category' => 'Waktu Tunggu & Antrean',
                 'ai_score' => -4,
@@ -593,9 +677,9 @@ class DummyDataSeeder extends Seeder
                 'minutes_ago' => 150,
             ],
             [
-                'room_id' => $roomPoliUmum->id,
-                'target_object' => 'Dokter Poli Umum',
-                'isi_laporan' => 'Dokter di Poli Umum mendengarkan keluhan dengan teliti dan memberikan edukasi pola hidup sehat dengan sangat memuaskan.',
+                'room_id' => $roomKulit->id,
+                'target_object' => 'Dokter Poli Kulit',
+                'isi_laporan' => 'Dokter di Poli Kulit mendengarkan keluhan dengan teliti dan memberikan edukasi pencegahan alergi dengan sangat memuaskan.',
                 'ai_sentiment' => 'POSITIF',
                 'ai_category' => 'Pelayanan Medis',
                 'ai_score' => 5,
@@ -607,9 +691,9 @@ class DummyDataSeeder extends Seeder
                 'minutes_ago' => 180,
             ],
             [
-                'room_id' => $roomAreaPublik->id,
-                'target_object' => 'Sistem Informasi Antrean',
-                'isi_laporan' => 'Alangkah baiknya bila layar monitor nomor antrean juga dilengkapi speaker audio di koridor penghubung agar tidak terlewat.',
+                'room_id' => $roomMcu->id,
+                'target_object' => 'Alur Pelayanan Poli MCU',
+                'isi_laporan' => 'Alangkah baiknya bila alur pemeriksaan Medical Check Up dilengkapi papan petunjuk alur di dinding koridor agar lebih mudah dipahami.',
                 'ai_sentiment' => 'NETRAL',
                 'ai_category' => 'Sarana & Prasarana',
                 'ai_score' => 0,
@@ -621,9 +705,9 @@ class DummyDataSeeder extends Seeder
                 'minutes_ago' => 210,
             ],
             [
-                'room_id' => $roomFarmasi->id,
-                'target_object' => 'Edukasi Obat Apotek',
-                'isi_laporan' => 'Apoteker memberikan penjelasan aturan pakai obat secara detail dan memberikan label pengingat yang sangat bermanfaat.',
+                'room_id' => $roomFisioterapi->id,
+                'target_object' => 'Terapis Poli Fisioterapi',
+                'isi_laporan' => 'Petugas fisioterapi memberikan penjelasan teknik peregangan otot secara detail dan sangat sabar melatih gerakan pemulihan.',
                 'ai_sentiment' => 'POSITIF',
                 'ai_category' => 'Komunikasi & Informasi',
                 'ai_score' => 5,
@@ -635,14 +719,14 @@ class DummyDataSeeder extends Seeder
                 'minutes_ago' => 240,
             ],
             [
-                'room_id' => $roomIgd->id,
-                'target_object' => 'Fasilitas Kursi Roda IGD',
-                'isi_laporan' => 'Ketersediaan kursi roda di lobi depan IGD mohon ditambah saat jam puncak kedatangan pasien agar pasien lansia tidak perlu menunggu.',
-                'ai_sentiment' => 'NETRAL',
-                'ai_category' => 'Sarana & Prasarana',
-                'ai_score' => 0,
+                'room_id' => $roomTht->id,
+                'target_object' => 'Fasilitas Alat Periksa Poli THT',
+                'isi_laporan' => 'Ketersediaan monitor kamera endoskopi THT sangat membantu pasien melihat kondisi telinga secara langsung, sangat informatif.',
+                'ai_sentiment' => 'POSITIF',
+                'ai_category' => 'Pelayanan Medis',
+                'ai_score' => 5,
                 'ai_confidence' => '90%',
-                'priority' => 'HIGH',
+                'priority' => 'NORMAL',
                 'reporter_name' => 'Bpk. Ketut Astawa',
                 'reporter_phone' => '081238910010',
                 'shift_info' => 'Pagi (07.00 - 14.00)',
@@ -695,7 +779,11 @@ class DummyDataSeeder extends Seeder
             'Pelayanan Medis',
         ];
 
-        $roomsList = [$roomIgd, $roomFarmasi, $roomRanap, $roomPoliUmum, $roomLab, $roomKasir, $roomPendaftaran];
+        // Gunakan seluruh ruangan Poli yang aktif
+        $roomsList = Room::where('is_active', true)->get()->all();
+        if (empty($roomsList)) {
+            $roomsList = [$roomInterna, $roomBedah, $roomAnak, $roomJantung];
+        }
 
         for ($day = 1; $day <= 13; $day++) {
             $reportDate = $now->copy()->subDays($day);

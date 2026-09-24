@@ -18,7 +18,8 @@ import {
     ChevronDown,
     ChevronLeft,
     ChevronRight,
-    ArrowLeft
+    ArrowLeft,
+    Ban
 } from '@lucide/vue';
 
 const props = defineProps({
@@ -351,6 +352,10 @@ onUnmounted(() => {
                                         <AlertCircle class="h-3.5 w-3.5 shrink-0" />
                                         <span>Perlu Verifikasi</span>
                                     </span>
+                                    <span v-else-if="item.verified_action_type === 'DIBATALKAN'" class="min-w-[135px] px-3.5 py-2 rounded-xl text-xs font-bold inline-flex items-center justify-center gap-1.5 border bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700" :title="item.verified_by ? `Dibatalkan oleh ${item.verified_by}` : 'Dibatalkan (Tidak Sesuai Fakta)'">
+                                        <Ban class="h-3.5 w-3.5 shrink-0 text-slate-500" />
+                                        <span>Dibatalkan</span>
+                                    </span>
                                     <span v-else class="min-w-[135px] px-3.5 py-2 rounded-xl text-xs font-bold inline-flex items-center justify-center gap-1.5 border bg-emerald-50 text-emerald-700 border-emerald-200/80 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-900/50" :title="item.verified_by ? `Divalidasi oleh ${item.verified_by}` : ''">
                                         <CheckCircle2 class="h-3.5 w-3.5 shrink-0" />
                                         <span>Terverifikasi</span>
@@ -411,9 +416,13 @@ onUnmounted(() => {
                                         </span>
                                         <span :class="[
                                             'px-2 py-0.5 rounded-lg text-[10px] font-bold',
-                                            item.status === 'PENDING' ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300' : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                                            item.status === 'PENDING' 
+                                                ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300' 
+                                                : (item.verified_action_type === 'DIBATALKAN'
+                                                    ? 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+                                                    : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300')
                                         ]">
-                                            {{ item.status === 'PENDING' ? 'Perlu Verifikasi' : 'Terverifikasi' }}
+                                            {{ item.status === 'PENDING' ? 'Perlu Verifikasi' : (item.verified_action_type === 'DIBATALKAN' ? 'Dibatalkan' : 'Terverifikasi') }}
                                         </span>
                                     </div>
                                 </div>

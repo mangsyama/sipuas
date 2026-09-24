@@ -15,6 +15,8 @@ class StaffKpiLog extends Model
         'report_id',
         'verified_by',
         'action_type',
+        'kpi_category',
+        'severity_level',
         'points',
         'note',
         'logged_at',

@@ -259,6 +259,7 @@ class KasiController extends Controller
                 'ai_category' => $r->ai_category ?? 'Pelayanan',
                 'ai_score' => $r->ai_score,
                 'status' => $r->status,
+                'verified_action_type' => $r->resolution_notes === 'DIBATALKAN' ? 'DIBATALKAN' : null,
                 'verified_by' => $r->verifier ? $r->verifier->name : null,
             ];
         });
@@ -413,21 +414,26 @@ class KasiController extends Controller
         $verifiedActionType = null;
         $verifiedPoints = null;
         if ($report && $report->status === 'VERIFIED') {
-            $firstStaff = $report->staff->first();
-            if ($firstStaff && $firstStaff->pivot) {
-                $verifiedActionType = $firstStaff->pivot->action_type;
-                $verifiedPoints = abs($firstStaff->pivot->points);
-            } else {
-                $firstKpi = StaffKpiLog::where('report_id', $report->id)->first();
-                if ($firstKpi) {
-                    $verifiedActionType = $firstKpi->action_type;
-                    $verifiedPoints = abs($firstKpi->points);
-                }
-            }
-
-            if (!$verifiedActionType) {
-                $verifiedActionType = 'NETRAL';
+            if ($report->resolution_notes === 'DIBATALKAN') {
+                $verifiedActionType = 'DIBATALKAN';
                 $verifiedPoints = 0;
+            } else {
+                $firstStaff = $report->staff->first();
+                if ($firstStaff && $firstStaff->pivot) {
+                    $verifiedActionType = $firstStaff->pivot->action_type;
+                    $verifiedPoints = abs($firstStaff->pivot->points);
+                } else {
+                    $firstKpi = StaffKpiLog::where('report_id', $report->id)->first();
+                    if ($firstKpi) {
+                        $verifiedActionType = $firstKpi->action_type;
+                        $verifiedPoints = abs($firstKpi->points);
+                    }
+                }
+
+                if (!$verifiedActionType) {
+                    $verifiedActionType = 'NETRAL';
+                    $verifiedPoints = 0;
+                }
             }
 
             // Pastikan staf yang terkait saat verifikasi selalu ada dalam daftar staf
@@ -487,6 +493,8 @@ class KasiController extends Controller
             'verified_by' => $report->verifier ? $report->verifier->name : null,
             'verified_action_type' => $verifiedActionType,
             'verified_points' => $verifiedPoints,
+            'verified_kpi_category' => $report->verified_kpi_category,
+            'verified_severity_level' => $report->verified_severity_level,
             'pesupeluh_ticket_id' => $report->pesupeluh_ticket_id,
             'pesupeluh_ticket_number' => $report->pesupeluh_ticket_number,
             'dispatched_to_pesupeluh_at' => $report->dispatched_to_pesupeluh_at ? $report->dispatched_to_pesupeluh_at->format('d M Y, H:i') . ' WITA' : null,
@@ -498,6 +506,48 @@ class KasiController extends Controller
         $pesupeluhCategories = $pesupeluhService->getCategories();
         $pesupeluhRooms = $pesupeluhService->getRooms();
 
+        $kpiCategories = [
+            [
+                'id' => 'KERAMAHAN',
+                'name' => 'Keramahan & Komunikasi',
+                'icon' => 'HeartHandshake',
+                'description' => 'Senyum, Salam, Sapa, Sopan, Santun (5S), nada bicara, empati & kesabaran melayani pasien/keluarga.',
+            ],
+            [
+                'id' => 'KEDISIPLINAN',
+                'name' => 'Kedisiplinan & Waktu Tanggap',
+                'icon' => 'Clock',
+                'description' => 'Kecepatan respon pelayanan, ketepatan waktu hadir/visite, respon cepat terhadap panggilan bel/keluhan.',
+            ],
+            [
+                'id' => 'SOP_PELAYANAN',
+                'name' => 'Kepatuhan SOP & Profesionalisme',
+                'icon' => 'ClipboardCheck',
+                'description' => 'Kepatuhan prosedur klinis & administrasi, ketelitian tindakan, edukasi pasien, kebersihan & higienitas.',
+            ],
+            [
+                'id' => 'INTEGRITAS',
+                'name' => 'Integritas & Etika Profesi',
+                'icon' => 'ShieldCheck',
+                'description' => 'Kejujuran, penolakan gratifikasi/pungli, perlindungan privasi medis pasien, dan etika profesi RS.',
+            ],
+        ];
+
+        $kpiTemplates = [
+            'PEMOTONGAN' => [
+                ['severity' => 'RINGAN', 'label' => 'Ringan', 'points' => 2, 'desc' => 'Teguran lisan / kekurangramahan minor'],
+                ['severity' => 'SEDANG', 'label' => 'Sedang', 'points' => 5, 'desc' => 'Keterlambatan respon / kelalaian SOP administratif'],
+                ['severity' => 'BERAT', 'label' => 'Berat', 'points' => 10, 'desc' => 'Ketidaksopanan fatal / pengabaian pasien / pelanggaran etika'],
+                ['severity' => 'CUSTOM', 'label' => 'Kustom', 'points' => null, 'desc' => 'Poin ditentukan sendiri oleh Kepala Seksi'],
+            ],
+            'PENAMBAHAN' => [
+                ['severity' => 'APRESIASI', 'label' => 'Apresiasi Ramah', 'points' => 3, 'desc' => 'Pujian sikap ramah & pelayanan komunikatif'],
+                ['severity' => 'BINTANG', 'label' => 'Bintang Layanan', 'points' => 5, 'desc' => 'Pelayanan cepat, tanggap & memuaskan pasien'],
+                ['severity' => 'TELADAN', 'label' => 'Kinerja Teladan', 'points' => 10, 'desc' => 'Dedikasi luar biasa / penanganan situasi darurat kritis'],
+                ['severity' => 'CUSTOM', 'label' => 'Kustom', 'points' => null, 'desc' => 'Poin ditentukan sendiri oleh Kepala Seksi'],
+            ],
+        ];
+
         return Inertia::render('Kasi/Verify', [
             'id' => $report ? $report->ticket_number : ($id ?? ''),
             'reportDetail' => $reportDetail,
@@ -505,6 +555,8 @@ class KasiController extends Controller
             'staffMembers' => $staffList,
             'pesupeluhCategories' => $pesupeluhCategories,
             'pesupeluhRooms' => $pesupeluhRooms,
+            'kpiCategories' => $kpiCategories,
+            'kpiTemplates' => $kpiTemplates,
         ]);
     }
 
@@ -521,13 +573,16 @@ class KasiController extends Controller
             return redirect()->route('kasi.feed');
         }
 
-        $isNeutral = $request->input('action_type') === 'NETRAL';
+        $isNeutralOrCancelled = in_array($request->input('action_type'), ['NETRAL', 'DIBATALKAN']);
+        $isCancelled = $request->input('action_type') === 'DIBATALKAN';
 
         $validated = $request->validate([
-            'selected_staff_ids' => $isNeutral ? 'nullable|array' : 'required|array|min:1',
-            'action_type' => 'required|string|in:PENAMBAHAN,PEMOTONGAN,NETRAL',
+            'selected_staff_ids' => $isNeutralOrCancelled ? 'nullable|array' : 'required|array|min:1',
+            'action_type' => 'required|string|in:PENAMBAHAN,PEMOTONGAN,NETRAL,DIBATALKAN',
+            'kpi_category' => $isNeutralOrCancelled ? 'nullable|string|max:50' : 'required|string|in:KERAMAHAN,KEDISIPLINAN,SOP_PELAYANAN,INTEGRITAS',
+            'severity_level' => 'nullable|string|max:50',
             'points' => 'required|integer',
-            'supervisor_notes' => 'nullable|string',
+            'supervisor_notes' => 'required|string|min:3',
             'forward_to_pesupeluh' => 'nullable|boolean',
             'pesupeluh_category_id' => 'nullable|integer',
             'pesupeluh_room_id' => 'nullable|integer',
@@ -538,18 +593,24 @@ class KasiController extends Controller
         ]);
 
         $points = (int) $validated['points'];
-        if ($validated['action_type'] === 'NETRAL') {
+        if ($validated['action_type'] === 'NETRAL' || $validated['action_type'] === 'DIBATALKAN') {
             $points = 0;
         } elseif ($validated['action_type'] === 'PEMOTONGAN' && $points > 0) {
             $points = -$points;
         }
 
-        // Update Report
+        $kpiCategory = $isNeutralOrCancelled ? null : ($validated['kpi_category'] ?? null);
+        $severityLevel = $isNeutralOrCancelled ? null : ($validated['severity_level'] ?? null);
+
+        // Update Report (simpan DIBATALKAN di resolution_notes secara aman tanpa migrasi DB)
         $report->update([
             'status' => 'VERIFIED',
             'verified_by' => $request->user() ? $request->user()->id : null,
             'verified_at' => Carbon::now(),
+            'verified_kpi_category' => $kpiCategory,
+            'verified_severity_level' => $severityLevel,
             'supervisor_notes' => $validated['supervisor_notes'],
+            'resolution_notes' => $validated['action_type'] === 'DIBATALKAN' ? 'DIBATALKAN' : null,
         ]);
 
         // Simpan lampiran berkas verifikasi (Surat Peringatan, Berita Acara, dll) jika diunggah
@@ -607,37 +668,46 @@ class KasiController extends Controller
             }
         }
 
-        // Sync report staff & update staff KPI logs directly on User model
-        $selectedStaffIds = $validated['selected_staff_ids'] ?? [];
-        foreach ($selectedStaffIds as $staffId) {
-            $staff = User::find($staffId);
-            if (!$staff) continue;
+        // Sync report staff & update staff KPI logs directly on User model (hanya jika bukan DIBATALKAN)
+        if ($validated['action_type'] !== 'DIBATALKAN') {
+            $selectedStaffIds = $validated['selected_staff_ids'] ?? [];
+            foreach ($selectedStaffIds as $staffId) {
+                $staff = User::find($staffId);
+                if (!$staff) continue;
 
-            ReportStaff::updateOrCreate(
-                ['report_id' => $report->id, 'user_id' => $staff->id],
-                ['action_type' => $validated['action_type'], 'points' => $points]
-            );
+                ReportStaff::updateOrCreate(
+                    ['report_id' => $report->id, 'user_id' => $staff->id],
+                    [
+                        'action_type' => $validated['action_type'],
+                        'kpi_category' => $kpiCategory,
+                        'severity_level' => $severityLevel,
+                        'points' => $points,
+                    ]
+                );
 
-            // Update Staff Balance Points only for PENAMBAHAN / PEMOTONGAN
-            if ($validated['action_type'] === 'PENAMBAHAN') {
-                $staff->increment('praise_count');
-                $staff->increment('total_points', abs($points));
-            } elseif ($validated['action_type'] === 'PEMOTONGAN') {
-                $staff->increment('complaint_count');
-                $staff->decrement('total_points', abs($points));
+                // Update Staff Balance Points only for PENAMBAHAN / PEMOTONGAN
+                if ($validated['action_type'] === 'PENAMBAHAN') {
+                    $staff->increment('praise_count');
+                    $staff->increment('total_points', abs($points));
+                } elseif ($validated['action_type'] === 'PEMOTONGAN') {
+                    $staff->increment('complaint_count');
+                    $staff->decrement('total_points', abs($points));
+                }
+                $staff->update(['last_point_update_at' => Carbon::now()]);
+
+                // Add KPI Log
+                StaffKpiLog::create([
+                    'user_id' => $staff->id,
+                    'report_id' => $report->id,
+                    'verified_by' => $request->user() ? $request->user()->id : null,
+                    'action_type' => $validated['action_type'],
+                    'kpi_category' => $kpiCategory,
+                    'severity_level' => $severityLevel,
+                    'points' => $points,
+                    'note' => $validated['supervisor_notes'] ?? 'Verifikasi laporan aduan/apresiasi unit.',
+                    'logged_at' => Carbon::now(),
+                ]);
             }
-            $staff->update(['last_point_update_at' => Carbon::now()]);
-
-            // Add KPI Log
-            StaffKpiLog::create([
-                'user_id' => $staff->id,
-                'report_id' => $report->id,
-                'verified_by' => $request->user() ? $request->user()->id : null,
-                'action_type' => $validated['action_type'],
-                'points' => $points,
-                'note' => $validated['supervisor_notes'] ?? 'Verifikasi laporan aduan/apresiasi unit.',
-                'logged_at' => Carbon::now(),
-            ]);
         }
 
         // Kirim Notifikasi WhatsApp Ucapan Terima Kasih & Laporan Selesai ke Pelapor (jika nomor HP diisi)
@@ -753,6 +823,8 @@ class KasiController extends Controller
                         'id' => $log->id,
                         'ticket_number' => $report ? $report->ticket_number : 'EVALUASI_MANUAL',
                         'type' => $log->action_type,
+                        'kpi_category' => $log->kpi_category,
+                        'severity_level' => $log->severity_level,
                         'points' => $log->points,
                         'note' => $log->note,
                         'verifier_name' => $log->verifier ? $log->verifier->name : 'Supervisor Kasi',

@@ -32,6 +32,8 @@ return new class extends Migration
             $table->string('priority', 30)->default('NORMAL'); // LOW, NORMAL, HIGH, URGENT
             $table->foreignId('verified_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestampTz('verified_at')->nullable();
+            $table->string('verified_kpi_category', 50)->nullable(); // KERAMAHAN, KEDISIPLINAN, SOP_PELAYANAN, INTEGRITAS
+            $table->string('verified_severity_level', 50)->nullable(); // RINGAN, SEDANG, BERAT, APRESIASI, CUSTOM
             $table->text('supervisor_notes')->nullable();
             $table->text('resolution_notes')->nullable();
             $table->timestampTz('resolved_at')->nullable();

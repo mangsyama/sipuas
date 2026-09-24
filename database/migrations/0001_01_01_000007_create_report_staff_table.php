@@ -16,6 +16,8 @@ return new class extends Migration
             $table->foreignId('report_id')->constrained('reports')->cascadeOnDelete();
             $table->foreignId('user_id')->constrained('users')->cascadeOnDelete();
             $table->string('action_type', 30)->default('PEMOTONGAN'); // PENAMBAHAN, PEMOTONGAN, NETRAL
+            $table->string('kpi_category', 50)->nullable();
+            $table->string('severity_level', 50)->nullable();
             $table->integer('points')->default(0); // e.g. +5, -5
             $table->timestampsTz();
         });

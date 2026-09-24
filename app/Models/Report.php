@@ -31,6 +31,8 @@ class Report extends Model
         'priority',
         'verified_by',
         'verified_at',
+        'verified_kpi_category',
+        'verified_severity_level',
         'supervisor_notes',
         'resolution_notes',
         'resolved_at',

@@ -63,6 +63,8 @@ class StaffDashboardController extends Controller
                 return [
                     'id' => $log->id,
                     'action_type' => $log->action_type,
+                    'kpi_category' => $log->kpi_category,
+                    'severity_level' => $log->severity_level,
                     'points' => $log->points,
                     'note' => $log->note,
                     'ticket_number' => $report ? $report->ticket_number : 'EVALUASI_MANUAL',
@@ -111,6 +113,8 @@ class StaffDashboardController extends Controller
                     'isi_laporan' => $r->isi_laporan,
                     'ai_sentiment' => $r->ai_sentiment,
                     'action_type' => $r->pivot->action_type ?? 'NETRAL',
+                    'kpi_category' => $r->pivot->kpi_category ?? $r->verified_kpi_category,
+                    'severity_level' => $r->pivot->severity_level ?? $r->verified_severity_level,
                     'points' => $r->pivot->points ?? 0,
                     'supervisor_notes' => $r->supervisor_notes,
                     'verified_at' => $r->verified_at ? $r->verified_at->format('d M Y, H:i') : '-',

@@ -16,6 +16,8 @@ class ReportStaff extends Model
         'report_id',
         'user_id',
         'action_type',
+        'kpi_category',
+        'severity_level',
         'points',
     ];
 

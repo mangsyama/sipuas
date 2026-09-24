@@ -173,6 +173,20 @@ const handleStep1Enter = () => {
     }
 };
 
+const autoResizeIsiLaporan = (e) => {
+    const el = e?.target || isiLaporanRef.value;
+    if (el) {
+        el.style.height = 'auto';
+        el.style.height = Math.max(el.scrollHeight, 108) + 'px';
+    }
+};
+
+const isiLaporanPlaceholder = computed(() => {
+    return isStaffReview.value 
+        ? 'Tuliskan ulasan atau apresiasi pelayanan Anda di sini...' 
+        : 'Tuliskan detail masukan, pujian, atau keluhan Anda di sini...';
+});
+
 const onIsiLaporanKeydown = (e) => {
     if (e.key === 'Enter') {
         // Desktop: Ctrl+Enter or Cmd+Enter to advance
@@ -708,7 +722,12 @@ const copyReceipt = () => {
 
                         <!-- Pilih Ruangan Pelayanan via SearchableSelect -->
                         <div class="space-y-1.5">
-                            <InputLabel for="unit_id" value="Ruangan Pelayanan *" />
+                            <div>
+                                <InputLabel for="unit_id" value="Ruangan Pelayanan *" />
+                                <p class="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                                    Pilih poliklinik, instalasi, bangsal rawat inap, atau unit kerja tempat kejadian.
+                                </p>
+                            </div>
                             <div>
                                 <SearchableSelect
                                     v-model="form.unit_id"
@@ -725,7 +744,12 @@ const copyReceipt = () => {
 
                         <!-- Nama / Fasilitas / Barang (Opsional) -->
                         <div class="space-y-1.5">
-                            <InputLabel for="target_object" value="Nama / Fasilitas / Barang (Opsional)" />
+                            <div>
+                                <InputLabel for="target_object" value="Nama / Fasilitas / Barang (Opsional)" />
+                                <p class="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                                    Sebutkan nama petugas, ciri fisik (jika tidak tahu namanya), fasilitas berkendala, atau kosongkan jika umum.
+                                </p>
+                            </div>
                             <TextInput
                                 id="target_object"
                                 ref="targetObjectRef"
@@ -734,7 +758,7 @@ const copyReceipt = () => {
                                 v-model="form.target_object"
                                 enterkeyhint="next"
                                 @keydown.enter.prevent="handleStep1Enter"
-                                placeholder="Contoh: AC Rusak / Kloset Bocor / Nurse Sinta Dewi"
+                                placeholder="Contoh: Perawat Siti / Dr. Budi / AC Kamar 204"
                             />
                         </div>
 
@@ -787,10 +811,18 @@ const copyReceipt = () => {
 
                         <!-- Detail Teks Laporan -->
                         <div class="space-y-1.5">
-                            <InputLabel 
-                                for="isi_laporan" 
-                                :value="isStaffReview ? 'Ceritakan Pengalaman / Apresiasi Anda *' : 'Isi Pujian / Masukan / Keluhan *'" 
-                            />
+                            <div>
+                                <InputLabel 
+                                    for="isi_laporan" 
+                                    :value="isStaffReview ? 'Ceritakan Pengalaman / Apresiasi Anda *' : 'Isi Pujian / Masukan / Keluhan *'" 
+                                />
+                                <p class="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                                    {{ isStaffReview 
+                                        ? 'Ceritakan pengalaman pelayanan, keramahan, kesigapan, atau ciri-ciri petugas jika tidak tahu namanya.' 
+                                        : 'Uraikan apa yang terjadi, perkiraan waktu kejadian, ciri-ciri petugas (bila tidak tahu namanya), atau saran perbaikan Anda.' 
+                                    }}
+                                </p>
+                            </div>
                             <textarea
                                 id="isi_laporan"
                                 ref="isiLaporanRef"
@@ -800,8 +832,10 @@ const copyReceipt = () => {
                                 required
                                 enterkeyhint="next"
                                 @keydown="onIsiLaporanKeydown"
-                                :placeholder="isStaffReview ? `Tuliskan pengalaman pelayanan, kepuasan, atau masukan Anda untuk ${form.target_object} secara rinci...` : 'Tuliskan pengalaman pelayanan, apresiasi pujian, atau kendala keluhan Anda di sini secara rinci...'"
-                                class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 p-4 text-xs sm:text-sm focus:border-emerald-500 dark:focus:border-emerald-400 focus:bg-white dark:focus:bg-slate-950 focus:outline-none focus:ring-0 focus:shadow-none transition duration-150 leading-relaxed"
+                                @input="autoResizeIsiLaporan"
+                                :placeholder="isiLaporanPlaceholder"
+                                class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 p-4 text-xs sm:text-sm focus:border-emerald-500 dark:focus:border-emerald-400 focus:bg-white dark:focus:bg-slate-950 focus:outline-none focus:ring-0 focus:shadow-none transition duration-150 leading-relaxed resize-none"
+                                style="field-sizing: content; min-height: 108px;"
                             ></textarea>
                             <div 
                                 v-if="form.isi_laporan.length > 0 && form.isi_laporan.trim().length < 5" 
@@ -814,7 +848,10 @@ const copyReceipt = () => {
                         <!-- Upload Bukti Foto / Video (Space Upload Area + Tombol Buka Kamera) -->
                         <div class="space-y-2.5">
                             <div>
-                                <InputLabel value="Lampirkan Bukti Foto / Video" />
+                                <InputLabel value="Lampirkan Bukti Foto / Video (Opsional)" />
+                                <p class="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                                    Foto kondisi sarana, tiket antrean, atau video singkat kejadian untuk mempercepat tindak lanjut.
+                                </p>
                             </div>
 
                             <!-- Inline Upload Error Alert Banner -->
@@ -1020,7 +1057,12 @@ const copyReceipt = () => {
 
                         <!-- Input Nama Pelapor -->
                         <div class="space-y-1.5">
-                            <InputLabel for="reporter_name" value="Nama Lengkap Pelapor (Opsional / Anonim)" />
+                            <div>
+                                <InputLabel for="reporter_name" value="Nama Lengkap Pelapor (Opsional / Anonim)" />
+                                <p class="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                                    Nama Anda tidak akan dipublikasikan. Kosongkan jika ingin melapor secara anonim.
+                                </p>
+                            </div>
                             <TextInput
                                 id="reporter_name"
                                 ref="reporterNameRef"
@@ -1029,13 +1071,18 @@ const copyReceipt = () => {
                                 v-model="form.reporter_name"
                                 enterkeyhint="next"
                                 @keydown.enter.prevent="handleReporterNameEnter"
-                                placeholder="Biarkan kosong jika ingin ANONIM..."
+                                placeholder="Contoh: Budi Santoso (atau biarkan kosong)"
                             />
                         </div>
 
                         <!-- Input No. HP / WA Pelapor -->
                         <div class="space-y-1.5">
-                            <InputLabel for="reporter_phone" value="No. WhatsApp / Telepon (Opsional)" />
+                            <div>
+                                <InputLabel for="reporter_phone" value="No. WhatsApp / Telepon (Opsional)" />
+                                <p class="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                                    Untuk menerima pesan notifikasi resmi perkembangan dan status penanganan aduan via WhatsApp.
+                                </p>
+                            </div>
                             <TextInput
                                 id="reporter_phone"
                                 ref="reporterPhoneRef"
@@ -1049,7 +1096,7 @@ const copyReceipt = () => {
                                 @keypress="onPhoneKeyPress"
                                 enterkeyhint="send"
                                 @keydown.enter.prevent="submitReport"
-                                placeholder="Contoh: 081234567890..."
+                                placeholder="Contoh: 081234567890 (atau biarkan kosong)"
                             />
                         </div>
 

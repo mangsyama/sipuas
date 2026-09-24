@@ -154,7 +154,7 @@ class ReportController extends Controller
                     'reporter_phone' => mb_substr($validated['reporter_phone'] ?? '', 0, 28) ?: null,
                     'is_anonymous' => empty($validated['reporter_name']) || strtolower(trim($validated['reporter_name'])) === 'anonim',
                     'status' => 'PENDING',
-                    'priority' => ($sentiment === 'NEGATIF' || ($aiAnalysis['urgency'] ?? '') === 'TINGGI' || ($aiAnalysis['urgency'] ?? '') === 'KRITIS') ? 'HIGH' : 'NORMAL',
+                    'priority' => in_array(strtoupper($aiAnalysis['urgency'] ?? ''), ['TINGGI', 'KRITIS']) ? 'HIGH' : 'NORMAL',
                 ]);
             } catch (\Throwable $createErr) {
                 \Illuminate\Support\Facades\Log::error('Report::create Primary Attempt Notice: ' . $createErr->getMessage() . '. Executing minimal fallback insert.');

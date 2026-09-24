@@ -34,7 +34,13 @@ import {
     Info,
     Paperclip,
     Trash2,
-    Download
+    Download,
+    Ban,
+    XCircle,
+    HeartHandshake,
+    ClipboardCheck,
+    Award,
+    Scale
 } from '@lucide/vue';
 
 const props = defineProps({
@@ -61,6 +67,14 @@ const props = defineProps({
     pesupeluhRooms: {
         type: Array,
         default: () => []
+    },
+    kpiCategories: {
+        type: Array,
+        default: () => []
+    },
+    kpiTemplates: {
+        type: Object,
+        default: () => ({})
     }
 });
 
@@ -68,6 +82,8 @@ const isSubmitting = ref(false);
 const showSuccessModal = ref(false);
 const showConfirmModal = ref(false);
 const showValidationModal = ref(false);
+const validationTitle = ref('Pilih Staf Bertugas');
+const validationMessage = ref('Mohon centang setidaknya 1 staf yang bertugas saat kejadian untuk mengaitkan poin KPI evaluasi/apresiasi.');
 const selectedImagePreview = ref(null);
 
 // Modal Keyboard (Escape) & Browser Back (popstate) standard handling
@@ -169,6 +185,158 @@ const pointValue = ref(
         : (actionType.value === 'NETRAL' ? 0 : 5)
 );
 const supervisorNotes = ref(report.value?.supervisor_notes || '');
+
+// Standar 4 Pilar Kategori KPI Rumah Sakit
+const defaultKpiCategories = [
+    {
+        id: 'KERAMAHAN',
+        name: 'Keramahan & Komunikasi',
+        icon: HeartHandshake,
+        description: 'Senyum, Salam, Sapa, Sopan, Santun (5S), nada bicara, empati & kesabaran menangani pasien/keluarga.'
+    },
+    {
+        id: 'KEDISIPLINAN',
+        name: 'Kedisiplinan & Waktu Tanggap',
+        icon: Clock,
+        description: 'Kecepatan respon pelayanan, ketepatan waktu hadir/visite, respon cepat terhadap panggilan bel/keluhan.'
+    },
+    {
+        id: 'SOP_PELAYANAN',
+        name: 'Kepatuhan SOP & Profesionalisme',
+        icon: ClipboardCheck,
+        description: 'Kepatuhan prosedur klinis & administrasi, ketelitian tindakan, edukasi pasien, kebersihan & higienitas.'
+    },
+    {
+        id: 'INTEGRITAS',
+        name: 'Integritas & Etika Profesi',
+        icon: ShieldCheck,
+        description: 'Kejujuran, penolakan gratifikasi/pungli, perlindungan privasi medis pasien, dan etika profesi RS.'
+    }
+];
+
+const defaultKpiTemplates = {
+    PEMOTONGAN: [
+        { severity: 'RINGAN', label: 'Ringan', points: 2, desc: 'Teguran lisan / kekurangramahan minor' },
+        { severity: 'SEDANG', label: 'Sedang', points: 5, desc: 'Keterlambatan respon / kelalaian SOP administratif' },
+        { severity: 'BERAT', label: 'Berat', points: 10, desc: 'Ketidaksopanan fatal / pengabaian pasien / pelanggaran etika' },
+        { severity: 'CUSTOM', label: 'Kustom', points: null, desc: 'Poin ditentukan sendiri oleh Kepala Seksi' }
+    ],
+    PENAMBAHAN: [
+        { severity: 'APRESIASI', label: 'Apresiasi Ramah', points: 3, desc: 'Pujian sikap ramah & pelayanan komunikatif' },
+        { severity: 'BINTANG', label: 'Bintang Layanan', points: 5, desc: 'Pelayanan cepat, tanggap & memuaskan pasien' },
+        { severity: 'TELADAN', label: 'Kinerja Teladan', points: 10, desc: 'Dedikasi luar biasa / penanganan situasi darurat kritis' },
+        { severity: 'CUSTOM', label: 'Kustom', points: null, desc: 'Poin ditentukan sendiri oleh Kepala Seksi' }
+    ]
+};
+
+const getSeverityLabel = (severity) => {
+    if (!severity) return '';
+    const upper = String(severity).toUpperCase();
+    const map = {
+        'BINTANG': 'Bintang Layanan',
+        'APRESIASI': 'Apresiasi Ramah',
+        'TELADAN': 'Kinerja Teladan',
+        'RINGAN': 'Ringan',
+        'SEDANG': 'Sedang',
+        'BERAT': 'Berat',
+        'CUSTOM': 'Kustom',
+    };
+    return map[upper] || severity;
+};
+
+const mapAiCategoryToKpi = (aiCat) => {
+    if (!aiCat) return 'KERAMAHAN';
+    const lower = aiCat.toLowerCase();
+    if (lower.includes('ramah') || lower.includes('sikap') || lower.includes('komunikasi') || lower.includes('sopan') || lower.includes('empati')) {
+        return 'KERAMAHAN';
+    }
+    if (lower.includes('waktu') || lower.includes('tunggu') || lower.includes('lambat') || lower.includes('antri') || lower.includes('disiplin') || lower.includes('cepat')) {
+        return 'KEDISIPLINAN';
+    }
+    if (lower.includes('prosedur') || lower.includes('sop') || lower.includes('obat') || lower.includes('medis') || lower.includes('klinis') || lower.includes('admin') || lower.includes('bersih')) {
+        return 'SOP_PELAYANAN';
+    }
+    if (lower.includes('etika') || lower.includes('integritas') || lower.includes('biaya') || lower.includes('pungli') || lower.includes('privasi')) {
+        return 'INTEGRITAS';
+    }
+    return 'KERAMAHAN';
+};
+
+const aiRecommendedCategory = computed(() => {
+    return mapAiCategoryToKpi(report.value?.ai_category);
+});
+
+const activeCategories = computed(() => {
+    return defaultKpiCategories.map(cat => ({
+        ...cat,
+        isAiRecommended: cat.id === aiRecommendedCategory.value
+    }));
+});
+
+const activeSeverityTemplates = computed(() => {
+    if (actionType.value === 'PEMOTONGAN') {
+        return (props.kpiTemplates?.PEMOTONGAN && props.kpiTemplates.PEMOTONGAN.length > 0)
+            ? props.kpiTemplates.PEMOTONGAN
+            : defaultKpiTemplates.PEMOTONGAN;
+    }
+    if (actionType.value === 'PENAMBAHAN') {
+        return (props.kpiTemplates?.PENAMBAHAN && props.kpiTemplates.PENAMBAHAN.length > 0)
+            ? props.kpiTemplates.PENAMBAHAN
+            : defaultKpiTemplates.PENAMBAHAN;
+    }
+    return [];
+});
+
+const getCategoryIcon = (catId) => {
+    switch (catId) {
+        case 'KERAMAHAN': return HeartHandshake;
+        case 'KEDISIPLINAN': return Clock;
+        case 'SOP_PELAYANAN': return ClipboardCheck;
+        case 'INTEGRITAS': return ShieldCheck;
+        default: return ShieldCheck;
+    }
+};
+
+const getKpiCategoryName = (catId) => {
+    const found = defaultKpiCategories.find(c => c.id === catId);
+    return found ? found.name : (catId || '-');
+};
+
+const selectedKpiCategory = ref(
+    report.value?.verified_kpi_category || 
+    (defaultActionType.value === 'PEMOTONGAN' || defaultActionType.value === 'PENAMBAHAN' ? aiRecommendedCategory.value : '')
+);
+
+const selectedSeverity = ref(
+    report.value?.verified_severity_level || 
+    (defaultActionType.value === 'PEMOTONGAN' ? 'SEDANG' : (defaultActionType.value === 'PENAMBAHAN' ? 'BINTANG' : ''))
+);
+
+const selectedKpiCategoryObj = computed(() => {
+    return defaultKpiCategories.find(c => c.id === selectedKpiCategory.value) || null;
+});
+
+const selectedSeverityObj = computed(() => {
+    return activeSeverityTemplates.value.find(t => t.severity === selectedSeverity.value) || null;
+});
+
+const selectSeverityPreset = (template) => {
+    if (isVerified.value) return;
+    selectedSeverity.value = template.severity;
+    if (template.points !== null) {
+        pointValue.value = template.points;
+    }
+};
+
+const checkMatchingSeverity = () => {
+    const templates = activeSeverityTemplates.value;
+    const matched = templates.find(t => t.points === pointValue.value);
+    if (matched) {
+        selectedSeverity.value = matched.severity;
+    } else {
+        selectedSeverity.value = 'CUSTOM';
+    }
+};
 
 // Attachment Upload State (Bisa multiple, dibatasi 1 file saat ini untuk kemudahan ekspansi mendatang)
 const MAX_ATTACHMENTS = 1;
@@ -290,12 +458,12 @@ const getEffectiveStaffList = () => {
     const list = (props.staffList && props.staffList.length > 0) 
         ? props.staffList 
         : (props.staffMembers || []);
-    // Jika laporan belum diverifikasi dan jenis tindakan NETRAL, jangan checklist staf bertugas
-    const isNeutral = !isVerified.value && actionType.value === 'NETRAL';
+    // Jika laporan belum diverifikasi dan jenis tindakan NETRAL atau DIBATALKAN, jangan checklist staf bertugas
+    const isNeutralOrCancelled = !isVerified.value && (actionType.value === 'NETRAL' || actionType.value === 'DIBATALKAN');
     return list.map(s => ({ 
         ...s, 
         selected_default: s.selected || false,
-        selected: isNeutral ? false : (s.selected || false) 
+        selected: isNeutralOrCancelled ? false : (s.selected || false) 
     }));
 };
 
@@ -321,9 +489,9 @@ const isDispatchedToPesupeluh = computed(() => {
     return !!pesupeluhTicketNumber.value || !!props.reportDetail?.pesupeluh_ticket_number || (forwardToPesupeluh.value && actionType.value === 'NETRAL') || alreadyDispatchedToPesupeluh.value;
 });
 
-// Ketika jenis tindakan diubah: jika NETRAL auto jangan checklist staf bertugas
+// Ketika jenis tindakan diubah: jika NETRAL atau DIBATALKAN auto bersihkan checklist staf bertugas & KPI kategori
 watch(actionType, (newAction) => {
-    if (newAction === 'NETRAL') {
+    if (newAction === 'NETRAL' || newAction === 'DIBATALKAN') {
         // Otomatis bersihkan checklist staf bertugas
         if (!isVerified.value) {
             staffList.value.forEach(s => {
@@ -331,12 +499,23 @@ watch(actionType, (newAction) => {
             });
         }
         pointValue.value = 0;
-        if (!alreadyDispatchedToPesupeluh.value) {
+        selectedKpiCategory.value = '';
+        selectedSeverity.value = '';
+        if (newAction === 'NETRAL' && !alreadyDispatchedToPesupeluh.value) {
             forwardToPesupeluh.value = true;
+        } else {
+            forwardToPesupeluh.value = false;
         }
     } else {
         forwardToPesupeluh.value = false;
-        if (pointValue.value === 0) {
+        if (!selectedKpiCategory.value) {
+            selectedKpiCategory.value = report.value?.verified_kpi_category || aiRecommendedCategory.value || 'KERAMAHAN';
+        }
+        if (newAction === 'PEMOTONGAN') {
+            selectedSeverity.value = 'SEDANG';
+            pointValue.value = 5;
+        } else if (newAction === 'PENAMBAHAN') {
+            selectedSeverity.value = 'BINTANG';
             pointValue.value = 5;
         }
         // Jika beralih kembali ke Tambah/Potong poin dan belum ada staf terpilih, pulihkan centang staf yang bertugas saat kejadian
@@ -398,7 +577,7 @@ const getInitialCategoryId = () => {
 };
 
 const pesupeluhCategoryId = ref(getInitialCategoryId());
-const pesupeluhPriority = ref(report.value?.ai_urgency === 'TINGGI' || report.value?.priority === 'HIGH' ? 'URGENT' : 'ROUTINE');
+const pesupeluhPriority = ref(report.value?.ai_urgency === 'TINGGI' || report.value?.ai_urgency === 'KRITIS' ? 'URGENT' : 'ROUTINE');
 
 // Smart initial room matching
 const getInitialRoomId = () => {
@@ -489,6 +668,7 @@ const incrementPoint = () => {
     if (isVerified.value) return;
     if (pointValue.value < 100) {
         pointValue.value++;
+        checkMatchingSeverity();
     }
 };
 
@@ -496,6 +676,7 @@ const decrementPoint = () => {
     if (isVerified.value) return;
     if (pointValue.value > 1) {
         pointValue.value--;
+        checkMatchingSeverity();
     }
 };
 
@@ -504,7 +685,28 @@ const selectedStaffList = computed(() => staffList.value.filter(s => s.selected)
 const submitVerification = () => {
     if (isVerified.value || isSubmitting.value) return;
     
-    if (actionType.value !== 'NETRAL' && selectedStaffList.value.length === 0 && staffList.value.length > 0) {
+    if (!supervisorNotes.value || !supervisorNotes.value.trim()) {
+        if (actionType.value === 'DIBATALKAN') {
+            validationTitle.value = 'Alasan Pembatalan Wajib Diisi';
+            validationMessage.value = 'Mohon cantumkan alasan atau hasil pengecekan langsung di lapangan kenapa laporan ini tidak diterima atau dibatalkan.';
+        } else {
+            validationTitle.value = 'Catatan Berita Acara Wajib Diisi';
+            validationMessage.value = 'Mohon cantumkan catatan berita acara, klarifikasi kronologi kejadian, atau tindak lanjut evaluasi sebelum memverifikasi laporan.';
+        }
+        showValidationModal.value = true;
+        return;
+    }
+
+    if ((actionType.value === 'PEMOTONGAN' || actionType.value === 'PENAMBAHAN') && !selectedKpiCategory.value) {
+        validationTitle.value = 'Pilih Kategori Standar KPI';
+        validationMessage.value = 'Mohon tentukan pilar kategori standar KPI rumah sakit (Keramahan, Kedisiplinan, Kepatuhan SOP, atau Integritas) sebelum memverifikasi evaluasi/apresiasi staf.';
+        showValidationModal.value = true;
+        return;
+    }
+
+    if ((actionType.value === 'PEMOTONGAN' || actionType.value === 'PENAMBAHAN') && selectedStaffList.value.length === 0 && staffList.value.length > 0) {
+        validationTitle.value = 'Pilih Staf Bertugas';
+        validationMessage.value = 'Mohon centang setidaknya 1 staf yang bertugas saat kejadian untuk mengaitkan poin KPI evaluasi/apresiasi.';
         showValidationModal.value = true;
         return;
     }
@@ -519,18 +721,22 @@ const confirmAndExecute = () => {
 
 const executeSubmit = () => {
     isSubmitting.value = true;
-    const selectedIds = selectedStaffList.value.map(s => s.id);
+    const selectedIds = (actionType.value === 'PEMOTONGAN' || actionType.value === 'PENAMBAHAN')
+        ? selectedStaffList.value.map(s => s.id)
+        : [];
 
     router.post(route('kasi.verify.process', { id: report.value.id }), {
         selected_staff_ids: selectedIds,
         action_type: actionType.value,
-        points: actionType.value === 'NETRAL' ? 0 : pointValue.value,
+        kpi_category: (actionType.value === 'PEMOTONGAN' || actionType.value === 'PENAMBAHAN') ? selectedKpiCategory.value : null,
+        severity_level: (actionType.value === 'PEMOTONGAN' || actionType.value === 'PENAMBAHAN') ? selectedSeverity.value : null,
+        points: (actionType.value === 'NETRAL' || actionType.value === 'DIBATALKAN') ? 0 : pointValue.value,
         supervisor_notes: supervisorNotes.value,
         forward_to_pesupeluh: actionType.value === 'NETRAL' ? forwardToPesupeluh.value : false,
         pesupeluh_category_id: pesupeluhCategoryId.value,
         pesupeluh_room_id: pesupeluhRoomId.value,
         pesupeluh_priority: pesupeluhPriority.value,
-        attachments: verificationFiles.value.map(f => f.file),
+        attachments: (actionType.value === 'PEMOTONGAN' || actionType.value === 'PENAMBAHAN') ? verificationFiles.value.map(f => f.file) : [],
     }, {
         preserveScroll: true,
         onSuccess: (page) => {
@@ -615,10 +821,12 @@ const finishVerification = () => {
                         <span :class="[
                             'px-3.5 py-1.5 rounded-xl text-xs font-bold',
                             report.status === 'VERIFIED'
-                                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+                                ? (actionType === 'DIBATALKAN'
+                                    ? 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300 border border-slate-300 dark:border-slate-700'
+                                    : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800')
                                 : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-200 dark:border-amber-800'
                         ]">
-                            {{ report.status === 'VERIFIED' ? '✓ Telah Diverifikasi' : 'Menunggu Verifikasi Kasi' }}
+                            {{ report.status === 'VERIFIED' ? (actionType === 'DIBATALKAN' ? '✓ Dibatalkan / Gugur (Tidak Sesuai Fakta)' : '✓ Telah Diverifikasi') : 'Menunggu Verifikasi Kasi' }}
                         </span>
                     </div>
                 </div>
@@ -626,13 +834,13 @@ const finishVerification = () => {
                 <!-- Stacked Containers Layout (Tumpukan Atas ke Bawah) -->
                 <div class="space-y-4">
                     
-                    <!-- Top Row: Dua Kontainer Mandiri Berdampingan (Tanpa Container di dalam Container) -->
-                    <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+                    <!-- Top Row: Dua Kontainer Mandiri Berdampingan (Tinggi Seimbang & Dinamis di Desktop) -->
+                    <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
                         
                         <!-- 1. Container: Data & Uraian Aduan Pasien (8 Kolom) -->
-                        <div class="lg:col-span-8 bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden divide-y divide-slate-100 dark:divide-slate-800">
+                        <div class="lg:col-span-8 bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden divide-y divide-slate-100 dark:divide-slate-800 flex flex-col h-full">
                             <!-- Header Kontainer -->
-                            <div class="p-4 sm:p-5 bg-slate-50/60 dark:bg-slate-950/60 flex items-center justify-between gap-3">
+                            <div class="p-4 sm:p-5 bg-slate-50/60 dark:bg-slate-950/60 flex items-center justify-between gap-3 shrink-0">
                                 <h3 class="text-xs font-extrabold uppercase tracking-wider text-slate-900 dark:text-white">
                                     Data & Uraian Aduan
                                 </h3>
@@ -645,117 +853,155 @@ const finishVerification = () => {
                             </div>
 
                             <!-- Section 1: Identitas & Kontak Pelapor -->
-                            <div class="p-4 sm:p-5 space-y-2">
+                            <div class="p-4 sm:p-5 space-y-2 shrink-0">
                                 <span class="text-[11px] font-medium text-slate-400 dark:text-slate-500 block">Identitas & Kontak Pelapor</span>
                                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                                     <div class="p-3 bg-slate-50/70 dark:bg-slate-950/50 rounded-xl border border-slate-200/70 dark:border-slate-800/80 space-y-1">
                                         <span class="text-[10px] text-slate-400 dark:text-slate-500 block">Nama Pasien</span>
-                                        <div class="text-xs font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                                            <div class="h-5 w-5 rounded-full bg-slate-200/80 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center text-[10px] font-medium">
+                                        <div class="h-6 text-xs font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                                            <div class="h-5 w-5 rounded-full bg-slate-200/80 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center text-[10px] font-medium shrink-0">
                                                 {{ report.reporter_name.charAt(0) }}
                                             </div>
-                                            <span>{{ report.reporter_name }}</span>
+                                            <span class="truncate">{{ report.reporter_name }}</span>
                                         </div>
                                     </div>
 
                                     <div class="p-3 bg-slate-50/70 dark:bg-slate-950/50 rounded-xl border border-slate-200/70 dark:border-slate-800/80 space-y-1">
                                         <span class="text-[10px] text-slate-400 dark:text-slate-500 block">No. WhatsApp / Telepon</span>
-                                        <div v-if="report.reporter_phone" class="text-xs font-semibold text-slate-800 dark:text-slate-100">
-                                            {{ report.reporter_phone }}
+                                        <div class="h-6 text-xs font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                                            <Phone class="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                            <span v-if="report.reporter_phone" class="truncate">{{ report.reporter_phone }}</span>
+                                            <span v-else class="text-slate-400 italic">Tidak dicantumkan</span>
                                         </div>
-                                        <span v-else class="text-xs text-slate-400 italic">Tidak dicantumkan</span>
                                     </div>
                                 </div>
                             </div>
 
-                            <!-- Section 2: Rincian Teks Aduan Pasien -->
-                            <div class="p-4 sm:p-5 space-y-2">
-                                <span class="text-[11px] font-medium text-slate-400 dark:text-slate-500 block">Rincian Teks Aduan Pasien</span>
-                                <div class="bg-slate-50/70 dark:bg-slate-950/50 p-3.5 sm:p-4 rounded-xl border border-slate-200/70 dark:border-slate-800/80 text-slate-800 dark:text-slate-200 text-xs sm:text-sm leading-relaxed font-normal">
-                                    "{{ report.isi_laporan }}"
-                                </div>
-                            </div>
-
-                            <!-- Section 3: Parameter & Lokasi Aduan -->
-                            <div class="p-4 sm:p-5 space-y-2">
-                                <span class="text-[11px] font-medium text-slate-400 dark:text-slate-500 block">Parameter & Lokasi Aduan</span>
+                            <!-- Section 2: Parameter & Lokasi Kejadian (Ukuran Presisi Sama dengan Identitas Pelapor) -->
+                            <div class="p-4 sm:p-5 space-y-2 shrink-0">
+                                <span class="text-[11px] font-medium text-slate-400 dark:text-slate-500 block">Parameter & Lokasi Kejadian</span>
                                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                                     <!-- Ruangan / Instalasi -->
                                     <div class="p-3 bg-slate-50/70 dark:bg-slate-950/50 rounded-xl border border-slate-200/70 dark:border-slate-800/80 space-y-1">
                                         <span class="text-[10px] text-slate-400 dark:text-slate-500 block">Ruangan / Instalasi</span>
-                                        <div class="text-xs font-semibold text-slate-800 dark:text-slate-100 truncate">
-                                            {{ report.unit }}
+                                        <div class="h-6 text-xs font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                                            <Building2 class="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                            <span class="truncate" :title="report.unit">{{ report.unit }}</span>
                                         </div>
                                     </div>
 
                                     <!-- Sasaran Aduan / Petugas / Loket -->
                                     <div class="p-3 bg-slate-50/70 dark:bg-slate-950/50 rounded-xl border border-slate-200/70 dark:border-slate-800/80 space-y-1">
                                         <span class="text-[10px] text-slate-400 dark:text-slate-500 block">Sasaran / Petugas</span>
-                                        <div class="text-xs font-semibold text-slate-800 dark:text-slate-100 truncate">
-                                            {{ report.target_object || 'Pelayanan Umum / Semua Staf' }}
+                                        <div class="h-6 text-xs font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                                            <User class="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                            <span class="truncate" :title="report.target_object || 'Pelayanan Umum / Semua Staf'">
+                                                {{ report.target_object || 'Pelayanan Umum / Semua Staf' }}
+                                            </span>
                                         </div>
                                     </div>
 
-                                    <!-- Waktu & Tanggal Laporan -->
+                                    <!-- Waktu Aduan -->
                                     <div class="p-3 bg-slate-50/70 dark:bg-slate-950/50 rounded-xl border border-slate-200/70 dark:border-slate-800/80 space-y-1">
                                         <span class="text-[10px] text-slate-400 dark:text-slate-500 block">Waktu Aduan</span>
-                                        <div class="text-xs font-semibold text-slate-800 dark:text-slate-100">
-                                            {{ report.timestamp }}
+                                        <div class="h-6 text-xs font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                                            <Calendar class="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                            <span class="truncate">{{ report.timestamp }}</span>
                                         </div>
                                     </div>
 
-                                    <!-- Tingkat Prioritas -->
+                                    <!-- Waktu Relatif / Diterima -->
                                     <div class="p-3 bg-slate-50/70 dark:bg-slate-950/50 rounded-xl border border-slate-200/70 dark:border-slate-800/80 space-y-1">
-                                        <span class="text-[10px] text-slate-400 dark:text-slate-500 block">Tingkat Prioritas</span>
-                                        <div>
-                                            <span :class="[
-                                                'px-2 py-0.5 rounded text-[11px] font-semibold',
-                                                report.priority === 'HIGH' ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300' : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
-                                            ]">
-                                                {{ report.priority === 'HIGH' ? 'Prioritas Tinggi' : 'Prioritas Standar' }}
-                                            </span>
+                                        <span class="text-[10px] text-slate-400 dark:text-slate-500 block">Waktu Relatif</span>
+                                        <div class="h-6 text-xs font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                                            <Clock class="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                            <span class="truncate">{{ report.created_at_human || 'Baru saja' }}</span>
                                         </div>
                                     </div>
                                 </div>
                             </div>
 
-                            <!-- Section 4: Lampiran Foto / Bukti -->
-                            <div class="p-4 sm:p-5 space-y-2">
-                                <div class="flex items-center justify-between">
-                                    <span class="text-[11px] font-medium text-slate-400 dark:text-slate-500">Lampiran Foto & Bukti</span>
-                                    <span class="text-[10px] text-slate-400">
-                                        {{ report.attachments.length }} Berkas
+                            <!-- Section 3: Rincian Teks Aduan Pasien (Dinamis Memanjang Mengikuti Ruang Kontainer) -->
+                            <div class="p-4 sm:p-5 space-y-2 flex-1 flex flex-col min-h-0">
+                                <span class="text-[11px] font-medium text-slate-400 dark:text-slate-500 block shrink-0">Rincian Teks Aduan Pasien</span>
+                                <div class="bg-slate-50/70 dark:bg-slate-950/50 p-3.5 sm:p-4 rounded-xl border border-slate-200/70 dark:border-slate-800/80 text-slate-800 dark:text-slate-200 text-xs sm:text-sm leading-relaxed font-normal flex-1 flex flex-col justify-start min-h-[100px] overflow-y-auto whitespace-pre-line break-words">
+                                    "{{ report.isi_laporan }}"
+                                </div>
+                            </div>
+
+                            <!-- Section 4: Lampiran Foto & Bukti (Compact & Rapi) -->
+                            <div class="p-4 sm:p-5 space-y-2 shrink-0">
+                                <div class="flex items-center justify-between shrink-0">
+                                    <span class="text-[11px] font-medium text-slate-400 dark:text-slate-500 block">Lampiran Foto & Bukti</span>
+                                    <span v-if="report.attachments && report.attachments.length > 0" class="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-200/60 dark:border-emerald-800/60">
+                                        {{ report.attachments.length }} Berkas Bukti
                                     </span>
                                 </div>
 
-                                <div v-if="report.attachments.length > 0" class="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-                                    <div
-                                        v-for="att in report.attachments"
+                                <!-- Jika Ada Lampiran: Kartu Media Horizontal Bersih & Proporsional -->
+                                <div v-if="report.attachments && report.attachments.length > 0" class="space-y-2">
+                                    <div 
+                                        v-for="att in report.attachments" 
                                         :key="att.id"
-                                        class="group relative rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-slate-950 aspect-video flex items-center justify-center cursor-pointer"
-                                        @click="selectedImagePreview = att.url"
+                                        class="flex items-center justify-between gap-3 p-3 bg-slate-50/80 dark:bg-slate-950/60 hover:bg-slate-100/80 dark:hover:bg-slate-800/60 border border-slate-200/80 dark:border-slate-800 rounded-xl transition group"
                                     >
-                                        <img
-                                            :src="att.url"
-                                            :alt="att.file_name"
-                                            class="w-full h-full object-cover group-hover:scale-105 transition duration-200"
-                                        />
-                                        <div class="absolute inset-0 bg-slate-950/50 opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-white gap-1.5 text-xs font-medium">
-                                            <Maximize2 class="h-3.5 w-3.5" />
-                                            <span>Perbesar</span>
+                                        <div class="flex items-center gap-3 min-w-0">
+                                            <!-- Mini Thumbnail Landscape yang Jelas & Rapi -->
+                                            <div 
+                                                class="relative h-14 w-22 sm:h-16 sm:w-24 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-900 shrink-0 cursor-pointer shadow-xs"
+                                                @click="selectedImagePreview = att.url"
+                                                :title="`Klik untuk memperbesar: ${att.file_name}`"
+                                            >
+                                                <img :src="att.url" :alt="att.file_name" class="w-full h-full object-cover group-hover:scale-105 transition duration-200" />
+                                                <div class="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white backdrop-blur-[1px]">
+                                                    <Maximize2 class="h-4 w-4" />
+                                                </div>
+                                            </div>
+
+                                            <!-- Detail Nama Berkas & Keterangan -->
+                                            <div class="space-y-1 min-w-0">
+                                                <p 
+                                                    class="text-xs font-bold text-slate-800 dark:text-slate-100 truncate group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition cursor-pointer"
+                                                    :title="att.file_name"
+                                                    @click="selectedImagePreview = att.url"
+                                                >
+                                                    {{ att.file_name }}
+                                                </p>
+                                                <div class="flex items-center gap-2 text-[11px] text-slate-400">
+                                                    <span class="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-semibold">
+                                                        <CheckCircle2 class="h-3 w-3 shrink-0" />
+                                                        Foto Bukti Pelapor
+                                                    </span>
+                                                    <span>•</span>
+                                                    <span>Klik foto untuk perbesar</span>
+                                                </div>
+                                            </div>
                                         </div>
+
+                                        <!-- Tombol Perbesar / Buka Foto -->
+                                        <button
+                                            type="button"
+                                            @click="selectedImagePreview = att.url"
+                                            class="shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold bg-white dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 hover:text-emerald-700 dark:hover:text-emerald-300 border border-slate-200 dark:border-slate-700 shadow-2xs transition flex items-center gap-1.5 cursor-pointer"
+                                        >
+                                            <Maximize2 class="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                                            <span class="hidden sm:inline">Perbesar</span>
+                                        </button>
                                     </div>
                                 </div>
-                                <div v-else class="py-2.5 text-center text-slate-400 bg-slate-50/70 dark:bg-slate-950/50 rounded-xl border border-slate-200/70 dark:border-slate-800/80 text-xs">
-                                    <span>Pelapor tidak menyertakan foto lampiran.</span>
+
+                                <!-- Jika Tidak Ada Lampiran: Clean placeholder yang compact -->
+                                <div v-else class="py-3 px-4 text-center text-slate-400 dark:text-slate-500 bg-slate-50/60 dark:bg-slate-950/40 rounded-xl border border-dashed border-slate-200/90 dark:border-slate-800/80 text-xs flex items-center justify-center gap-2">
+                                    <Image class="h-4 w-4 text-slate-300 dark:text-slate-600 shrink-0" />
+                                    <span>Pelapor tidak menyertakan foto lampiran berkas.</span>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- 2. Container: Hasil Analisis AI Pintar (4 Kolom - Lebih Ramping & Ditumpuk) -->
-                        <div class="lg:col-span-4 bg-white dark:bg-slate-900 border border-emerald-300/80 dark:border-emerald-800/80 rounded-2xl shadow-sm overflow-hidden divide-y divide-emerald-100 dark:divide-slate-800 relative">
+                        <!-- 2. Container: Hasil Analisis AI Pintar (4 Kolom - Seimbang & Sama Tinggi dengan Kontainer Kiri) -->
+                        <div class="lg:col-span-4 bg-white dark:bg-slate-900 border border-emerald-300/80 dark:border-emerald-800/80 rounded-2xl shadow-sm overflow-hidden divide-y divide-emerald-100 dark:divide-slate-800 relative flex flex-col h-full">
                             <!-- Header Hijau Solid yang Keren & Jelas -->
-                            <div class="p-4 sm:p-5 bg-emerald-600 dark:bg-emerald-700 text-white flex items-center justify-between gap-3 shadow-xs">
+                            <div class="p-4 sm:p-5 bg-emerald-600 dark:bg-emerald-700 text-white flex items-center justify-between gap-3 shadow-xs shrink-0">
                                 <div class="flex items-center gap-2.5">
                                     <div class="h-7 w-7 rounded-lg bg-white/20 text-white flex items-center justify-center shrink-0">
                                         <Sparkles class="h-3.5 w-3.5" />
@@ -776,9 +1022,9 @@ const finishVerification = () => {
                             </div>
 
                             <!-- Body Analisis AI -->
-                            <div class="p-4 sm:p-5 space-y-4">
+                            <div class="p-4 sm:p-5 space-y-4 flex-1 flex flex-col">
                                 <!-- 4 Kartu Metrik AI Ditumpuk Vertikal (1 Kolom) -->
-                                <div class="grid grid-cols-1 gap-2.5">
+                                <div class="grid grid-cols-1 gap-2.5 shrink-0">
                                     <!-- Metrik 1: Sentimen AI -->
                                     <div class="bg-slate-50/70 dark:bg-slate-950/50 hover:bg-slate-100/70 dark:hover:bg-slate-800/50 border border-slate-200/80 dark:border-slate-800 rounded-xl p-3 transition space-y-1">
                                         <span class="text-[10px] text-slate-500 dark:text-slate-400 block font-normal">Sentimen Pasien</span>
@@ -839,22 +1085,24 @@ const finishVerification = () => {
                                 </div>
 
                                 <!-- Box Rekomendasi Solusi & Arahan AI -->
-                                <div v-if="report.ai_recommendation" class="bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-200/80 dark:border-emerald-500/30 rounded-xl p-4 space-y-2">
-                                    <div class="flex items-center gap-1.5 text-emerald-800 dark:text-emerald-400 font-semibold text-[11px]">
-                                        <Sparkles class="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                                        <span>Rekomendasi Solusi & Evaluasi:</span>
+                                <div v-if="report.ai_recommendation" class="bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-200/80 dark:border-emerald-500/30 rounded-xl p-4 space-y-2 flex-1 flex flex-col justify-between">
+                                    <div class="space-y-2">
+                                        <div class="flex items-center gap-1.5 text-emerald-800 dark:text-emerald-400 font-semibold text-[11px] shrink-0">
+                                            <Sparkles class="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                            <span>Rekomendasi Solusi & Evaluasi:</span>
+                                        </div>
+                                        <p class="text-xs text-slate-700 dark:text-slate-200 leading-relaxed font-normal">
+                                            {{ report.ai_recommendation }}
+                                        </p>
                                     </div>
-                                    <p class="text-xs text-slate-700 dark:text-slate-200 leading-relaxed font-normal">
-                                        {{ report.ai_recommendation }}
-                                    </p>
-                                    <div v-if="report.ai_summary" class="pt-2 border-t border-emerald-200/80 dark:border-emerald-500/20 text-[11px] text-slate-500 dark:text-slate-400 font-normal">
+                                    <div v-if="report.ai_summary" class="pt-2 border-t border-emerald-200/80 dark:border-emerald-500/20 text-[11px] text-slate-500 dark:text-slate-400 font-normal mt-auto">
                                         <span class="font-medium text-emerald-900/80 dark:text-emerald-300">Ringkasan AI:</span> {{ report.ai_summary }}
                                     </div>
                                 </div>
                             </div>
 
                             <!-- Bottom Bar / Footer Analisis AI -->
-                            <div class="px-4 py-2.5 bg-slate-50/80 dark:bg-slate-950/60 flex items-center gap-2">
+                            <div class="px-4 py-2.5 bg-slate-50/80 dark:bg-slate-950/60 flex items-center gap-2 shrink-0 mt-auto">
                                 <ShieldCheck class="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
                                 <p class="text-[10.5px] text-slate-500 dark:text-slate-400 italic leading-snug">
                                     Diproses otomatis oleh <span class="font-semibold not-italic text-slate-700 dark:text-slate-300">{{ report.ai_provider || 'Groq AI (Llama-3)' }}</span> sebagai validasi bukti telaah aduan.
@@ -864,137 +1112,35 @@ const finishVerification = () => {
 
                     </div>
 
-                    <!-- 2. Container: Shift Staff Matching Card -->
+                    <!-- 2. Container: Eksekusi Poin KPI & Berita Acara (Dengan Pencocokan Staf Terpadu) -->
                     <div class="bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden divide-y divide-slate-100 dark:divide-slate-800">
-                            
-                            <!-- Staff Matching Container Header -->
-                            <div class="p-4 sm:p-5 bg-slate-50/60 dark:bg-slate-950/60 flex flex-wrap items-center justify-between gap-3">
-                                <h3 class="text-xs font-extrabold uppercase tracking-wider text-slate-900 dark:text-white">
-                                    Pencocokan Staf Bertugas
-                                </h3>
-                                <span class="px-2.5 py-1 rounded-lg text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
-                                    <Clock class="h-3 w-3 text-slate-400" />
-                                    <span>{{ report.created_at_time || report.timestamp }}</span>
-                                </span>
-                            </div>
-
-                            <!-- Staff Matching Container Body -->
-                            <div class="p-4 sm:p-5 space-y-3">
-                                <p v-if="isVerified" class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed font-normal">
-                                    Daftar staf unit yang telah ditautkan dan dievaluasi pada verifikasi laporan ini:
-                                </p>
-                                <div v-else-if="actionType === 'NETRAL'" class="p-2.5 rounded-xl bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/50 flex items-center gap-2.5 text-xs text-blue-700 dark:text-blue-300">
-                                    <Info class="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
-                                    <span class="font-medium">Tindakan KPI Netral (0 Poin): Pencocokan staf bertugas dinonaktifkan (disabled) karena tidak ada evaluasi poin reward/punishment staf.</span>
-                                </div>
-                                <p v-else class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed font-normal">
-                                    Centang staf yang bertugas saat aduan terjadi untuk verifikasi & evaluasi poin KPI (otomatis ditandai dari data Presensi Masuk):
-                                </p>
-
-                                <!-- Staff List Checkbox Grid -->
-                                <div v-if="staffList.length > 0" class="space-y-2 max-h-60 overflow-y-auto pr-1">
-                                    <label
-                                        v-for="staff in staffList"
-                                        :key="staff.id"
-                                        @click="(isVerified || actionType === 'NETRAL') ? $event.preventDefault() : null"
-                                        :class="[
-                                            'flex items-center justify-between p-3 rounded-xl border select-none transition',
-                                            isVerified
-                                                ? (staff.selected 
-                                                    ? (actionType === 'PEMOTONGAN' 
-                                                        ? 'cursor-not-allowed bg-rose-50/70 border-rose-300 dark:bg-rose-950/30 dark:border-rose-800/80' 
-                                                        : (actionType === 'NETRAL' 
-                                                            ? 'cursor-not-allowed bg-blue-50/70 border-blue-300 dark:bg-blue-950/30 dark:border-blue-800/80' 
-                                                            : 'cursor-not-allowed bg-emerald-50/70 border-emerald-300 dark:bg-emerald-950/30 dark:border-emerald-800/80'))
-                                                    : 'cursor-not-allowed opacity-50 bg-slate-100/50 dark:bg-slate-900/30 border-slate-200 dark:border-slate-800')
-                                                : (actionType === 'NETRAL' 
-                                                    ? 'cursor-not-allowed opacity-60 bg-slate-100/70 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800' 
-                                                    : (staff.selected 
-                                                        ? (actionType === 'PEMOTONGAN'
-                                                            ? 'cursor-pointer bg-rose-50/80 border-rose-500 dark:bg-rose-950/40 dark:border-rose-700'
-                                                            : 'cursor-pointer bg-emerald-50/80 border-emerald-500 dark:bg-emerald-950/40 dark:border-emerald-700')
-                                                        : 'cursor-pointer bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 hover:border-slate-300'))
-                                        ]"
-                                    >
-                                        <div class="flex items-center gap-3">
-                                            <input
-                                                type="checkbox"
-                                                v-model="staff.selected"
-                                                :disabled="isVerified || actionType === 'NETRAL'"
-                                                :class="[
-                                                    'rounded h-4 w-4 disabled:cursor-not-allowed',
-                                                    actionType === 'PEMOTONGAN'
-                                                        ? 'text-rose-600 focus:ring-rose-500 accent-rose-600'
-                                                        : 'text-emerald-600 focus:ring-emerald-500 accent-emerald-600'
-                                                ]"
-                                            />
-                                            <div>
-                                                <div class="flex items-center gap-1.5 flex-wrap">
-                                                    <span class="text-xs font-semibold text-slate-800 dark:text-slate-100">{{ staff.name }}</span>
-                                                    <span
-                                                        v-if="staff.attendance_type === 'ACTIVE_AT_REPORT'"
-                                                        class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800"
-                                                        title="Tercatat berdinas saat jam aduan diterima"
-                                                    >
-                                                        ✓ On-Duty saat Kejadian
-                                                    </span>
-                                                    <span
-                                                        v-else-if="staff.attendance_type === 'TODAY'"
-                                                        class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-800"
-                                                    >
-                                                        Hadir Hari Ini
-                                                    </span>
-                                                </div>
-                                                <div class="text-[10px] text-slate-500 dark:text-slate-400 font-normal mt-0.5">
-                                                    {{ staff.role }} • NIP: {{ staff.nip }}
-                                                    <span v-if="staff.clock_in_time" class="ml-1 text-slate-400">
-                                                        (Presensi: {{ staff.clock_in_time }})
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div class="text-right flex-shrink-0">
-                                            <span class="text-[11px] font-semibold block" :class="actionType === 'PEMOTONGAN' && isVerified ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'">
-                                                {{ staff.total_points }} Poin
-                                            </span>
-                                            <span v-if="staff.selected" class="text-[10px] font-semibold" :class="actionType === 'PEMOTONGAN' ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'">
-                                                {{ isVerified ? (actionType === 'PEMOTONGAN' ? `Dievaluasi (-${pointValue})` : (actionType === 'NETRAL' ? 'Tercatat (0 Poin)' : `Diberi Reward (+${pointValue})`)) : 'Terpilih' }}
-                                            </span>
-                                        </div>
-                                    </label>
-                                </div>
-
-                                <!-- If No Staff Registered in this Unit -->
-                                <div v-else class="text-center py-6 border border-dashed border-slate-200 dark:border-slate-800 rounded-xl space-y-2">
-                                    <div class="h-9 w-9 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mx-auto">
-                                        <Users class="h-4 w-4" />
-                                    </div>
-                                    <p class="text-[11px] text-slate-400 dark:text-slate-500 font-normal">
-                                        Belum ada staf terdaftar di unit {{ report.unit }}.
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- 3. Container: KPI Point Execution & Supervisor Notes Form -->
-                        <div class="bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden divide-y divide-slate-100 dark:divide-slate-800">
                             
                             <!-- KPI Form Container Header -->
                             <div class="p-4 sm:p-5 bg-slate-50/60 dark:bg-slate-950/60 flex items-center justify-between gap-3">
                                 <h3 class="text-xs font-extrabold uppercase tracking-wider text-slate-900 dark:text-white">
                                     Eksekusi Poin KPI & Berita Acara
                                 </h3>
-                                <span v-if="isVerified" :class="[
-                                    'px-2.5 py-1 rounded-lg text-[10px] font-semibold flex items-center gap-1 shrink-0 border',
-                                    actionType === 'PEMOTONGAN' 
-                                        ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border-rose-300 dark:border-rose-800' 
-                                        : (actionType === 'NETRAL'
-                                            ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 border-blue-300 dark:border-blue-800'
-                                            : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800')
-                                ]">
-                                    <Check class="h-3 w-3" />
-                                    <span>Telah Dieksekusi ({{ actionType === 'PEMOTONGAN' ? 'Potong Poin' : (actionType === 'NETRAL' ? 'Netral' : 'Tambah Poin') }})</span>
-                                </span>
+                                <div v-if="isVerified" class="flex items-center gap-1.5 flex-wrap">
+                                    <span v-if="report.verified_kpi_category" class="px-2.5 py-1 rounded-lg text-[10px] font-semibold flex items-center gap-1 shrink-0 border bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 border-slate-200 dark:border-slate-700 shadow-2xs">
+                                        <component :is="getCategoryIcon(report.verified_kpi_category)" class="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+                                        <span>{{ getKpiCategoryName(report.verified_kpi_category) }}</span>
+                                        <span v-if="report.verified_severity_level" class="text-slate-400 dark:text-slate-500 font-normal">({{ getSeverityLabel(report.verified_severity_level) }})</span>
+                                    </span>
+                                    <span :class="[
+                                        'px-2.5 py-1 rounded-lg text-[10px] font-semibold flex items-center gap-1 shrink-0 border',
+                                        actionType === 'PEMOTONGAN' 
+                                            ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border-rose-300 dark:border-rose-800' 
+                                            : (actionType === 'NETRAL'
+                                                ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 border-blue-300 dark:border-blue-800'
+                                                : (actionType === 'DIBATALKAN'
+                                                    ? 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300 border-slate-300 dark:border-slate-700'
+                                                    : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800'))
+                                    ]">
+                                        <Ban v-if="actionType === 'DIBATALKAN'" class="h-3 w-3 text-slate-600 dark:text-slate-300" />
+                                        <Check v-else class="h-3 w-3" />
+                                        <span>{{ actionType === 'DIBATALKAN' ? 'Telah Dibatalkan / Gugur' : `Telah Dieksekusi (${actionType === 'PEMOTONGAN' ? 'Potong Poin' : (actionType === 'NETRAL' ? 'Netral' : 'Tambah Poin')})` }}</span>
+                                    </span>
+                                </div>
                                 <span v-else class="px-2.5 py-1 rounded-lg text-[10px] font-semibold bg-emerald-50 text-emerald-700 dark:bg-white/10 dark:text-white shrink-0">
                                     Poin KPI
                                 </span>
@@ -1005,7 +1151,7 @@ const finishVerification = () => {
                                 <!-- Action Type Selector -->
                                 <div class="space-y-1.5">
                                     <label class="text-[11px] font-medium text-slate-400 dark:text-slate-500 block">Jenis Tindakan KPI:</label>
-                                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
                                          <button
                                             type="button"
                                             :disabled="isVerified"
@@ -1053,75 +1199,454 @@ const finishVerification = () => {
                                             <ShieldCheck :class="['h-4 w-4 sm:h-3.5 sm:w-3.5 shrink-0', actionType === 'NETRAL' ? 'text-white' : 'text-blue-500']" />
                                             <span>Netral (0 Poin)</span>
                                         </button>
+
+                                        <button
+                                            type="button"
+                                            :disabled="isVerified"
+                                            @click="if (!isVerified) { actionType = 'DIBATALKAN'; pointValue = 0; }"
+                                            :class="[
+                                                'py-2.5 sm:py-2 px-3 sm:px-2 rounded-xl border text-xs font-semibold flex items-center justify-center gap-2 sm:gap-1.5 transition outline-none focus:outline-none focus:ring-0 select-none',
+                                                isVerified ? 'cursor-not-allowed' : 'cursor-pointer active:scale-[0.98]',
+                                                actionType === 'DIBATALKAN' 
+                                                    ? 'bg-slate-800 dark:bg-slate-700 border-slate-800 dark:border-slate-700 text-white shadow-xs' 
+                                                    : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-900'
+                                            ]"
+                                        >
+                                            <Ban :class="['h-4 w-4 sm:h-3.5 sm:w-3.5 shrink-0', actionType === 'DIBATALKAN' ? 'text-white' : 'text-slate-500 dark:text-slate-400']" />
+                                            <span>Batalkan / Gugur</span>
+                                        </button>
                                     </div>
                                 </div>
 
-                                <!-- Point Value Input: Clean Stepper with Direct Typed Sign -->
-                                <div v-if="actionType !== 'NETRAL'" class="space-y-1.5">
-                                    <label class="text-[11px] font-medium text-slate-400 dark:text-slate-500 block">Besaran Poin Per Staf Terpilih:</label>
-                                    <div class="flex items-center gap-2 sm:gap-3">
-                                        <button
-                                            type="button"
-                                            :disabled="isVerified"
-                                            @click="decrementPoint"
-                                            :class="[
-                                                'h-11 w-11 sm:h-10 sm:w-10 rounded-xl border flex items-center justify-center transition shrink-0 font-bold bg-slate-50 dark:bg-slate-950',
-                                                actionType === 'PEMOTONGAN' 
-                                                    ? 'border-rose-200 dark:border-rose-900/50 text-rose-600 dark:text-rose-400' 
-                                                    : 'border-emerald-200 dark:border-emerald-900/50 text-emerald-600 dark:text-emerald-400',
-                                                isVerified 
-                                                    ? 'opacity-40 cursor-not-allowed' 
-                                                    : (actionType === 'PEMOTONGAN' 
-                                                        ? 'hover:bg-rose-50 hover:border-rose-300 dark:hover:bg-rose-950/40 active:scale-95 cursor-pointer' 
-                                                        : 'hover:bg-emerald-50 hover:border-emerald-300 dark:hover:bg-emerald-950/40 active:scale-95 cursor-pointer')
-                                            ]"
-                                        >
-                                            <Minus class="h-4 w-4" />
-                                        </button>
-                                        
-                                        <div class="relative flex-1">
-                                            <input
-                                                :value="actionType === 'PEMOTONGAN' ? `-${pointValue}` : `+${pointValue}`"
-                                                :disabled="isVerified"
-                                                inputmode="numeric"
-                                                @input="e => {
-                                                    if (isVerified) return;
-                                                    const cleaned = e.target.value.replace(/[^0-9]/g, '');
-                                                    pointValue = cleaned ? parseInt(cleaned) : 1;
-                                                }"
-                                                type="text"
-                                                :class="[
-                                                    'w-full h-11 sm:h-10 text-center font-bold text-base sm:text-sm rounded-xl border bg-slate-50 dark:bg-slate-950 focus:outline-none transition px-12',
-                                                    isVerified ? 'cursor-not-allowed opacity-80' : '',
-                                                    actionType === 'PEMOTONGAN' 
-                                                        ? 'text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-900/50 focus:border-rose-500' 
-                                                        : 'text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/50 focus:border-emerald-500'
-                                                ]"
-                                            />
-                                            <span class="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-400 pointer-events-none">
-                                                Poin
+                                <!-- Kelompok Konfigurasi Penilaian KPI Staf (Kategori, Bobot Poin, & Pencocokan Staf) -->
+                                <div 
+                                    v-if="actionType === 'PEMOTONGAN' || actionType === 'PENAMBAHAN'" 
+                                    class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/40 p-4 sm:p-5 space-y-5"
+                                >
+                                    <!-- Header Kelompok Konfigurasi KPI -->
+                                    <div class="flex items-center justify-between pb-3.5 border-b border-slate-200/80 dark:border-slate-800 flex-wrap gap-2">
+                                        <div class="flex items-center gap-2.5">
+                                            <div class="h-7 w-7 rounded-lg flex items-center justify-center bg-slate-200/80 dark:bg-slate-800 text-slate-600 dark:text-slate-300 shrink-0">
+                                                <TrendingDown v-if="actionType === 'PEMOTONGAN'" class="h-3.5 w-3.5 text-rose-500" />
+                                                <TrendingUp v-else class="h-3.5 w-3.5 text-emerald-500" />
+                                            </div>
+                                            <div>
+                                                <h4 class="text-xs font-bold text-slate-800 dark:text-slate-200">
+                                                    {{ actionType === 'PEMOTONGAN' ? 'Kelompok Penilaian Evaluasi & Sanksi KPI' : 'Kelompok Penilaian Apresiasi & Reward KPI' }}
+                                                </h4>
+                                                <p class="text-[10.5px] text-slate-400 dark:text-slate-500">
+                                                    Konfigurasi standar pilar KPI, bobot nilai poin, dan penetapan staf terkait
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Pemilihan Kategori Standar KPI Rumah Sakit -->
+                                    <div class="space-y-2.5">
+                                        <div class="flex items-center justify-between gap-2 flex-wrap">
+                                            <label class="text-[11px] font-medium text-slate-400 dark:text-slate-500 flex items-center gap-1.5">
+                                                <Award class="h-3.5 w-3.5 text-slate-400" />
+                                                <span>Kategori Standar KPI Rumah Sakit:</span>
+                                                <span class="text-rose-500 font-bold">*</span>
+                                            </label>
+                                            <span v-if="aiRecommendedCategory && !isVerified" class="text-[10.5px] font-medium text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800/80 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                                <Sparkles class="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+                                                <span>Rekomendasi AI: {{ getKpiCategoryName(aiRecommendedCategory) }}</span>
                                             </span>
                                         </div>
 
-                                        <button
-                                            type="button"
-                                            :disabled="isVerified"
-                                            @click="incrementPoint"
-                                            :class="[
-                                                'h-11 w-11 sm:h-10 sm:w-10 rounded-xl border flex items-center justify-center transition shrink-0 font-bold bg-slate-50 dark:bg-slate-950',
-                                                actionType === 'PEMOTONGAN' 
-                                                    ? 'border-rose-200 dark:border-rose-900/50 text-rose-600 dark:text-rose-400' 
-                                                    : 'border-emerald-200 dark:border-emerald-900/50 text-emerald-600 dark:text-emerald-400',
-                                                isVerified 
-                                                    ? 'opacity-40 cursor-not-allowed' 
-                                                    : (actionType === 'PEMOTONGAN' 
-                                                        ? 'hover:bg-rose-50 hover:border-rose-300 dark:hover:bg-rose-950/40 active:scale-95 cursor-pointer' 
-                                                        : 'hover:bg-emerald-50 hover:border-emerald-300 dark:hover:bg-emerald-950/40 active:scale-95 cursor-pointer')
-                                            ]"
-                                        >
-                                            <Plus class="h-4 w-4" />
-                                        </button>
+                                        <!-- 4 Hospital KPI Category Cards -->
+                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                            <label
+                                                v-for="cat in activeCategories"
+                                                :key="cat.id"
+                                                @click="!isVerified ? selectedKpiCategory = cat.id : null"
+                                                :class="[
+                                                    'flex items-start p-3.5 rounded-xl border select-none transition gap-3',
+                                                    isVerified 
+                                                        ? (selectedKpiCategory === cat.id 
+                                                            ? (actionType === 'PEMOTONGAN' ? 'cursor-not-allowed bg-rose-600 text-white border-rose-600 shadow-sm' : 'cursor-not-allowed bg-emerald-600 text-white border-emerald-600 shadow-sm')
+                                                            : 'cursor-not-allowed opacity-50 bg-slate-100/50 dark:bg-slate-900/30 border-slate-200 dark:border-slate-800')
+                                                        : (selectedKpiCategory === cat.id
+                                                            ? (actionType === 'PEMOTONGAN' 
+                                                                ? 'cursor-pointer bg-rose-600 text-white border-rose-600 shadow-sm' 
+                                                                : 'cursor-pointer bg-emerald-600 text-white border-emerald-600 shadow-sm')
+                                                            : 'cursor-pointer bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700')
+                                                ]"
+                                            >
+                                                <div class="flex items-start gap-3 flex-1 min-w-0">
+                                                    <!-- Accessible sr-only radio -->
+                                                    <input
+                                                        type="radio"
+                                                        name="kpi_category_choice"
+                                                        :value="cat.id"
+                                                        :checked="selectedKpiCategory === cat.id"
+                                                        :disabled="isVerified"
+                                                        class="sr-only"
+                                                    />
+
+                                                    <!-- Bulatan selector dengan ikon centang saat dipilih -->
+                                                    <div :class="[
+                                                        'h-4 w-4 rounded-full flex items-center justify-center shrink-0 mt-0.5 transition-all',
+                                                        selectedKpiCategory === cat.id
+                                                            ? 'bg-white shadow-xs'
+                                                            : 'border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800'
+                                                    ]">
+                                                        <Check 
+                                                            v-if="selectedKpiCategory === cat.id" 
+                                                            :class="[
+                                                                'h-2.5 w-2.5 stroke-[3]',
+                                                                actionType === 'PEMOTONGAN' ? 'text-rose-600' : 'text-emerald-600'
+                                                            ]" 
+                                                        />
+                                                    </div>
+
+                                                    <div :class="[
+                                                        'h-8 w-8 rounded-lg flex items-center justify-center shrink-0 text-sm font-bold mt-0.5',
+                                                        selectedKpiCategory === cat.id
+                                                            ? 'bg-white/20 text-white shadow-xs'
+                                                            : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+                                                    ]">
+                                                        <component :is="getCategoryIcon(cat.id)" class="h-4 w-4" />
+                                                    </div>
+
+                                                    <div class="flex-1 min-w-0">
+                                                        <div class="flex items-center gap-1.5 flex-wrap">
+                                                            <span :class="[
+                                                                'text-xs font-bold',
+                                                                selectedKpiCategory === cat.id ? 'text-white' : 'text-slate-800 dark:text-slate-100'
+                                                            ]">
+                                                                {{ cat.name }}
+                                                            </span>
+                                                            <span 
+                                                                v-if="cat.isAiRecommended && !isVerified" 
+                                                                :class="[
+                                                                    'px-1.5 py-0.5 rounded text-[9px] font-bold flex items-center gap-0.5 border',
+                                                                    selectedKpiCategory === cat.id
+                                                                        ? 'bg-white/20 text-white border-white/30'
+                                                                        : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                                                                ]"
+                                                            >
+                                                                <Sparkles :class="['h-2.5 w-2.5', selectedKpiCategory === cat.id ? 'text-white' : 'text-emerald-600 dark:text-emerald-400']" />
+                                                                Rekomendasi AI
+                                                            </span>
+                                                        </div>
+                                                        <p :class="[
+                                                            'text-[11px] font-normal leading-relaxed mt-1',
+                                                            selectedKpiCategory === cat.id ? 'text-white/90' : 'text-slate-500 dark:text-slate-400'
+                                                        ]">
+                                                            {{ cat.description }}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </label>
+                                        </div>
                                     </div>
+
+                                    <!-- Tingkat & Bobot Poin KPI -->
+                                    <div class="space-y-2.5 pt-4 border-t border-slate-200/70 dark:border-slate-800">
+                                        <div class="flex items-center justify-between gap-2 flex-wrap">
+                                            <label class="text-[11px] font-medium text-slate-400 dark:text-slate-500 flex items-center gap-1.5">
+                                                <Scale class="h-3.5 w-3.5 text-slate-400" />
+                                                <span>Tingkat & Bobot Poin KPI:</span>
+                                                <span class="text-rose-500 font-bold">*</span>
+                                            </label>
+                                            <span class="text-[10.5px] text-slate-400">
+                                                Gunakan standar acuan RS atau sesuaikan nilai poin
+                                            </span>
+                                        </div>
+
+                                        <!-- Quick Severity Preset Cards -->
+                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                            <label
+                                                v-for="tmpl in activeSeverityTemplates"
+                                                :key="tmpl.severity"
+                                                @click="!isVerified ? selectSeverityPreset(tmpl) : null"
+                                                :class="[
+                                                    'flex items-start p-3.5 rounded-xl border select-none transition gap-3',
+                                                    isVerified 
+                                                        ? (selectedSeverity === tmpl.severity
+                                                            ? (actionType === 'PEMOTONGAN'
+                                                                ? 'cursor-not-allowed bg-rose-600 text-white border-rose-600 shadow-sm'
+                                                                : 'cursor-not-allowed bg-emerald-600 text-white border-emerald-600 shadow-sm')
+                                                            : 'cursor-not-allowed opacity-50 bg-slate-100/50 dark:bg-slate-900/30 border-slate-200 dark:border-slate-800')
+                                                        : (selectedSeverity === tmpl.severity
+                                                            ? (actionType === 'PEMOTONGAN'
+                                                                ? 'cursor-pointer bg-rose-600 text-white border-rose-600 shadow-sm'
+                                                                : 'cursor-pointer bg-emerald-600 text-white border-emerald-600 shadow-sm')
+                                                            : 'cursor-pointer bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700')
+                                                ]"
+                                            >
+                                                <div class="flex items-start gap-3 flex-1 min-w-0">
+                                                    <!-- Accessible sr-only radio -->
+                                                    <input
+                                                        type="radio"
+                                                        name="kpi_severity_choice"
+                                                        :value="tmpl.severity"
+                                                        :checked="selectedSeverity === tmpl.severity"
+                                                        :disabled="isVerified"
+                                                        class="sr-only"
+                                                    />
+
+                                                    <!-- Bulatan selector dengan ikon centang saat dipilih -->
+                                                    <div :class="[
+                                                        'h-4 w-4 rounded-full flex items-center justify-center shrink-0 mt-0.5 transition-all',
+                                                        selectedSeverity === tmpl.severity
+                                                            ? 'bg-white shadow-xs'
+                                                            : 'border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800'
+                                                    ]">
+                                                        <Check 
+                                                            v-if="selectedSeverity === tmpl.severity" 
+                                                            :class="[
+                                                                'h-2.5 w-2.5 stroke-[3]',
+                                                                actionType === 'PEMOTONGAN' ? 'text-rose-600' : 'text-emerald-600'
+                                                            ]" 
+                                                        />
+                                                    </div>
+
+                                                    <div class="flex-1 min-w-0">
+                                                        <div class="flex items-center justify-between gap-2 flex-wrap">
+                                                            <span :class="[
+                                                                'text-xs font-bold',
+                                                                selectedSeverity === tmpl.severity ? 'text-white' : 'text-slate-800 dark:text-slate-100'
+                                                            ]">
+                                                                {{ tmpl.label }}
+                                                            </span>
+                                                            <span :class="[
+                                                                'text-[10px] font-extrabold px-2 py-0.5 rounded-md shrink-0 shadow-xs border',
+                                                                selectedSeverity === tmpl.severity
+                                                                    ? (actionType === 'PEMOTONGAN' ? 'bg-white text-rose-700 border-transparent' : 'bg-white text-emerald-700 border-transparent')
+                                                                    : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 border-slate-200/80 dark:border-slate-700'
+                                                            ]">
+                                                                {{ tmpl.points !== null ? (actionType === 'PEMOTONGAN' ? `-${tmpl.points} Poin` : `+${tmpl.points} Poin`) : 'Poin Bebas' }}
+                                                            </span>
+                                                        </div>
+                                                        <!-- Full description text without truncation -->
+                                                        <p :class="[
+                                                            'text-[11px] font-normal leading-relaxed mt-1',
+                                                            selectedSeverity === tmpl.severity ? 'text-white/90' : 'text-slate-500 dark:text-slate-400'
+                                                        ]">
+                                                            {{ tmpl.desc }}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </label>
+                                        </div>
+
+                                        <!-- Point Value Stepper -->
+                                        <div class="flex items-center gap-2 sm:gap-3 pt-1">
+                                            <button
+                                                type="button"
+                                                :disabled="isVerified"
+                                                @click="decrementPoint"
+                                                :class="[
+                                                    'h-11 w-11 sm:h-10 sm:w-10 rounded-xl border flex items-center justify-center transition shrink-0 font-bold bg-white dark:bg-slate-900',
+                                                    actionType === 'PEMOTONGAN' 
+                                                        ? 'border-rose-200 dark:border-rose-900/50 text-rose-600 dark:text-rose-400' 
+                                                        : 'border-emerald-200 dark:border-emerald-900/50 text-emerald-600 dark:text-emerald-400',
+                                                    isVerified 
+                                                        ? 'opacity-40 cursor-not-allowed' 
+                                                        : (actionType === 'PEMOTONGAN' 
+                                                            ? 'hover:bg-rose-50 hover:border-rose-300 dark:hover:bg-rose-950/40 active:scale-95 cursor-pointer' 
+                                                            : 'hover:bg-emerald-50 hover:border-emerald-300 dark:hover:bg-emerald-950/40 active:scale-95 cursor-pointer')
+                                                ]"
+                                            >
+                                                <Minus class="h-4 w-4" />
+                                            </button>
+                                            
+                                            <div class="relative flex-1">
+                                                <input
+                                                    :value="actionType === 'PEMOTONGAN' ? `-${pointValue}` : `+${pointValue}`"
+                                                    :disabled="isVerified"
+                                                    inputmode="numeric"
+                                                    @input="e => {
+                                                        if (isVerified) return;
+                                                        const cleaned = e.target.value.replace(/[^0-9]/g, '');
+                                                        pointValue = cleaned ? parseInt(cleaned) : 1;
+                                                        checkMatchingSeverity();
+                                                    }"
+                                                    type="text"
+                                                    :class="[
+                                                        'w-full h-11 sm:h-10 text-center font-bold text-base sm:text-sm rounded-xl border bg-white dark:bg-slate-900 focus:outline-none transition px-12',
+                                                        isVerified ? 'cursor-not-allowed opacity-80' : '',
+                                                        actionType === 'PEMOTONGAN' 
+                                                            ? 'text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-900/50 focus:border-rose-500' 
+                                                            : 'text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/50 focus:border-emerald-500'
+                                                    ]"
+                                                />
+                                                <span class="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-400 pointer-events-none">
+                                                    Poin
+                                                </span>
+                                            </div>
+
+                                            <button
+                                                type="button"
+                                                :disabled="isVerified"
+                                                @click="incrementPoint"
+                                                :class="[
+                                                    'h-11 w-11 sm:h-10 sm:w-10 rounded-xl border flex items-center justify-center transition shrink-0 font-bold bg-white dark:bg-slate-900',
+                                                    actionType === 'PEMOTONGAN' 
+                                                        ? 'border-rose-200 dark:border-rose-900/50 text-rose-600 dark:text-rose-400' 
+                                                        : 'border-emerald-200 dark:border-emerald-900/50 text-emerald-600 dark:text-emerald-400',
+                                                    isVerified 
+                                                        ? 'opacity-40 cursor-not-allowed' 
+                                                        : (actionType === 'PEMOTONGAN' 
+                                                            ? 'hover:bg-rose-50 hover:border-rose-300 dark:hover:bg-rose-950/40 active:scale-95 cursor-pointer' 
+                                                            : 'hover:bg-emerald-50 hover:border-emerald-300 dark:hover:bg-emerald-950/40 active:scale-95 cursor-pointer')
+                                                ]"
+                                            >
+                                                <Plus class="h-4 w-4" />
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <!-- Pencocokan & Pemilihan Staf Bertugas -->
+                                    <div class="space-y-2.5 pt-4 border-t border-slate-200/70 dark:border-slate-800">
+                                        <div class="flex items-center justify-between gap-2 flex-wrap">
+                                            <label class="text-[11px] font-medium text-slate-400 dark:text-slate-500 flex items-center gap-1.5">
+                                                <Users class="h-3.5 w-3.5 text-slate-400" />
+                                                <span>Pencocokan Staf Bertugas yang Terkait:</span>
+                                                <span class="text-rose-500 font-bold">*</span>
+                                            </label>
+                                            <div class="flex items-center gap-2">
+                                                <span class="px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300">
+                                                    {{ selectedStaffList.length }} dari {{ staffList.length }} Staf Terpilih
+                                                </span>
+                                                <span class="px-2 py-0.5 rounded-lg text-[10px] font-medium bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hidden sm:inline-flex items-center gap-1">
+                                                    <Clock class="h-3 w-3 text-slate-400" />
+                                                    <span>{{ report.created_at_time || report.timestamp }}</span>
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed font-normal">
+                                            {{ isVerified 
+                                                ? 'Daftar staf unit yang telah ditautkan dan dievaluasi pada verifikasi laporan ini:' 
+                                                : 'Centang staf yang bertugas saat aduan terjadi untuk evaluasi poin KPI (otomatis ditandai dari data Presensi Masuk):' 
+                                            }}
+                                        </p>
+
+                                        <!-- Staff List Checkbox Grid -->
+                                        <div v-if="staffList.length > 0" class="space-y-2 max-h-60 overflow-y-auto pr-1">
+                                            <label
+                                                v-for="staff in staffList"
+                                                :key="staff.id"
+                                                @click="isVerified ? $event.preventDefault() : null"
+                                                :class="[
+                                                    'flex items-center justify-between p-3 rounded-xl border select-none transition',
+                                                    isVerified
+                                                        ? (staff.selected 
+                                                            ? (actionType === 'PEMOTONGAN' 
+                                                                ? 'cursor-not-allowed bg-rose-600 text-white border-rose-600 shadow-sm' 
+                                                                : 'cursor-not-allowed bg-emerald-600 text-white border-emerald-600 shadow-sm')
+                                                            : 'cursor-not-allowed opacity-50 bg-slate-100/50 dark:bg-slate-900/30 border-slate-200 dark:border-slate-800')
+                                                        : (staff.selected 
+                                                            ? (actionType === 'PEMOTONGAN'
+                                                                ? 'cursor-pointer bg-rose-600 text-white border-rose-600 shadow-sm'
+                                                                : 'cursor-pointer bg-emerald-600 text-white border-emerald-600 shadow-sm')
+                                                            : 'cursor-pointer bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300')
+                                                ]"
+                                            >
+                                                <div class="flex items-center gap-3">
+                                                    <!-- Accessible sr-only checkbox -->
+                                                    <input
+                                                        type="checkbox"
+                                                        v-model="staff.selected"
+                                                        :disabled="isVerified"
+                                                        class="sr-only"
+                                                    />
+
+                                                    <!-- Bulatan selector dengan ikon centang saat dipilih -->
+                                                    <div :class="[
+                                                        'h-4 w-4 rounded-full flex items-center justify-center shrink-0 transition-all',
+                                                        staff.selected
+                                                            ? 'bg-white shadow-xs'
+                                                            : 'border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800'
+                                                    ]">
+                                                        <Check 
+                                                            v-if="staff.selected" 
+                                                            :class="[
+                                                                'h-2.5 w-2.5 stroke-[3]',
+                                                                actionType === 'PEMOTONGAN' ? 'text-rose-600' : 'text-emerald-600'
+                                                            ]" 
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <div class="flex items-center gap-1.5 flex-wrap">
+                                                            <span :class="['text-xs font-semibold', staff.selected ? 'text-white' : 'text-slate-800 dark:text-slate-100']">
+                                                                {{ staff.name }}
+                                                            </span>
+                                                            <span
+                                                                v-if="staff.attendance_type === 'ACTIVE_AT_REPORT'"
+                                                                :class="[
+                                                                    'px-1.5 py-0.5 rounded text-[10px] font-semibold border',
+                                                                    staff.selected 
+                                                                        ? 'bg-white/20 text-white border-white/30' 
+                                                                        : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800'
+                                                                ]"
+                                                                title="Tercatat berdinas saat jam aduan diterima"
+                                                            >
+                                                                ✓ On-Duty saat Kejadian
+                                                            </span>
+                                                            <span
+                                                                v-else-if="staff.attendance_type === 'TODAY'"
+                                                                :class="[
+                                                                    'px-1.5 py-0.5 rounded text-[10px] font-medium border',
+                                                                    staff.selected 
+                                                                        ? 'bg-white/20 text-white border-white/30' 
+                                                                        : 'bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border-blue-200 dark:border-blue-800'
+                                                                ]"
+                                                            >
+                                                                Hadir Hari Ini
+                                                            </span>
+                                                        </div>
+                                                        <div :class="['text-[10px] font-normal mt-0.5', staff.selected ? 'text-white/80' : 'text-slate-500 dark:text-slate-400']">
+                                                            {{ staff.role }} • NIP: {{ staff.nip }}
+                                                            <span v-if="staff.clock_in_time" :class="staff.selected ? 'text-white/70' : 'text-slate-400'">
+                                                                (Presensi: {{ staff.clock_in_time }})
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="text-right flex-shrink-0">
+                                                    <span :class="[
+                                                        'text-[11px] font-semibold block',
+                                                        staff.selected
+                                                            ? 'text-white'
+                                                            : (actionType === 'PEMOTONGAN' && isVerified ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400')
+                                                    ]">
+                                                        {{ staff.total_points }} Poin
+                                                    </span>
+                                                    <span v-if="isVerified && staff.selected" class="text-[10px] font-semibold text-white/90">
+                                                        {{ actionType === 'PEMOTONGAN' ? `Dievaluasi (-${pointValue})` : `Diberi Reward (+${pointValue})` }}
+                                                    </span>
+                                                </div>
+                                            </label>
+                                        </div>
+
+                                        <!-- If No Staff Registered in this Unit -->
+                                        <div v-else class="text-center py-6 border border-dashed border-slate-200 dark:border-slate-800 rounded-xl space-y-2 bg-white/50 dark:bg-slate-900/50">
+                                            <div class="h-9 w-9 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mx-auto">
+                                                <Users class="h-4 w-4" />
+                                            </div>
+                                            <p class="text-[11px] text-slate-400 dark:text-slate-500 font-normal">
+                                                Belum ada staf terdaftar di unit {{ report.unit }}.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Info Callout for Dibatalkan Action (Gugur / Tidak Sesuai Fakta) -->
+                                <div v-else-if="actionType === 'DIBATALKAN'" class="p-3.5 rounded-xl bg-slate-100 dark:bg-slate-850 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-xs leading-relaxed space-y-1.5">
+                                    <div class="font-bold flex items-center gap-1.5 text-slate-900 dark:text-white">
+                                        <Ban class="h-4 w-4 text-slate-600 dark:text-slate-300 shrink-0" />
+                                        <span>Status Tindakan: Dibatalkan / Gugur (Tidak Sesuai Fakta Lapangan)</span>
+                                    </div>
+                                    <p class="text-[11px] text-slate-600 dark:text-slate-300 font-normal">
+                                        Laporan ini dikategorikan tidak valid atau tidak sesuai fakta setelah dicek langsung di tempat kejadian. 
+                                        <strong>Tidak ada sanksi atau potongan poin apa pun kepada staf unit</strong>, dan staf <strong>tidak diinformasikan</strong>. 
+                                        Pada lacak laporan publik, status tiket tetap selesai.
+                                    </p>
                                 </div>
 
                                 <!-- Info Callout for Netral Action (0 Poin) -->
@@ -1141,19 +1666,19 @@ const finishVerification = () => {
                                     :class="[
                                         'rounded-xl border transition p-4 space-y-3',
                                         alreadyDispatchedToPesupeluh || forwardToPesupeluh 
-                                            ? 'bg-emerald-50/60 dark:bg-emerald-950/25 border-emerald-300/80 dark:border-emerald-800/60' 
+                                            ? 'bg-blue-50/60 dark:bg-blue-950/25 border-blue-300/80 dark:border-blue-800/60' 
                                             : 'bg-slate-50/70 dark:bg-slate-950/40 border-slate-200 dark:border-slate-800'
                                     ]"
                                 >
                                     <div class="flex items-start justify-between gap-3">
                                         <div class="flex items-center gap-2.5">
-                                            <div class="h-8 w-8 rounded-lg flex items-center justify-center bg-emerald-600 text-white shrink-0 shadow-xs">
-                                                <Wrench class="h-4 w-4" />
+                                            <div class="h-7 w-7 rounded-lg flex items-center justify-center bg-slate-200/80 dark:bg-slate-800 text-slate-600 dark:text-slate-300 shrink-0">
+                                                <Wrench class="h-3.5 w-3.5 text-blue-500" />
                                             </div>
                                             <div>
                                                 <h4 class="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5 flex-wrap">
                                                     <span>Disposisi ke PESU PELUH (Unit Penunjang / IPSRS)</span>
-                                                    <span v-if="alreadyDispatchedToPesupeluh" class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                                                    <span v-if="alreadyDispatchedToPesupeluh" class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 border border-blue-300 dark:border-blue-800">
                                                         TERKIRIM
                                                     </span>
                                                 </h4>
@@ -1167,24 +1692,24 @@ const finishVerification = () => {
                                         <div v-if="!alreadyDispatchedToPesupeluh && !isVerified" class="flex items-center shrink-0">
                                             <label class="relative inline-flex items-center cursor-pointer">
                                                 <input type="checkbox" v-model="forwardToPesupeluh" class="sr-only peer" />
-                                                <div class="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
+                                                <div class="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
                                             </label>
                                         </div>
                                     </div>
 
                                     <!-- Status If Already Dispatched -->
-                                    <div v-if="alreadyDispatchedToPesupeluh" class="p-3 bg-white dark:bg-slate-900 rounded-lg border border-emerald-200 dark:border-emerald-900/50 flex flex-wrap items-center justify-between gap-2 text-xs">
+                                    <div v-if="alreadyDispatchedToPesupeluh" class="p-3 bg-white dark:bg-slate-900 rounded-lg border border-blue-200 dark:border-blue-900/50 flex flex-wrap items-center justify-between gap-2 text-xs">
                                         <div class="flex items-center gap-2">
-                                            <CheckCircle2 class="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                            <CheckCircle2 class="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0" />
                                             <span class="text-slate-700 dark:text-slate-200 font-medium">
-                                                Tiket berhasil diteruskan dengan Nomor: <strong class="font-bold text-emerald-700 dark:text-emerald-400">{{ report.pesupeluh_ticket_number }}</strong>
+                                                Tiket berhasil diteruskan dengan Nomor: <strong class="font-bold text-blue-700 dark:text-blue-400">{{ report.pesupeluh_ticket_number }}</strong>
                                             </span>
                                         </div>
                                         <span class="text-[10px] text-slate-400">{{ report.dispatched_to_pesupeluh_at || '' }}</span>
                                     </div>
 
                                     <!-- Form Settings when forwardToPesupeluh is active -->
-                                    <div v-else-if="forwardToPesupeluh" class="space-y-3 pt-2 border-t border-emerald-200/60 dark:border-emerald-900/40">
+                                    <div v-else-if="forwardToPesupeluh" class="space-y-3 pt-2 border-t border-blue-200/60 dark:border-blue-900/40">
                                         
                                         <!-- Pilihan Target Ruangan di PESU PELUH via SearchableSelect -->
                                         <div class="space-y-1.5">
@@ -1245,19 +1770,19 @@ const finishVerification = () => {
                                         </div>
 
                                         <!-- Info Data yang Diteruskan -->
-                                        <div class="bg-emerald-100/60 dark:bg-emerald-950/35 p-2.5 rounded-lg border border-emerald-200 dark:border-emerald-900/40 flex items-start gap-2 text-[11px] text-emerald-900 dark:text-emerald-200">
-                                            <Sparkles class="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                                        <div class="bg-blue-100/60 dark:bg-blue-950/35 p-2.5 rounded-lg border border-blue-200 dark:border-blue-900/40 flex items-start gap-2 text-[11px] text-blue-900 dark:text-blue-200">
+                                            <UserCheck class="h-3.5 w-3.5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
                                             <div class="space-y-1 leading-relaxed">
                                                 <p>
                                                     <strong>Identitas Pelapor di PESU PELUH:</strong>
                                                     <span class="font-bold underline ml-1">
                                                         {{ report.is_anonymous ? 'Masyarakat / Pasien (Anonim via SIPUAS)' : `${report.reporter_name} (Publik via SIPUAS)` }}
                                                     </span>
-                                                    <span v-if="!report.is_anonymous && report.reporter_phone" class="text-[10px] ml-1">
+                                                    <span v-if="!report.is_anonymous && report.reporter_phone" class="font-bold ml-1.5">
                                                         (HP: {{ report.reporter_phone }})
                                                     </span>
                                                 </p>
-                                                <p class="text-[10.5px] text-emerald-800/90 dark:text-emerald-300/80">
+                                                <p class="text-[10.5px] text-blue-800/90 dark:text-blue-300/80">
                                                     Teknisi penunjang dapat langsung melihat nama pelapor, nomor telepon warga<template v-if="report.attachments && report.attachments.length > 0">, serta <strong>{{ report.attachments.length }} lampiran foto bukti</strong></template> langsung di aplikasi PESU PELUH.
                                                 </p>
                                             </div>
@@ -1267,22 +1792,45 @@ const finishVerification = () => {
 
                                 <!-- Supervisor Notes -->
                                 <div class="space-y-1.5">
-                                    <label class="text-[11px] font-medium text-slate-400 dark:text-slate-500 block">Catatan Berita Acara / Tindak Lanjut:</label>
+                                    <div class="flex items-center justify-between gap-2 flex-wrap">
+                                        <label class="text-[11px] font-medium text-slate-400 dark:text-slate-500 flex items-center gap-1.5">
+                                            <FileText class="h-3.5 w-3.5 text-slate-400" />
+                                            <span>
+                                                {{ actionType === 'DIBATALKAN' ? 'Alasan Pembatalan / Gugur Laporan (Wajib Diisi):' : 'Catatan Berita Acara / Tindak Lanjut (Wajib Diisi):' }}
+                                            </span>
+                                            <span class="text-rose-500 font-bold">*</span>
+                                        </label>
+                                        <span v-if="actionType === 'DIBATALKAN'" class="text-[10px] text-rose-500 dark:text-rose-400 font-semibold">
+                                            Wajib diisi untuk arsip internal
+                                        </span>
+                                        <span v-else class="text-[10px] text-rose-500 dark:text-rose-400 font-semibold">
+                                            Wajib diisi
+                                        </span>
+                                    </div>
                                     <textarea
                                         v-model="supervisorNotes"
                                         :disabled="isVerified"
                                         :readonly="isVerified"
                                         rows="3"
-                                        placeholder="Tuliskan klarifikasi kejadian, evaluasi tindakan, atau catatan apresiasi untuk staf..."
+                                        :placeholder="actionType === 'DIBATALKAN' 
+                                            ? 'Tuliskan hasil pengecekan langsung di lapangan kenapa laporan ini tidak diterima atau dibatalkan (misal: setelah dicek di lokasi saat kejadian, petugas sudah melayani sesuai SOP dan keluhan tidak sesuai fakta)...' 
+                                            : 'Tuliskan klarifikasi kejadian, evaluasi tindakan, atau catatan apresiasi untuk staf...'"
                                         :class="[
-                                            'w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3 text-xs sm:text-sm text-slate-800 dark:text-slate-200 leading-relaxed font-normal focus:outline-none transition',
-                                            isVerified ? 'cursor-not-allowed opacity-80' : 'focus:border-emerald-500'
+                                            'w-full bg-slate-50 dark:bg-slate-950 border rounded-xl p-3 text-xs sm:text-sm text-slate-800 dark:text-slate-200 leading-relaxed font-normal focus:outline-none transition',
+                                            actionType === 'DIBATALKAN' 
+                                                ? 'border-slate-200 dark:border-slate-800 focus:border-slate-300 dark:focus:border-slate-700 focus:ring-0 outline-none' 
+                                                : (actionType === 'NETRAL'
+                                                    ? 'border-slate-200 dark:border-slate-800 focus:border-blue-500'
+                                                    : (actionType === 'PEMOTONGAN'
+                                                        ? 'border-slate-200 dark:border-slate-800 focus:border-rose-500'
+                                                        : 'border-slate-200 dark:border-slate-800 focus:border-emerald-500')),
+                                            isVerified ? 'cursor-not-allowed opacity-80' : ''
                                         ]"
                                     ></textarea>
                                 </div>
 
-                                <!-- Attachment Section: SP / Surat Teguran / Berkas Apresiasi (Opsional, dibatasi 1 file saat ini) -->
-                                <div v-if="actionType !== 'NETRAL' || (isVerified && report?.verification_attachments?.length > 0)" class="space-y-2">
+                                <!-- Attachment Section: SP / Surat Teguran / Berkas Apresiasi (Hanya Tampil untuk PEMOTONGAN & PENAMBAHAN) -->
+                                <div v-if="(actionType === 'PEMOTONGAN' || actionType === 'PENAMBAHAN') || (isVerified && report?.verification_attachments?.length > 0)" class="space-y-2">
                                     <div class="flex items-center justify-between">
                                         <label class="text-[11px] font-medium text-slate-400 dark:text-slate-500 flex items-center gap-1.5">
                                             <Paperclip class="h-3.5 w-3.5" />
@@ -1462,24 +2010,40 @@ const finishVerification = () => {
                                         ? 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900/60'
                                         : (actionType === 'NETRAL'
                                             ? 'bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-900/60'
-                                            : 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800')
+                                            : (actionType === 'DIBATALKAN'
+                                                ? 'bg-slate-100 dark:bg-slate-800/60 border-slate-300 dark:border-slate-700'
+                                                : 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800'))
                                 ]">
                                     <div :class="[
                                         'flex items-center justify-center gap-2 font-bold text-xs sm:text-sm',
                                         actionType === 'PEMOTONGAN'
                                             ? 'text-rose-800 dark:text-rose-300'
-                                            : (actionType === 'NETRAL' ? 'text-blue-800 dark:text-blue-300' : 'text-emerald-800 dark:text-emerald-300')
+                                            : (actionType === 'NETRAL' 
+                                                ? 'text-blue-800 dark:text-blue-300' 
+                                                : (actionType === 'DIBATALKAN'
+                                                    ? 'text-slate-900 dark:text-white'
+                                                    : 'text-emerald-800 dark:text-emerald-300'))
                                     ]">
-                                        <CheckCircle2 class="h-4 w-4 sm:h-4.5 sm:w-4.5 shrink-0" :class="actionType === 'PEMOTONGAN' ? 'text-rose-600 dark:text-rose-400' : (actionType === 'NETRAL' ? 'text-blue-600 dark:text-blue-400' : 'text-emerald-600 dark:text-emerald-400')" />
-                                        <span>Laporan Ini Telah Selesai Diverifikasi</span>
+                                        <Ban v-if="actionType === 'DIBATALKAN'" class="h-4 w-4 sm:h-4.5 sm:w-4.5 shrink-0 text-slate-600 dark:text-slate-300" />
+                                        <CheckCircle2 v-else class="h-4 w-4 sm:h-4.5 sm:w-4.5 shrink-0" :class="actionType === 'PEMOTONGAN' ? 'text-rose-600 dark:text-rose-400' : (actionType === 'NETRAL' ? 'text-blue-600 dark:text-blue-400' : 'text-emerald-600 dark:text-emerald-400')" />
+                                        <span>{{ actionType === 'DIBATALKAN' ? 'Laporan Dibatalkan / Gugur (Tidak Sesuai Fakta)' : 'Laporan Ini Telah Selesai Diverifikasi' }}</span>
                                     </div>
                                     <p :class="[
                                         'text-[11px] sm:text-xs font-normal leading-relaxed',
                                         actionType === 'PEMOTONGAN'
                                             ? 'text-rose-700/90 dark:text-rose-300/80'
-                                            : (actionType === 'NETRAL' ? 'text-blue-700/90 dark:text-blue-300/80' : 'text-emerald-700/90 dark:text-emerald-300/80')
+                                            : (actionType === 'NETRAL' 
+                                                ? 'text-blue-700/90 dark:text-blue-300/80' 
+                                                : (actionType === 'DIBATALKAN'
+                                                    ? 'text-slate-600 dark:text-slate-300'
+                                                    : 'text-emerald-700/90 dark:text-emerald-300/80'))
                                     ]">
-                                        Verifikasi dieksekusi pada <strong>{{ report.verified_at || '-' }}</strong><template v-if="report.verified_by"> oleh <strong>{{ report.verified_by }}</strong></template>. Saldo poin staf unit telah tercatat di logbook dan tidak dapat diubah kembali.
+                                        <template v-if="actionType === 'DIBATALKAN'">
+                                            Laporan telah diperiksa langsung di lapangan dan dinyatakan tidak sesuai fakta pada <strong>{{ report.verified_at || '-' }}</strong><template v-if="report.verified_by"> oleh <strong>{{ report.verified_by }}</strong></template>. Tidak ada pemotongan/penambahan poin kepada staf, dan informasi ini hanya dicatat untuk arsip internal rumah sakit.
+                                        </template>
+                                        <template v-else>
+                                            Verifikasi dieksekusi pada <strong>{{ report.verified_at || '-' }}</strong><template v-if="report.verified_by"> oleh <strong>{{ report.verified_by }}</strong></template>. Saldo poin staf unit telah tercatat di logbook dan tidak dapat diubah kembali.
+                                        </template>
                                     </p>
                                 </div>
 
@@ -1489,20 +2053,30 @@ const finishVerification = () => {
                                     @click="submitVerification"
                                     :disabled="isSubmitting || isVerified"
                                     :class="[
-                                        'w-full py-3.5 sm:py-3 text-white rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 shadow-sm transition disabled:opacity-50 cursor-pointer bg-emerald-600 hover:bg-emerald-500 active:scale-[0.99] shadow-emerald-500/20',
+                                        'w-full py-3.5 sm:py-3 text-white rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 shadow-sm transition disabled:opacity-50 cursor-pointer',
+                                        actionType === 'DIBATALKAN'
+                                            ? 'bg-slate-800 hover:bg-slate-700 active:scale-[0.99] shadow-slate-900/20'
+                                            : (actionType === 'NETRAL'
+                                                ? 'bg-blue-600 hover:bg-blue-500 active:scale-[0.99] shadow-blue-500/20'
+                                                : (actionType === 'PEMOTONGAN'
+                                                    ? 'bg-rose-600 hover:bg-rose-500 active:scale-[0.99] shadow-rose-500/20'
+                                                    : 'bg-emerald-600 hover:bg-emerald-500 active:scale-[0.99] shadow-emerald-500/20')),
                                         (isSubmitting || isVerified) ? 'opacity-60 cursor-not-allowed pointer-events-none' : ''
                                     ]"
                                 >
                                     <RefreshCw v-if="isSubmitting" class="h-4 w-4 animate-spin" />
+                                    <Ban v-else-if="actionType === 'DIBATALKAN'" class="h-4 w-4" />
                                     <Send v-else-if="forwardToPesupeluh && !alreadyDispatchedToPesupeluh" class="h-4 w-4" />
                                     <CheckCircle2 v-else class="h-4 w-4" />
                                     <span>
                                         {{ 
                                             isSubmitting 
-                                                ? 'Memproses Verifikasi & Disposisi...' 
-                                                : (forwardToPesupeluh && !alreadyDispatchedToPesupeluh 
-                                                    ? 'Simpan Verifikasi & Teruskan ke PESU PELUH' 
-                                                    : 'Simpan Verifikasi & Catat Logbook') 
+                                                ? 'Memproses...' 
+                                                : (actionType === 'DIBATALKAN'
+                                                    ? 'Batalkan Laporan & Selesaikan'
+                                                    : (forwardToPesupeluh && !alreadyDispatchedToPesupeluh 
+                                                        ? 'Simpan Verifikasi & Teruskan ke PESU PELUH' 
+                                                        : 'Simpan Verifikasi & Catat Logbook')) 
                                         }}
                                     </span>
                                 </button>
@@ -1548,17 +2122,25 @@ const finishVerification = () => {
                     <!-- Modal Card -->
                     <div class="relative bg-white/95 dark:bg-slate-900/95 border border-slate-100 dark:border-slate-800 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden p-6 sm:p-7 flex flex-col items-center text-center transform transition-all duration-200 scale-100 backdrop-blur-md">
                         <!-- Status Icon -->
-                        <div class="h-16 w-16 sm:h-20 sm:w-20 rounded-full flex items-center justify-center mb-4 sm:mb-5 flex-shrink-0 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400">
-                            <ShieldCheck class="h-8 w-8 sm:h-10 sm:w-10" />
+                        <div :class="[
+                            'h-16 w-16 sm:h-20 sm:w-20 rounded-full flex items-center justify-center mb-4 sm:mb-5 flex-shrink-0',
+                            actionType === 'DIBATALKAN'
+                                ? 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+                                : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400'
+                        ]">
+                            <Ban v-if="actionType === 'DIBATALKAN'" class="h-8 w-8 sm:h-10 sm:w-10" />
+                            <ShieldCheck v-else class="h-8 w-8 sm:h-10 sm:w-10" />
                         </div>
 
                         <!-- Info Content -->
                         <h3 class="text-base sm:text-lg font-extrabold text-slate-900 dark:text-white leading-tight px-2">
-                            Konfirmasi Verifikasi Laporan
+                            {{ actionType === 'DIBATALKAN' ? 'Konfirmasi Pembatalan Laporan' : 'Konfirmasi Verifikasi Laporan' }}
                         </h3>
 
                         <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-2 leading-relaxed px-1">
-                            Periksa kembali rincian verifikasi sebelum disimpan ke logbook dan saldo poin staf unit.
+                            {{ actionType === 'DIBATALKAN'
+                                ? 'Pastikan hasil kroscek lapangan sudah sesuai. Laporan ini akan digugurkan tanpa memberikan sanksi/poin ke staf.'
+                                : 'Periksa kembali rincian verifikasi sebelum disimpan ke logbook dan saldo poin staf unit.' }}
                         </p>
 
                         <!-- Summary Card -->
@@ -1572,9 +2154,12 @@ const finishVerification = () => {
                                 <span class="font-semibold text-slate-800 dark:text-slate-200">{{ report?.unit || '-' }}</span>
                             </div>
                             <div class="flex justify-between items-center pb-2 border-b border-slate-200/60 dark:border-slate-800">
-                                <span class="text-slate-400 font-medium">Aksi Distribusi KPI:</span>
+                                <span class="text-slate-400 font-medium">Aksi Tindakan:</span>
                                 <div>
-                                    <span v-if="actionType === 'PENAMBAHAN'" class="inline-flex items-center px-2.5 py-0.5 rounded-lg text-xs font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                                    <span v-if="actionType === 'DIBATALKAN'" class="inline-flex items-center px-2.5 py-0.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700">
+                                        Dibatalkan / Gugur (0 Poin KPI)
+                                    </span>
+                                    <span v-else-if="actionType === 'PENAMBAHAN'" class="inline-flex items-center px-2.5 py-0.5 rounded-lg text-xs font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
                                         +{{ pointValue }} Poin (Apresiasi / Pujian)
                                     </span>
                                     <span v-else-if="actionType === 'PEMOTONGAN'" class="inline-flex items-center px-2.5 py-0.5 rounded-lg text-xs font-bold bg-rose-100 text-rose-800 dark:bg-rose-950/80 dark:text-rose-300 border border-rose-200 dark:border-rose-800">
@@ -1585,14 +2170,43 @@ const finishVerification = () => {
                                     </span>
                                 </div>
                             </div>
+                            <div v-if="actionType === 'PEMOTONGAN' || actionType === 'PENAMBAHAN'" class="flex justify-between items-center pb-2 border-b border-slate-200/60 dark:border-slate-800">
+                                <span class="text-slate-400 font-medium">Kategori KPI RS:</span>
+                                <span class="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                                    <component :is="getCategoryIcon(selectedKpiCategory)" class="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                                    <span>{{ getKpiCategoryName(selectedKpiCategory) }}</span>
+                                </span>
+                            </div>
+                            <div v-if="actionType === 'PEMOTONGAN' || actionType === 'PENAMBAHAN'" class="flex justify-between items-center pb-2 border-b border-slate-200/60 dark:border-slate-800">
+                                <span class="text-slate-400 font-medium">Klasifikasi Bobot:</span>
+                                <span class="font-bold" :class="actionType === 'PEMOTONGAN' ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'">
+                                    {{ selectedSeverityObj ? selectedSeverityObj.label : 'Kustom' }} ({{ actionType === 'PEMOTONGAN' ? `-${pointValue}` : `+${pointValue}` }} Poin)
+                                </span>
+                            </div>
                             <div class="pb-2" :class="(actionType === 'NETRAL' && forwardToPesupeluh) || verificationFiles.length > 0 ? 'border-b border-slate-200/60 dark:border-slate-800' : ''">
-                                <span class="text-slate-400 font-medium block mb-1">Staf Bertugas Terkait:</span>
-                                <div v-if="selectedStaffList.length > 0" class="font-semibold text-slate-800 dark:text-slate-200 text-xs">
+                                <span class="text-slate-400 font-medium block mb-1">Status Eksekusi Staf:</span>
+                                <div v-if="actionType === 'DIBATALKAN'" class="text-slate-600 dark:text-slate-300 font-semibold text-xs">
+                                    ✓ Bebas Sanksi (Tidak ada poin & staf tidak diinformasikan)
+                                </div>
+                                <div v-else-if="selectedStaffList.length > 0" class="font-semibold text-slate-800 dark:text-slate-200 text-xs">
                                     {{ selectedStaffList.map(s => s.name).join(', ') }}
                                 </div>
                                 <div v-else class="text-slate-400 italic text-xs">
                                     Tidak ada staf dikaitkan
                                 </div>
+                            </div>
+                            <div v-if="actionType === 'DIBATALKAN'" class="pb-2" :class="verificationFiles.length > 0 ? 'border-b border-slate-200/60 dark:border-slate-800' : ''">
+                                <span class="text-slate-400 font-medium block mb-1">Status Lacak Laporan Publik:</span>
+                                <div class="text-emerald-700 dark:text-emerald-400 font-bold text-xs flex items-center gap-1">
+                                    <CheckCircle2 class="h-3.5 w-3.5" />
+                                    <span>Ditampilkan "Selesai" untuk pelapor</span>
+                                </div>
+                            </div>
+                            <div v-if="actionType === 'DIBATALKAN' && supervisorNotes" class="pb-2" :class="verificationFiles.length > 0 ? 'border-b border-slate-200/60 dark:border-slate-800' : ''">
+                                <span class="text-slate-400 font-medium block mb-0.5">Alasan Pembatalan Internal:</span>
+                                <p class="text-slate-700 dark:text-slate-300 font-normal italic leading-relaxed text-[11px]">
+                                    "{{ supervisorNotes }}"
+                                </p>
                             </div>
                             <div v-if="verificationFiles.length > 0" class="flex justify-between items-center pb-2" :class="actionType === 'NETRAL' && forwardToPesupeluh ? 'border-b border-slate-200/60 dark:border-slate-800' : ''">
                                 <span class="text-slate-400 font-medium">Lampiran Berkas:</span>
@@ -1601,8 +2215,8 @@ const finishVerification = () => {
                                     <span class="truncate">{{ verificationFiles[0].name }} ({{ verificationFiles[0].size }})</span>
                                 </span>
                             </div>
-                            <div v-if="actionType === 'NETRAL' && forwardToPesupeluh" class="p-2.5 rounded-xl bg-sky-50 dark:bg-sky-950/40 border border-sky-200/80 dark:border-sky-800/80 text-sky-800 dark:text-sky-300 text-xs font-medium flex items-center gap-2">
-                                <Wrench class="h-4 w-4 shrink-0 text-sky-600 dark:text-sky-400" />
+                            <div v-if="actionType === 'NETRAL' && forwardToPesupeluh" class="p-2.5 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-800/80 text-blue-800 dark:text-blue-300 text-xs font-medium flex items-center gap-2">
+                                <Wrench class="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
                                 <span>Laporan ini akan otomatis <strong>diteruskan ke PESU PELUH</strong> untuk teknisi sarana.</span>
                             </div>
                         </div>
@@ -1619,9 +2233,18 @@ const finishVerification = () => {
                             <button
                                 type="button"
                                 @click="confirmAndExecute"
-                                class="flex-1 h-11 text-xs sm:text-sm font-bold rounded-xl text-white shadow-sm transition duration-150 focus:outline-none bg-emerald-600 hover:bg-emerald-500 active:scale-[0.99] cursor-pointer"
+                                :class="[
+                                    'flex-1 h-11 text-xs sm:text-sm font-bold rounded-xl text-white shadow-sm transition duration-150 focus:outline-none cursor-pointer active:scale-[0.99]',
+                                    actionType === 'DIBATALKAN'
+                                        ? 'bg-slate-800 hover:bg-slate-700'
+                                        : (actionType === 'NETRAL'
+                                            ? 'bg-blue-600 hover:bg-blue-500'
+                                            : (actionType === 'PEMOTONGAN'
+                                                ? 'bg-rose-600 hover:bg-rose-500'
+                                                : 'bg-emerald-600 hover:bg-emerald-500'))
+                                ]"
                             >
-                                Ya, Simpan Verifikasi
+                                {{ actionType === 'DIBATALKAN' ? 'Ya, Batalkan Laporan' : 'Ya, Simpan Verifikasi' }}
                             </button>
                         </div>
                     </div>
@@ -1652,11 +2275,11 @@ const finishVerification = () => {
 
                         <!-- Info Content -->
                         <h3 class="text-base sm:text-lg font-extrabold text-slate-900 dark:text-white leading-tight px-2">
-                            Pilih Staf Bertugas
+                            {{ validationTitle }}
                         </h3>
 
                         <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-2.5 leading-relaxed px-1">
-                            Mohon centang setidaknya 1 staf yang bertugas saat kejadian untuk mengaitkan poin KPI evaluasi/apresiasi.
+                            {{ validationMessage }}
                         </p>
 
                         <!-- Action Button -->
@@ -1697,11 +2320,14 @@ const finishVerification = () => {
 
                         <!-- Info Content -->
                         <h3 class="text-base font-extrabold text-slate-900 dark:text-white leading-tight px-2">
-                            {{ isDispatchedToPesupeluh ? 'Verifikasi & Disposisi Berhasil Disimpan!' : 'Verifikasi Berhasil Disimpan!' }}
+                            {{ actionType === 'DIBATALKAN' ? 'Laporan Berhasil Dibatalkan & Diselesaikan!' : (isDispatchedToPesupeluh ? 'Verifikasi & Disposisi Berhasil Disimpan!' : 'Verifikasi Berhasil Disimpan!') }}
                         </h3>
 
                         <p class="text-sm text-slate-500 dark:text-slate-400 mt-3 leading-relaxed px-1">
-                            <template v-if="isDispatchedToPesupeluh">
+                            <template v-if="actionType === 'DIBATALKAN'">
+                                Laporan ini telah ditandai sebagai <strong class="font-semibold text-slate-700 dark:text-slate-200">DIBATALKAN / GUGUR</strong>. Staf unit tidak dikenakan sanksi atau potongan poin apa pun, dan pada lacak aduan publik status laporan tetap tertutup secara aman.
+                            </template>
+                            <template v-else-if="isDispatchedToPesupeluh">
                                 Status laporan telah diperbarui menjadi <strong class="font-semibold text-slate-700 dark:text-slate-200">TERVERIFIKASI</strong> dan logbook unit telah dicatat. Laporan aduan fasilitas ini juga telah <strong class="text-emerald-600 dark:text-emerald-400 font-semibold">berhasil didisposisikan ke PESU PELUH</strong> untuk penanganan teknisi sarana.
                             </template>
                             <template v-else>
