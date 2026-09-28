@@ -147,7 +147,7 @@ const allowOnlyNumbers = (e) => {
     // Allow control/navigation keys
     if (
         ['Backspace', 'Delete', 'Tab', 'Escape', 'Enter', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key) ||
-        e.ctrlKey || e.metaKey
+        e.ctrlKey || e.metaKey || e.altKey
     ) {
         return;
     }
@@ -157,15 +157,63 @@ const allowOnlyNumbers = (e) => {
     }
 };
 
+const blockNonNumericInput = (e) => {
+    if (e.data && !/^[0-9]+$/.test(e.data)) {
+        e.preventDefault();
+    }
+};
+
 const handleNipInput = (e) => {
-    form.nip = e.target.value.replace(/\D/g, '').slice(0, 18);
+    form.clearErrors('nip');
+    const cleaned = (e.target.value || '').replace(/\D/g, '').slice(0, 18);
+    form.nip = cleaned;
+    e.target.value = cleaned;
 };
 
 const handlePhoneInput = (e) => {
-    form.phone_number = e.target.value.replace(/\D/g, '').slice(0, 15);
+    form.clearErrors('phone_number');
+    const cleaned = (e.target.value || '').replace(/\D/g, '').slice(0, 15);
+    form.phone_number = cleaned;
+    e.target.value = cleaned;
+};
+
+const handleNipPaste = (e) => {
+    e.preventDefault();
+    const paste = (e.clipboardData || window.clipboardData)?.getData('text') || '';
+    const cleaned = paste.replace(/\D/g, '');
+    const target = e.target;
+    const start = target.selectionStart || 0;
+    const end = target.selectionEnd || 0;
+    const currentVal = target.value || '';
+    const combined = (currentVal.slice(0, start) + cleaned + currentVal.slice(end)).slice(0, 18);
+    form.nip = combined;
+    target.value = combined;
+    form.clearErrors('nip');
+};
+
+const handlePhonePaste = (e) => {
+    e.preventDefault();
+    const paste = (e.clipboardData || window.clipboardData)?.getData('text') || '';
+    const cleaned = paste.replace(/\D/g, '');
+    const target = e.target;
+    const start = target.selectionStart || 0;
+    const end = target.selectionEnd || 0;
+    const currentVal = target.value || '';
+    const combined = (currentVal.slice(0, start) + cleaned + currentVal.slice(end)).slice(0, 15);
+    form.phone_number = combined;
+    target.value = combined;
+    form.clearErrors('phone_number');
 };
 
 const submit = () => {
+    if (!form.nip) {
+        form.setError('nip', 'NIP wajib diisi.');
+        return;
+    }
+    if (form.nip.length !== 18) {
+        form.setError('nip', 'NIP harus terdiri dari 18 digit angka.');
+        return;
+    }
     form.post(route('register'), {
         onFinish: () => form.reset('password', 'password_confirmation'),
     });
@@ -388,7 +436,9 @@ const submit = () => {
                             placeholder="198207102008011003"
                             :value="form.nip"
                             @keydown="allowOnlyNumbers"
+                            @beforeinput="blockNonNumericInput"
                             @input="handleNipInput"
+                            @paste="handleNipPaste"
                             class="block w-full h-11 rounded-xl border border-slate-300 bg-slate-50 pl-10 pr-4 text-sm text-slate-900 placeholder:text-slate-400 transition-colors focus:border-emerald-500 focus:bg-white focus:outline-none focus:ring-0 focus:shadow-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-emerald-400 dark:focus:bg-slate-950"
                         />
                     </div>
@@ -444,7 +494,9 @@ const submit = () => {
                             placeholder="081234567890"
                             :value="form.phone_number"
                             @keydown="allowOnlyNumbers"
+                            @beforeinput="blockNonNumericInput"
                             @input="handlePhoneInput"
+                            @paste="handlePhonePaste"
                             class="block w-full h-11 rounded-xl border border-slate-300 bg-slate-50 pl-10 pr-4 text-sm text-slate-900 placeholder:text-slate-400 transition-colors focus:border-emerald-500 focus:bg-white focus:outline-none focus:ring-0 focus:shadow-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-emerald-400 dark:focus:bg-slate-950"
                         />
                     </div>

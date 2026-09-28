@@ -5,9 +5,11 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
+use App\Traits\NormalizesTimestamps;
+
 class WaMessageLog extends Model
 {
-    use HasFactory;
+    use HasFactory, NormalizesTimestamps;
 
     protected $fillable = [
         'recipient_phone',

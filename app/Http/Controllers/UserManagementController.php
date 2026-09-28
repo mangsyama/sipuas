@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
+use Carbon\Carbon;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -86,7 +87,11 @@ class UserManagementController extends Controller
         $unitFilter = $request->query('unit', '');
         $statusFilter = $request->query('status', '');
 
-        $query = User::with('room')->latest();
+        // Scope query: hanya pengguna resmi (pengguna aktif ATAU pengguna nonaktif yang sudah diapprove)
+        // Pengguna yang masih dalam proses pendaftaran/verifikasi persetujuan akun tidak ditampilkan di sini.
+        $baseQuery = User::officialUsers();
+
+        $query = (clone $baseQuery)->with('room')->latest();
 
         if (!empty($search)) {
             $query->where(function ($q) use ($search) {
@@ -151,14 +156,15 @@ class UserManagementController extends Controller
         $roles = Role::orderBy('id', 'asc')->get();
 
         $stats = [
-            'total' => User::count(),
-            'administrator' => User::where('role_id', Role::ADMINISTRATOR)->count(),
-            'superadmin' => User::where('role_id', Role::ADMINISTRATOR)->count(),
-            'direktur' => User::where('role_id', Role::DIREKTUR)->count(),
-            'kabid' => User::where('role_id', Role::KEPALA_BIDANG)->count(),
-            'kasi' => User::where('role_id', Role::KEPALA_SEKSI)->count(),
-            'staff' => User::where('role_id', Role::STAFF)->count(),
-            'active' => User::where('is_active', true)->count(),
+            'total' => (clone $baseQuery)->count(),
+            'administrator' => (clone $baseQuery)->where('role_id', Role::ADMINISTRATOR)->count(),
+            'superadmin' => (clone $baseQuery)->where('role_id', Role::ADMINISTRATOR)->count(),
+            'direktur' => (clone $baseQuery)->where('role_id', Role::DIREKTUR)->count(),
+            'kabid' => (clone $baseQuery)->where('role_id', Role::KEPALA_BIDANG)->count(),
+            'kasi' => (clone $baseQuery)->where('role_id', Role::KEPALA_SEKSI)->count(),
+            'staff' => (clone $baseQuery)->where('role_id', Role::STAFF)->count(),
+            'active' => (clone $baseQuery)->where('is_active', true)->count(),
+            'pending' => User::where('is_active', false)->whereNotNull('activation_requested_at')->count(),
         ];
 
         return Inertia::render('UserManagement/Index', [
@@ -184,14 +190,35 @@ class UserManagementController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:150',
-            'username' => ['nullable', 'string', 'max:50', Rule::unique('users')->whereNull('deleted_at')],
-            'nip' => ['nullable', 'string', 'max:50', Rule::unique('users')->whereNull('deleted_at')],
+            'username' => ['required', 'string', 'max:50', Rule::unique('users')->whereNull('deleted_at')],
+            'nip' => ['required', 'string', 'regex:/^[0-9]+$/', 'size:18', Rule::unique('users')->whereNull('deleted_at')],
             'email' => ['required', 'string', 'email', 'max:150', Rule::unique('users')->whereNull('deleted_at')],
-            'phone_number' => 'nullable|string|max:30',
+            'phone_number' => ['required', 'string', 'regex:/^[0-9]+$/', 'min:10', 'max:15'],
             'password' => 'required|string|min:6',
             'role' => 'required|string|in:ADMINISTRATOR,SUPERADMIN,DIREKTUR,KABID,KASI,STAFF',
             'room_id' => 'nullable|exists:rooms,id',
-            'unit_id' => 'nullable|exists:rooms,id',
+            'unit_id' => 'required|exists:rooms,id',
+        ], [
+            'name.required' => 'Nama lengkap & gelar wajib diisi.',
+            'username.required' => 'Username login wajib diisi.',
+            'username.unique' => 'Username ini sudah digunakan, silakan pilih username lain.',
+            'nip.required' => 'NIP wajib diisi.',
+            'nip.regex' => 'NIP hanya boleh berisi angka.',
+            'nip.size' => 'NIP harus terdiri dari 18 digit angka.',
+            'nip.unique' => 'NIP ini sudah terdaftar di sistem SIPUAS.',
+            'email.required' => 'Alamat email resmi wajib diisi.',
+            'email.email' => 'Format email tidak valid.',
+            'email.unique' => 'Alamat email ini sudah terdaftar di sistem SIPUAS.',
+            'phone_number.required' => 'Nomor HP / WhatsApp wajib diisi.',
+            'phone_number.regex' => 'Nomor HP hanya boleh berisi angka.',
+            'phone_number.min' => 'Nomor HP minimal 10 digit angka.',
+            'phone_number.max' => 'Nomor HP maksimal 15 digit angka.',
+            'role.required' => 'Peran / Hak Akses wajib dipilih.',
+            'role.in' => 'Peran / Hak Akses yang dipilih tidak valid.',
+            'unit_id.required' => 'Penugasan Unit Kerja wajib dipilih.',
+            'unit_id.exists' => 'Unit Kerja yang dipilih tidak ditemukan.',
+            'password.required' => 'Kata sandi awal wajib diisi.',
+            'password.min' => 'Kata sandi minimal 6 karakter.',
         ]);
 
         if (!empty($validated['unit_id']) && empty($validated['room_id'])) {
@@ -209,6 +236,9 @@ class UserManagementController extends Controller
         $validated['role_id'] = $roleId;
         $validated['password'] = Hash::make($validated['password']);
         $validated['is_active'] = true;
+        $validated['approved_at'] = Carbon::now();
+        $validated['approved_by'] = Auth::id();
+        $validated['activation_requested_at'] = null;
 
         User::create($validated);
 
@@ -218,8 +248,12 @@ class UserManagementController extends Controller
     /**
      * Display the specified user detail.
      */
-    public function show(User $user): Response
+    public function show(User $user)
     {
+        if (!$user->is_active && $user->activation_requested_at && !$user->approved_at) {
+            return redirect()->route('users.approvals.show', $user->id);
+        }
+
         $user->load(['room', 'verifiedReports']);
 
         return Inertia::render('UserManagement/Show', [
@@ -254,8 +288,12 @@ class UserManagementController extends Controller
     /**
      * Show form for editing user.
      */
-    public function edit(User $user): Response
+    public function edit(User $user)
     {
+        if (!$user->is_active && $user->activation_requested_at && !$user->approved_at) {
+            return redirect()->route('users.approvals.show', $user->id);
+        }
+
         $rooms = Room::where('is_active', true)->orderBy('name')->get();
         $units = $rooms->map(fn ($r) => [
             'id' => $r->id,

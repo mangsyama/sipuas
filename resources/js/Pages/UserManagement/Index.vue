@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import InputError from '@/Components/InputError.vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { 
     Users, 
@@ -8,7 +9,6 @@ import {
     Search, 
     Filter, 
     Shield, 
-    ShieldCheck, 
     Activity, 
     Building2, 
     CheckCircle2, 
@@ -27,7 +27,8 @@ import {
     AlertTriangle,
     Sparkles,
     ChevronLeft,
-    ChevronRight
+    ChevronRight,
+    UserCheck
 } from '@lucide/vue';
 
 const props = defineProps({
@@ -47,7 +48,8 @@ const props = defineProps({
             kabid: 0,
             kasi: 0,
             staff: 0,
-            active: 0
+            active: 0,
+            pending: 0
         })
     },
     filters: {
@@ -163,11 +165,146 @@ const goToPage = (page) => {
     }
 };
 
+const allowOnlyNumbers = (e) => {
+    // Allow control/navigation keys
+    if (
+        ['Backspace', 'Delete', 'Tab', 'Escape', 'Enter', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key) ||
+        e.ctrlKey || e.metaKey || e.altKey
+    ) {
+        return;
+    }
+    // Block any non-digit character
+    if (!/^[0-9]$/.test(e.key)) {
+        e.preventDefault();
+    }
+};
+
+const blockNonNumericInput = (e) => {
+    if (e.data && !/^[0-9]+$/.test(e.data)) {
+        e.preventDefault();
+    }
+};
+
+const handleCreateNipInput = (e) => {
+    createForm.clearErrors('nip');
+    const cleaned = (e.target.value || '').replace(/\D/g, '').slice(0, 18);
+    createForm.nip = cleaned;
+    e.target.value = cleaned;
+};
+
+const handleCreatePhoneInput = (e) => {
+    createForm.clearErrors('phone_number');
+    const cleaned = (e.target.value || '').replace(/\D/g, '').slice(0, 15);
+    createForm.phone_number = cleaned;
+    e.target.value = cleaned;
+};
+
+const handleNipPaste = (e) => {
+    e.preventDefault();
+    const paste = (e.clipboardData || window.clipboardData)?.getData('text') || '';
+    const cleaned = paste.replace(/\D/g, '');
+    const target = e.target;
+    const start = target.selectionStart || 0;
+    const end = target.selectionEnd || 0;
+    const currentVal = target.value || '';
+    const combined = (currentVal.slice(0, start) + cleaned + currentVal.slice(end)).slice(0, 18);
+    createForm.nip = combined;
+    target.value = combined;
+    createForm.clearErrors('nip');
+};
+
+const handlePhonePaste = (e) => {
+    e.preventDefault();
+    const paste = (e.clipboardData || window.clipboardData)?.getData('text') || '';
+    const cleaned = paste.replace(/\D/g, '');
+    const target = e.target;
+    const start = target.selectionStart || 0;
+    const end = target.selectionEnd || 0;
+    const currentVal = target.value || '';
+    const combined = (currentVal.slice(0, start) + cleaned + currentVal.slice(end)).slice(0, 15);
+    createForm.phone_number = combined;
+    target.value = combined;
+    createForm.clearErrors('phone_number');
+};
+
+const openCreateModal = () => {
+    createForm.reset();
+    createForm.clearErrors();
+    showCreateModal.value = true;
+};
+
+const closeCreateModal = () => {
+    showCreateModal.value = false;
+    createForm.reset();
+    createForm.clearErrors();
+};
+
 const submitCreateUser = () => {
+    createForm.clearErrors();
+
+    // 1. Nama Lengkap (Wajib)
+    if (!createForm.name || !createForm.name.trim()) {
+        createForm.setError('name', 'Nama lengkap & gelar wajib diisi.');
+        return;
+    }
+
+    // 2. NIP (Wajib, tepat 18 karakter angka)
+    if (!createForm.nip) {
+        createForm.setError('nip', 'NIP wajib diisi.');
+        return;
+    }
+    if (createForm.nip.length !== 18) {
+        createForm.setError('nip', 'NIP harus terdiri dari 18 digit angka.');
+        return;
+    }
+
+    // 3. Username Login (Wajib)
+    if (!createForm.username || !createForm.username.trim()) {
+        createForm.setError('username', 'Username login wajib diisi.');
+        return;
+    }
+
+    // 4. Email Resmi (Wajib)
+    if (!createForm.email || !createForm.email.trim()) {
+        createForm.setError('email', 'Email resmi wajib diisi.');
+        return;
+    }
+
+    // 5. Nomor HP / WhatsApp (Wajib, 10 - 15 digit angka)
+    if (!createForm.phone_number) {
+        createForm.setError('phone_number', 'Nomor HP / WhatsApp wajib diisi.');
+        return;
+    }
+    if (createForm.phone_number.length < 10) {
+        createForm.setError('phone_number', 'Nomor HP / WhatsApp minimal 10 digit angka.');
+        return;
+    }
+
+    // 6. Peran / Hak Akses (Wajib)
+    if (!createForm.role) {
+        createForm.setError('role', 'Peran / Hak Akses wajib dipilih.');
+        return;
+    }
+
+    // 7. Penugasan Unit Instalasi (Wajib)
+    if (!createForm.unit_id) {
+        createForm.setError('unit_id', 'Penugasan Unit Kerja wajib dipilih.');
+        return;
+    }
+
+    // 8. Kata Sandi Awal (Wajib, minimal 6 karakter)
+    if (!createForm.password) {
+        createForm.setError('password', 'Kata sandi awal wajib diisi.');
+        return;
+    }
+    if (createForm.password.length < 6) {
+        createForm.setError('password', 'Kata sandi minimal 6 karakter.');
+        return;
+    }
+
     createForm.post(route('users.store'), {
         onSuccess: () => {
-            showCreateModal.value = false;
-            createForm.reset();
+            closeCreateModal();
         }
     });
 };
@@ -250,7 +387,7 @@ const isAnyModalOpen = computed(() => {
 });
 
 const closeAllModals = () => {
-    showCreateModal.value = false;
+    closeCreateModal();
     showDeleteConfirmModal.value = false;
     showResetPasswordModal.value = false;
 };
@@ -318,10 +455,20 @@ onUnmounted(() => {
                     </div>
                 </div>
 
-                <div class="w-full sm:w-auto flex items-center">
+                <div class="w-full sm:w-auto flex flex-wrap items-center gap-2.5">
+                    <Link
+                        v-if="stats.pending > 0"
+                        :href="route('users.approvals')"
+                        class="w-full sm:w-auto h-10 px-4 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800/60 text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer"
+                    >
+                        <UserCheck class="h-4 w-4" />
+                        <span>Persetujuan Pendaftar</span>
+                        <span class="min-w-[20px] h-5 px-1.5 rounded-full bg-amber-500 text-white text-[10px] font-extrabold flex items-center justify-center shrink-0 leading-none">{{ stats.pending }}</span>
+                    </Link>
+
                     <button
-                        @click="showCreateModal = true"
-                        class="w-full sm:w-auto h-10 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer"
+                        @click="openCreateModal"
+                        class="w-full sm:w-auto h-10 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer shadow-sm"
                     >
                         <UserPlus class="h-4 w-4" />
                         <span>Tambah Pengguna Baru</span>
@@ -366,12 +513,12 @@ onUnmounted(() => {
 
                 <div class="bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 rounded-2xl p-5 shadow-sm flex items-center justify-between">
                     <div class="space-y-1">
-                        <span class="text-xs font-bold uppercase tracking-wider text-slate-400 block">Administrator</span>
-                        <div class="text-3xl font-extrabold text-slate-900 dark:text-white leading-tight">{{ stats.administrator ?? stats.superadmin }}</div>
-                        <span class="text-[11px] text-slate-400 block">Akses Penuh Sistem</span>
+                        <span class="text-xs font-bold uppercase tracking-wider text-slate-400 block">Staf Pelayanan</span>
+                        <div class="text-3xl font-extrabold text-slate-900 dark:text-white leading-tight">{{ stats.staff }}</div>
+                        <span class="text-[11px] text-slate-400 block">Pelaksana Pelayanan RS</span>
                     </div>
                     <div class="h-12 w-12 rounded-xl flex items-center justify-center flex-shrink-0 bg-purple-50 dark:bg-purple-950/40">
-                        <ShieldCheck class="h-6 w-6 text-purple-600 dark:text-purple-400" />
+                        <User class="h-6 w-6 text-purple-600 dark:text-purple-400" />
                     </div>
                 </div>
             </div>
@@ -620,26 +767,38 @@ onUnmounted(() => {
                                     placeholder="Contoh: dr. H. Rahmat, Sp.B"
                                     class="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition"
                                 />
+                                <InputError :message="createForm.errors.name" class="mt-1.5" />
                             </div>
 
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                                 <div>
-                                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">NIP (Nomor Induk Pegawai)</label>
+                                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">NIP (Nomor Induk Pegawai) *</label>
                                     <input
                                         type="text"
-                                        v-model="createForm.nip"
+                                        required
+                                        inputmode="numeric"
+                                        pattern="[0-9]*"
+                                        maxlength="18"
+                                        :value="createForm.nip"
+                                        @keydown="allowOnlyNumbers"
+                                        @beforeinput="blockNonNumericInput"
+                                        @input="handleCreateNipInput"
+                                        @paste="handleNipPaste"
                                         placeholder="198207102008011003"
                                         class="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition"
                                     />
+                                    <InputError :message="createForm.errors.nip" class="mt-1.5" />
                                 </div>
                                 <div>
-                                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Username Login</label>
+                                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Username Login *</label>
                                     <input
                                         type="text"
                                         v-model="createForm.username"
+                                        required
                                         placeholder="rahmat_igd"
                                         class="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition"
                                     />
+                                    <InputError :message="createForm.errors.username" class="mt-1.5" />
                                 </div>
                             </div>
 
@@ -653,15 +812,25 @@ onUnmounted(() => {
                                         placeholder="rahmat@rs.local"
                                         class="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition"
                                     />
+                                    <InputError :message="createForm.errors.email" class="mt-1.5" />
                                 </div>
                                 <div>
-                                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Nomor HP / WhatsApp</label>
+                                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Nomor HP / WhatsApp *</label>
                                     <input
-                                        type="text"
-                                        v-model="createForm.phone_number"
+                                        type="tel"
+                                        required
+                                        inputmode="numeric"
+                                        pattern="[0-9]*"
+                                        maxlength="15"
+                                        :value="createForm.phone_number"
+                                        @keydown="allowOnlyNumbers"
+                                        @beforeinput="blockNonNumericInput"
+                                        @input="handleCreatePhoneInput"
+                                        @paste="handlePhonePaste"
                                         placeholder="081234567891"
                                         class="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition"
                                     />
+                                    <InputError :message="createForm.errors.phone_number" class="mt-1.5" />
                                 </div>
                             </div>
 
@@ -680,18 +849,21 @@ onUnmounted(() => {
                                         <option value="KASI">Kepala Seksi</option>
                                         <option value="STAFF">Staf Pelayanan</option>
                                     </select>
+                                    <InputError :message="createForm.errors.role" class="mt-1.5" />
                                 </div>
                                 <div>
-                                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Penugasan Unit Instalasi</label>
+                                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Penugasan Unit Kerja *</label>
                                     <select
                                         v-model="createForm.unit_id"
+                                        required
                                         class="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition cursor-pointer"
                                     >
-                                        <option value="">-- Pilih Unit Kerja --</option>
+                                        <option value="" disabled>-- Pilih Unit Kerja --</option>
                                         <option v-for="unit in units" :key="unit.id" :value="unit.id">
                                             {{ unit.name }}
                                         </option>
                                     </select>
+                                    <InputError :message="createForm.errors.unit_id" class="mt-1.5" />
                                 </div>
                             </div>
 
@@ -705,6 +877,7 @@ onUnmounted(() => {
                                     placeholder="Minimal 6 karakter"
                                     class="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition"
                                 />
+                                <InputError :message="createForm.errors.password" class="mt-1.5" />
                             </div>
                         </div>
 
@@ -712,7 +885,7 @@ onUnmounted(() => {
                         <div class="px-6 pt-4 pb-10 sm:pb-4 bg-slate-50/50 dark:bg-slate-800/40 border-t border-slate-100 dark:border-slate-800 flex flex-col-reverse sm:flex-row items-center justify-end gap-2.5 shrink-0 mt-auto sm:mt-0">
                             <button
                                 type="button"
-                                @click="showCreateModal = false"
+                                @click="closeCreateModal"
                                 class="w-full sm:w-auto px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer text-center justify-center"
                             >
                                 Batal

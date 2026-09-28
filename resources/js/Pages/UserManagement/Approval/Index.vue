@@ -3,7 +3,6 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { 
-    Users, 
     UserCheck, 
     UserX, 
     Search, 
@@ -15,10 +14,10 @@ import {
     X,
     Check,
     AlertTriangle,
-    Clock,
     ChevronLeft,
     ChevronRight,
-    Sparkles
+    Sparkles,
+    Loader2
 } from '@lucide/vue';
 
 const props = defineProps({
@@ -58,9 +57,10 @@ const perPage = ref(10);
 const showQuickApproveModal = ref(false);
 const showRejectModal = ref(false);
 const selectedUserForAction = ref(null);
+const isRejecting = ref(false);
 
 const approveForm = useForm({
-    role: 'STAFF',
+    role: '',
     unit_id: ''
 });
 
@@ -110,13 +110,18 @@ const goToPage = (page) => {
 
 const openQuickApprove = (user) => {
     selectedUserForAction.value = user;
-    approveForm.role = user.role || 'STAFF';
+    approveForm.clearErrors();
+    approveForm.role = '';
     approveForm.unit_id = user.unit_id || '';
     showQuickApproveModal.value = true;
 };
 
 const submitQuickApprove = () => {
     if (!selectedUserForAction.value) return;
+    if (!approveForm.role) {
+        approveForm.setError('role', 'Silakan pilih peran / role akses terlebih dahulu.');
+        return;
+    }
     approveForm.post(route('users.approvals.approve', { user: selectedUserForAction.value.id }), {
         onSuccess: () => {
             showQuickApproveModal.value = false;
@@ -127,15 +132,20 @@ const submitQuickApprove = () => {
 
 const openRejectModal = (user) => {
     selectedUserForAction.value = user;
+    isRejecting.value = false;
     showRejectModal.value = true;
 };
 
 const submitReject = () => {
-    if (!selectedUserForAction.value) return;
+    if (!selectedUserForAction.value || isRejecting.value) return;
+    isRejecting.value = true;
     router.delete(route('users.approvals.reject', { user: selectedUserForAction.value.id }), {
         onSuccess: () => {
             showRejectModal.value = false;
             selectedUserForAction.value = null;
+        },
+        onFinish: () => {
+            isRejecting.value = false;
         }
     });
 };
@@ -210,52 +220,6 @@ onUnmounted(() => {
                         <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 max-w-2xl leading-relaxed">
                             Verifikasi berkas pendaftaran, pasfoto formal, dan tetapkan hak akses akun staf baru di SIPUAS.
                         </p>
-                    </div>
-                </div>
-
-                <div class="w-full sm:w-auto flex items-center">
-                    <Link
-                        :href="route('users.index')"
-                        class="w-full sm:w-auto h-10 px-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer"
-                    >
-                        <Users class="h-4 w-4" />
-                        <span>Daftar Pengguna</span>
-                    </Link>
-                </div>
-            </div>
-
-            <!-- Summary KPI Stats Cards (SAME LAYOUT AS MASTER PENGGUNA) -->
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div class="bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 rounded-2xl p-5 shadow-sm flex items-center justify-between">
-                    <div class="space-y-1">
-                        <span class="text-xs font-bold uppercase tracking-wider text-slate-400 block">Menunggu Verifikasi</span>
-                        <div class="text-3xl font-extrabold text-amber-600 dark:text-amber-400 leading-tight">{{ stats.pending }}</div>
-                        <span class="text-[11px] text-slate-400 block">Pendaftar baru belum disetujui</span>
-                    </div>
-                    <div class="h-12 w-12 rounded-xl flex items-center justify-center flex-shrink-0 bg-amber-50 dark:bg-amber-950/40">
-                        <Clock class="h-6 w-6 text-amber-600 dark:text-amber-400" />
-                    </div>
-                </div>
-
-                <div class="bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 rounded-2xl p-5 shadow-sm flex items-center justify-between">
-                    <div class="space-y-1">
-                        <span class="text-xs font-bold uppercase tracking-wider text-slate-400 block">Disetujui Hari Ini</span>
-                        <div class="text-3xl font-extrabold text-emerald-600 dark:text-emerald-400 leading-tight">{{ stats.approved_today }}</div>
-                        <span class="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold block">Akun diaktifkan hari ini</span>
-                    </div>
-                    <div class="h-12 w-12 rounded-xl flex items-center justify-center flex-shrink-0 bg-emerald-50 dark:bg-emerald-950/40">
-                        <CheckCircle2 class="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
-                    </div>
-                </div>
-
-                <div class="bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 rounded-2xl p-5 shadow-sm flex items-center justify-between">
-                    <div class="space-y-1">
-                        <span class="text-xs font-bold uppercase tracking-wider text-slate-400 block">Total Pengguna Aktif</span>
-                        <div class="text-3xl font-extrabold text-blue-600 dark:text-blue-400 leading-tight">{{ stats.total_active }}</div>
-                        <span class="text-[11px] text-slate-400 block">Akun aktif dalam sistem</span>
-                    </div>
-                    <div class="h-12 w-12 rounded-xl flex items-center justify-center flex-shrink-0 bg-blue-50 dark:bg-blue-950/40">
-                        <Users class="h-6 w-6 text-blue-600 dark:text-blue-400" />
                     </div>
                 </div>
             </div>
@@ -504,12 +468,14 @@ onUnmounted(() => {
                             required
                             class="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-emerald-500 font-medium cursor-pointer transition"
                         >
+                            <option value="" disabled selected>-- Pilih Peran / Role Akses --</option>
                             <option value="STAFF">Staf Pelayanan</option>
                             <option value="KASI">Kepala Seksi (Kasi)</option>
                             <option value="KABID">Kepala Bidang (Kabid)</option>
                             <option value="ADMINISTRATOR">Administrator</option>
                             <option value="SUPERADMIN">Super Administrator</option>
                         </select>
+                        <div v-if="approveForm.errors.role" class="text-rose-500 text-[11px] font-medium">{{ approveForm.errors.role }}</div>
                     </div>
 
                     <!-- Unit Assignment -->
@@ -568,17 +534,20 @@ onUnmounted(() => {
                     <button
                         type="button"
                         @click="showRejectModal = false"
-                        class="h-9 px-4 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition cursor-pointer"
+                        :disabled="isRejecting"
+                        class="h-9 px-4 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         Batal
                     </button>
                     <button
                         type="button"
                         @click="submitReject"
-                        class="h-9 px-4 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+                        :disabled="isRejecting"
+                        class="h-9 px-4 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                        <Trash2 class="h-4 w-4" />
-                        <span>Ya, Tolak & Hapus</span>
+                        <Loader2 v-if="isRejecting" class="h-4 w-4 animate-spin" />
+                        <Trash2 v-else class="h-4 w-4" />
+                        <span>{{ isRejecting ? 'Menolak...' : 'Ya, Tolak & Hapus' }}</span>
                     </button>
                 </div>
             </div>

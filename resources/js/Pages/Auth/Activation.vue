@@ -73,6 +73,10 @@ const scrollToTop = () => {
 
 const closeModal = () => {
     showSuccessModal.value = false;
+    statusMessage.value = '';
+    if (typeof document !== 'undefined') {
+        document.body.style.overflow = '';
+    }
     scrollToTop();
 };
 
@@ -83,41 +87,14 @@ const handleKeyDown = (e) => {
     }
 };
 
-const handlePopState = () => {
-    if (showSuccessModal.value) {
-        closeModal();
-    }
-};
-
-let pushHistoryFlag = false;
-
-watch(showSuccessModal, (isOpen, oldVal) => {
+watch(showSuccessModal, (isOpen) => {
     if (typeof document !== 'undefined') {
-        if (isOpen) {
-            document.body.style.overflow = 'hidden';
-            if (!window.history.state?.activationModalOpen) {
-                try {
-                    window.history.pushState({ activationModalOpen: true }, '');
-                    pushHistoryFlag = true;
-                } catch (e) {}
-            }
-        } else {
-            document.body.style.overflow = '';
-            if (oldVal && pushHistoryFlag && window.history.state?.activationModalOpen) {
-                pushHistoryFlag = false;
-                try {
-                    window.history.back();
-                } catch (e) {}
-            } else {
-                pushHistoryFlag = false;
-            }
-        }
+        document.body.style.overflow = isOpen ? 'hidden' : '';
     }
 });
 
 onMounted(() => {
     window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('popstate', handlePopState);
     if (props.status) {
         statusMessage.value = props.status;
         showSuccessModal.value = true;
@@ -127,7 +104,6 @@ onMounted(() => {
 
 onUnmounted(() => {
     window.removeEventListener('keydown', handleKeyDown);
-    window.removeEventListener('popstate', handlePopState);
     if (typeof document !== 'undefined') {
         document.body.style.overflow = '';
     }
@@ -290,7 +266,7 @@ const submit = () => {
                             Permohonan Aktivasi Akun
                         </h2>
                         <p class="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto leading-relaxed">
-                            Data akun Anda terhubung dari sistem Pesu Peluh. Silakan lengkapi unit pelayanan bertugas dan konfirmasi nomor WhatsApp untuk mengaktifkan akun Anda di SIPUAS.
+                            Data akun Anda terhubung dari sistem Pesu Peluh. Silakan pilih ruangan pelayanan bertugas dan konfirmasi nomor WhatsApp, lalu klik Minta Verifikasi Akun agar akun Anda dapat ditinjau oleh Administrator.
                         </p>
                     </div>
 
@@ -306,6 +282,24 @@ const submit = () => {
                                 <CheckCircle2 class="h-3 w-3 shrink-0 text-emerald-600 dark:text-emerald-400" />
                                 <span>Terverifikasi</span>
                             </span>
+                        </div>
+
+                        <!-- Foto Profil Resmi Tersinkronisasi dari Pesu Peluh -->
+                        <div class="flex items-center gap-3.5 p-3.5 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-100 dark:border-slate-800/80">
+                            <div v-if="user.profile_photo_path" class="h-14 w-14 rounded-full overflow-hidden border-2 border-emerald-500 shrink-0 bg-slate-100 dark:bg-slate-800 shadow-xs">
+                                <img :src="user.profile_photo_path" :alt="user.name" class="h-full w-full object-cover" />
+                            </div>
+                            <div v-else class="h-14 w-14 rounded-full bg-emerald-50 dark:bg-white/10 text-emerald-600 dark:text-white flex items-center justify-center font-bold text-lg shrink-0 border border-emerald-200 dark:border-white/20">
+                                {{ user.name?.charAt(0) || 'U' }}
+                            </div>
+                            <div class="min-w-0">
+                                <div class="font-bold text-slate-900 dark:text-white text-xs sm:text-sm font-['Poppins',sans-serif] truncate">
+                                    {{ user.name }}
+                                </div>
+                                <div class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                                    {{ user.profile_photo_path ? 'Pasfoto resmi tersinkronisasi dari Pesu Peluh' : 'Pasfoto profil tersambung via akun Pesu Peluh' }}
+                                </div>
+                            </div>
                         </div>
 
                         <!-- Stacked Rows (No columns, 100% Poppins, font-medium matching dropdown) -->
@@ -502,7 +496,7 @@ const submit = () => {
                                         class="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"
                                     ></span>
                                     <template v-else>
-                                        <span>{{ user.has_requested ? 'Simpan Perubahan' : 'Ajukan Pengaktifan Akun' }}</span>
+                                        <span>{{ user.has_requested ? 'Simpan Perubahan' : 'Minta Verifikasi Akun' }}</span>
                                         <ArrowRight class="h-4 w-4" />
                                     </template>
                                 </button>
@@ -575,7 +569,7 @@ const submit = () => {
                                 class="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"
                             ></span>
                             <template v-else>
-                                <span>{{ user.has_requested ? 'Simpan Perubahan' : 'Ajukan Pengaktifan Akun' }}</span>
+                                <span>{{ user.has_requested ? 'Simpan Perubahan' : 'Minta Verifikasi Akun' }}</span>
                                 <ArrowRight class="h-4 w-4" />
                             </template>
                         </button>
@@ -616,8 +610,8 @@ const submit = () => {
                 leave-to-class="opacity-0"
             >
                 <div v-if="showSuccessModal" class="fixed inset-0 z-[9999] flex items-center justify-center p-4 font-['Poppins',sans-serif]">
-                    <!-- Backdrop overlay (Click outside to close disabled as per standard) -->
-                    <div class="fixed inset-0 bg-black/40 backdrop-blur-xs select-none"></div>
+                    <!-- Backdrop overlay -->
+                    <div class="fixed inset-0 bg-black/40 backdrop-blur-xs select-none cursor-pointer" @click="closeModal"></div>
 
                     <!-- Modal Card matching AuthenticatedLayout Swal design -->
                     <div class="relative bg-white/95 dark:bg-slate-900/95 border border-slate-100 dark:border-slate-800 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden p-6 sm:p-7 flex flex-col items-center text-center transform transition-all duration-200 backdrop-blur-md">

@@ -33,7 +33,20 @@ class UserFactory extends Factory
             'password' => static::$password ??= Hash::make('password'),
             'remember_token' => Str::random(10),
             'is_active' => true,
+            'activation_requested_at' => now(),
         ];
+    }
+
+    /**
+     * Indicate that the user has not yet requested activation.
+     */
+    public function unrequestedActivation(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'room_id' => null,
+            'is_active' => false,
+            'activation_requested_at' => null,
+        ]);
     }
 
     /**

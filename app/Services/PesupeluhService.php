@@ -388,4 +388,100 @@ class PesupeluhService
             'updated_at' => $now,
         ]);
     }
+
+    /**
+     * Synchronize profile photo from Pesu Peluh to SIPUAS storage.
+     *
+     * @param User $user
+     * @param string|null $pesupeluhPhotoPath
+     * @return string|null The local SIPUAS public storage path
+     */
+    public static function syncUserProfilePhoto(User $user, ?string $pesupeluhPhotoPath = null): ?string
+    {
+        // 1. If photo path not provided, query from Pesu Peluh database
+        if (empty($pesupeluhPhotoPath)) {
+            try {
+                $pesupeluhUser = DB::connection('pesupeluh')
+                    ->table('users')
+                    ->where(function ($q) use ($user) {
+                        if (!empty($user->username)) $q->orWhere('username', $user->username);
+                        if (!empty($user->nip)) $q->orWhere('nip', $user->nip);
+                        if (!empty($user->email)) $q->orWhere('email', $user->email);
+                    })
+                    ->whereNotNull('profile_photo_path')
+                    ->first(['profile_photo_path']);
+
+                if ($pesupeluhUser && !empty($pesupeluhUser->profile_photo_path)) {
+                    $pesupeluhPhotoPath = $pesupeluhUser->profile_photo_path;
+                }
+            } catch (\Throwable $e) {
+                Log::warning('PesupeluhService::syncUserProfilePhoto DB lookup failed: ' . $e->getMessage());
+            }
+        }
+
+        if (empty($pesupeluhPhotoPath)) {
+            return null;
+        }
+
+        $filename = basename($pesupeluhPhotoPath);
+        if (empty($filename) || $filename === '.' || $filename === '/') {
+            return null;
+        }
+
+        $sipuasDestDir = storage_path('app/public/profile_photos');
+        if (!is_dir($sipuasDestDir)) {
+            @mkdir($sipuasDestDir, 0755, true);
+        }
+        $sipuasDestFile = $sipuasDestDir . DIRECTORY_SEPARATOR . $filename;
+
+        // If file already exists in SIPUAS storage, ensure user model has it and return
+        if (file_exists($sipuasDestFile) && filesize($sipuasDestFile) > 0) {
+            $localPath = '/storage/profile_photos/' . $filename;
+            if ($user->profile_photo_path !== $localPath) {
+                $user->profile_photo_path = $localPath;
+                $user->save();
+            }
+            return $localPath;
+        }
+
+        // 2. Try copying from local disk paths (Pesu Peluh folders)
+        $cleanRelPath = ltrim(str_replace('/storage/', '', $pesupeluhPhotoPath), '/\\');
+        $candidatePaths = [
+            base_path('../pesupeluh/storage/app/public/profile_photos/' . $filename),
+            base_path('../pesupeluh/public/storage/profile_photos/' . $filename),
+            base_path('../pesupeluh/storage/app/public/' . $cleanRelPath),
+            base_path('../pesupeluh/public/' . ltrim($pesupeluhPhotoPath, '/\\')),
+        ];
+
+        foreach ($candidatePaths as $sourcePath) {
+            if (file_exists($sourcePath) && is_readable($sourcePath) && filesize($sourcePath) > 0) {
+                if (@copy($sourcePath, $sipuasDestFile)) {
+                    $localPath = '/storage/profile_photos/' . $filename;
+                    $user->profile_photo_path = $localPath;
+                    $user->save();
+                    return $localPath;
+                }
+            }
+        }
+
+        // 3. Fallback: Try fetching via HTTP from Pesu Peluh API/Base URL
+        try {
+            $apiUrl = config('services.pesupeluh.api_url', 'http://127.0.0.1:8000');
+            $baseUrl = preg_replace('#/api/?$#', '', $apiUrl);
+            $photoUrl = rtrim($baseUrl, '/') . '/' . ltrim($pesupeluhPhotoPath, '/');
+
+            $response = Http::timeout(5)->get($photoUrl);
+            if ($response->successful() && strlen($response->body()) > 0) {
+                file_put_contents($sipuasDestFile, $response->body());
+                $localPath = '/storage/profile_photos/' . $filename;
+                $user->profile_photo_path = $localPath;
+                $user->save();
+                return $localPath;
+            }
+        } catch (\Throwable $e) {
+            Log::warning('PesupeluhService::syncUserProfilePhoto HTTP fetch failed: ' . $e->getMessage());
+        }
+
+        return null;
+    }
 }

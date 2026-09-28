@@ -12,10 +12,12 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Str;
 
+use App\Traits\NormalizesTimestamps;
+
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable, SoftDeletes;
+    use HasFactory, Notifiable, SoftDeletes, NormalizesTimestamps;
 
     protected $fillable = [
         'uuid',
@@ -42,6 +44,7 @@ class User extends Authenticatable
         'wa_notify_enabled',
         'profile_photo_path',
         'role', // Handled via mutator
+        'activation_requested_at',
     ];
 
     protected $hidden = [
@@ -78,6 +81,7 @@ class User extends Authenticatable
             'wa_notify_enabled' => 'boolean',
             'page_permissions' => 'array',
             'approved_at' => 'datetime',
+            'activation_requested_at' => 'datetime',
             'last_point_update_at' => 'datetime',
             'role_id' => 'integer',
             'room_id' => 'integer',
@@ -149,6 +153,23 @@ class User extends Authenticatable
             get: fn () => $this->room_id,
             set: fn ($value) => ['room_id' => $value],
         );
+    }
+
+    /**
+     * Relative human readable time for registration / activation request.
+     */
+    public function getCreatedAtHumanAttribute(): string
+    {
+        $target = $this->activation_requested_at ?: $this->created_at;
+        if (!$target) {
+            return '-';
+        }
+
+        if ($target->isFuture()) {
+            return 'Baru saja';
+        }
+
+        return $target->diffForHumans();
     }
 
     public function attendances(): HasMany
@@ -293,5 +314,26 @@ class User extends Authenticatable
             get: fn (?string $value) => $value ? strtolower($value) : null,
             set: fn (?string $value) => $value ? strtolower($value) : null,
         );
+    }
+
+    public function hasRequestedActivation(): bool
+    {
+        return !is_null($this->activation_requested_at);
+    }
+
+    /**
+     * Scope a query to only include official users (active users or approved inactive users),
+     * excluding unapproved applicants who are still in the registration/activation approval process.
+     */
+    public function scopeOfficialUsers($query)
+    {
+        return $query->where(function ($q) {
+            $q->where('is_active', true)
+              ->orWhere(function ($sub) {
+                  $sub->where('is_active', false)
+                      ->whereNotNull('approved_at')
+                      ->whereNull('activation_requested_at');
+              });
+        });
     }
 }

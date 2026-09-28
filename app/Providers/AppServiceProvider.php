@@ -21,7 +21,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        date_default_timezone_set(config('app.timezone', 'Asia/Makassar'));
+        $appTimezone = config('app.timezone', 'Asia/Makassar');
+        date_default_timezone_set($appTimezone);
+        Carbon::setLocale(config('app.locale', 'id'));
 
         Carbon::serializeUsing(function (\DateTimeInterface $date) {
             $tz = config('app.timezone', 'Asia/Makassar');

@@ -23,7 +23,8 @@ class UserApprovalController extends Controller
 
         $query = User::with('room')
             ->where('is_active', false)
-            ->latest();
+            ->whereNotNull('activation_requested_at')
+            ->latest('activation_requested_at');
 
         if (!empty($search)) {
             $query->where(function ($q) use ($search) {
@@ -40,6 +41,12 @@ class UserApprovalController extends Controller
         }
 
         $pendingUsers = $query->get()->map(function ($u) {
+            if (empty($u->profile_photo_path)) {
+                $synced = \App\Services\PesupeluhService::syncUserProfilePhoto($u);
+                if ($synced) {
+                    $u->profile_photo_path = $synced;
+                }
+            }
             return [
                 'id' => $u->id,
                 'name' => $u->name,
@@ -55,8 +62,9 @@ class UserApprovalController extends Controller
                 'room_name' => $u->room ? $u->room->name : 'Belum Ditentukan',
                 'room_location' => $u->room ? $u->room->location_info : '-',
                 'is_active' => (bool) $u->is_active,
-                'created_at' => $u->created_at ? $u->created_at->format('d M Y, H:i') : '-',
-                'created_at_human' => $u->created_at ? $u->created_at->diffForHumans() : '-',
+                'created_at' => $u->activation_requested_at ? $u->activation_requested_at->format('d M Y, H:i') : ($u->created_at ? $u->created_at->format('d M Y, H:i') : '-'),
+                'created_at_human' => $u->created_at_human,
+                'activation_requested_at' => $u->activation_requested_at ? $u->activation_requested_at->format('d M Y, H:i') : null,
             ];
         });
 
@@ -71,7 +79,7 @@ class UserApprovalController extends Controller
         });
 
         $stats = [
-            'pending' => User::where('is_active', false)->count(),
+            'pending' => User::where('is_active', false)->whereNotNull('activation_requested_at')->count(),
             'approved_today' => User::where('is_active', true)->whereDate('updated_at', today())->count(),
             'total_active' => User::where('is_active', true)->count(),
         ];
@@ -90,13 +98,25 @@ class UserApprovalController extends Controller
     /**
      * Show detail of a user registration for approval.
      */
-    public function show(User $user): Response
+    public function show(User $user): Response|\Illuminate\Http\RedirectResponse
     {
+        if ($user->is_active || !$user->activation_requested_at) {
+            return redirect()->route('users.approvals');
+        }
+
         if (!request()->header('X-Inertia-Partial-Data')) {
             \App\Services\NotificationService::markAsRead('user-' . $user->id, request());
         }
 
         $user->load('room');
+
+        if (empty($user->profile_photo_path)) {
+            $synced = \App\Services\PesupeluhService::syncUserProfilePhoto($user);
+            if ($synced) {
+                $user->profile_photo_path = $synced;
+            }
+        }
+
         $units = Room::where('is_active', true)->orderBy('name')->get(['id', 'name', 'building_name', 'location_floor'])->map(function ($r) {
             return [
                 'id' => $r->id,
@@ -126,8 +146,9 @@ class UserApprovalController extends Controller
                 'room_location' => $user->room ? $user->room->location_info : '-',
                 'is_active' => (bool) $user->is_active,
                 'page_permissions' => $user->page_permissions,
-                'created_at' => $user->created_at ? $user->created_at->format('d M Y, H:i') : '-',
-                'created_at_human' => $user->created_at ? $user->created_at->diffForHumans() : '-',
+                'created_at' => $user->activation_requested_at ? $user->activation_requested_at->format('d M Y, H:i') : ($user->created_at ? $user->created_at->format('d M Y, H:i') : '-'),
+                'created_at_human' => $user->created_at_human,
+                'activation_requested_at' => $user->activation_requested_at ? $user->activation_requested_at->format('d M Y, H:i') : null,
             ],
             'units' => $units,
             'roles' => $roles,
@@ -147,6 +168,13 @@ class UserApprovalController extends Controller
             'unit_id' => 'nullable|exists:rooms,id',
             'page_permissions' => 'nullable|array',
         ]);
+
+        if (empty($validated['role']) && empty($validated['role_id'])) {
+            return redirect()->back()->withErrors([
+                'role' => 'Silakan pilih peran jabatan terlebih dahulu.',
+                'role_id' => 'Silakan pilih peran jabatan terlebih dahulu.',
+            ]);
+        }
 
         if (!empty($validated['role_id'])) {
             $roleId = (int) $validated['role_id'];
@@ -190,6 +218,7 @@ class UserApprovalController extends Controller
             'is_active' => true,
             'approved_by' => $request->user() ? $request->user()->id : null,
             'approved_at' => Carbon::now(),
+            'activation_requested_at' => null,
         ]);
 
         // Auto-send WhatsApp activation confirmation if phone number is present
@@ -231,13 +260,23 @@ class UserApprovalController extends Controller
     {
         $userName = $user->name;
 
+        // Reset activation status and credentials state
+        $user->is_active = false;
+        $user->room_id = null;
+        $user->unit_id = null;
+        $user->approved_by = null;
+        $user->approved_at = null;
+        $user->activation_requested_at = null;
+        $user->save();
+
+        // Soft delete the user so foreign key constraints on past activity remain intact
+        $user->delete();
+
         // Real-Time Notification Broadcast
         try {
             event(new \App\Events\UserApprovalUpdated($user));
         } catch (\Throwable $bErr) {}
 
-        $user->forceDelete();
-
-        return redirect()->route('users.approvals')->with('success', "Pendaftaran akun {$userName} telah ditolak dan dihapus.");
+        return redirect()->route('users.approvals')->with('success', "Pendaftaran akun {$userName} telah ditolak.");
     }
 }

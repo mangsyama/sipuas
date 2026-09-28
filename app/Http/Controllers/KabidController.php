@@ -106,12 +106,113 @@ class KabidController extends Controller
     }
 
     /**
-     * Kasi Responsiveness & Unit Accountability Monitoring
+     * Kasi Responsiveness & Unit Accountability Monitoring (Data Riil Kasi & Unit)
      */
     public function kasiResponsiveness(Request $request): Response
     {
         [$startDate, $endDate, $periodKey, $periodLabel, $roomId] = $this->parsePeriodFilter($request);
 
+        // 1. Query Base Reports
+        $baseReportsQuery = Report::query();
+        if ($startDate && $endDate) {
+            $baseReportsQuery->whereBetween('created_at', [$startDate, $endDate]);
+        }
+        if (!empty($roomId)) {
+            $baseReportsQuery->where('room_id', $roomId);
+        }
+        $allPeriodReports = $baseReportsQuery->with(['verifier', 'room'])->get();
+
+        $totalAllReports = $allPeriodReports->count();
+        $verifiedAllReports = $allPeriodReports->whereIn('status', ['VERIFIED', 'RESOLVED'])->values();
+        $totalAllVerified = $verifiedAllReports->count();
+        $totalAllPending = $allPeriodReports->where('status', 'PENDING')->count();
+        $avgVerificationAll = $totalAllReports > 0 ? round(($totalAllVerified / $totalAllReports) * 100) : 100;
+
+        // 2. Data Kinerja Riil User Kepala Seksi (Kasi)
+        $kasiUsers = User::where('role_id', Role::KEPALA_SEKSI)->where('is_active', true)->orderBy('name')->get();
+
+        $kasiOfficersData = $kasiUsers->map(function ($kasi) use ($verifiedAllReports) {
+            $kasiVerifications = $verifiedAllReports->where('verified_by', $kasi->id)->values();
+            $verifiedCount = $kasiVerifications->count();
+
+            // Hitung kecepatan respons rata-rata Kasi ini
+            $verifiedWithTimes = $kasiVerifications->filter(fn($r) => !empty($r->verified_at));
+            if ($verifiedWithTimes->count() > 0) {
+                $totalMinutes = $verifiedWithTimes->reduce(function ($carry, $r) {
+                    $created = Carbon::parse($r->created_at);
+                    $verified = Carbon::parse($r->verified_at);
+                    return $carry + max(0, $created->diffInMinutes($verified));
+                }, 0);
+
+                $avgMins = round($totalMinutes / $verifiedWithTimes->count());
+                if ($avgMins < 60) {
+                    $avgResponseFormatted = $avgMins . ' Menit';
+                } else {
+                    $avgResponseFormatted = round($avgMins / 60, 1) . ' Jam';
+                }
+            } else {
+                $avgResponseFormatted = $verifiedCount > 0 ? '< 1 Jam' : '-';
+            }
+
+            // Hitung distribusi tindakan
+            $pemotonganCount = 0;
+            $penambahanCount = 0;
+            $netralCount = 0;
+            $dibatalkanCount = 0;
+
+            if ($verifiedCount > 0) {
+                $verifiedReportIds = $kasiVerifications->pluck('id')->toArray();
+                $staffActions = \App\Models\ReportStaff::whereIn('report_id', $verifiedReportIds)->get()->groupBy('report_id');
+
+                foreach ($kasiVerifications as $rep) {
+                    if ($rep->resolution_notes === 'DIBATALKAN') {
+                        $dibatalkanCount++;
+                    } elseif (isset($staffActions[$rep->id])) {
+                        $actions = $staffActions[$rep->id]->pluck('action_type')->toArray();
+                        if (in_array('PEMOTONGAN', $actions)) {
+                            $pemotonganCount++;
+                        } elseif (in_array('PENAMBAHAN', $actions)) {
+                            $penambahanCount++;
+                        } else {
+                            $netralCount++;
+                        }
+                    } else {
+                        $netralCount++;
+                    }
+                }
+            }
+
+            // Unit/ruangan yang pernah ditangani
+            $handledRooms = $kasiVerifications->map(function ($r) {
+                return $r->room ? $r->room->name : ($r->unit ?? null);
+            })->filter()->unique()->values()->all();
+
+            $lastVerified = $kasiVerifications->sortByDesc('verified_at')->first();
+            $lastVerifiedFormatted = $lastVerified && $lastVerified->verified_at 
+                ? Carbon::parse($lastVerified->verified_at)->locale('id')->diffForHumans() 
+                : '-';
+
+            return [
+                'id' => $kasi->id,
+                'name' => $kasi->name,
+                'nip' => $kasi->nip ?? '-',
+                'username' => $kasi->username ?? '-',
+                'email' => $kasi->email ?? '-',
+                'role' => 'Kepala Seksi',
+                'verified_count' => $verifiedCount,
+                'avg_response_time' => $avgResponseFormatted,
+                'pemotongan_count' => $pemotonganCount,
+                'penambahan_count' => $penambahanCount,
+                'netral_count' => $netralCount,
+                'dibatalkan_count' => $dibatalkanCount,
+                'handled_rooms' => $handledRooms,
+                'handled_rooms_count' => count($handledRooms),
+                'last_verified_at' => $lastVerifiedFormatted,
+                'status' => $verifiedCount > 0 ? 'AKTIF' : 'STANDBY',
+            ];
+        });
+
+        // 3. Data Aduan & Responsivitas per Unit Ruangan RS (Real Unit Data Tanpa Nama Dummy)
         $unitsQuery = Unit::where('is_active', true)
             ->with(['reports' => function ($q) use ($startDate, $endDate) {
                 if ($startDate && $endDate) {
@@ -125,7 +226,7 @@ class KabidController extends Controller
 
         $units = $unitsQuery->orderBy('name')->get();
 
-        $kasiData = $units->map(function ($u) {
+        $unitResponsivenessData = $units->map(function ($u) {
             $reports = $u->reports;
             $totalReports = $reports->count();
             $verifiedReports = $reports->whereIn('status', ['VERIFIED', 'RESOLVED'])->values();
@@ -152,44 +253,12 @@ class KabidController extends Controller
                 $avgResponseFormatted = $verifiedCount > 0 ? '< 1 Jam' : '-';
             }
 
-            $kasiUser = User::where('room_id', $u->id)->where('role_id', Role::KEPALA_SEKSI)->first();
+            // Dapatkan nama-nama Kasi yang memverifikasi di unit ini secara riil
+            $verifiers = $verifiedReports->map(fn($r) => $r->verifier?->name)->filter()->unique()->values()->all();
+            $verifierDisplay = count($verifiers) > 0 
+                ? implode(', ', $verifiers) 
+                : ($totalReports > 0 ? 'Menunggu Verifikasi Kasi' : 'Belum Ada Aduan');
 
-            $defaultKasiNames = [
-                1 => 'I Wayan Sudarma, S.AP',
-                2 => 'Apt. Ni Nyoman Sariani, S.Si',
-                3 => 'Ns. Ni Made Rai Widiastuti, S.Kep',
-                4 => 'dr. I Putu Gede Sanjaya, Sp.An',
-                5 => 'dr. I Ketut Widiana, Sp.B',
-                6 => 'dr. I Nyoman Sastrawan, Sp.B',
-                7 => 'Bd. Ni Luh Putu Mirah, S.Tr.Keb',
-                8 => 'dr. Ni Kadek Dwipayani, Sp.PK',
-                9 => 'I Gusti Ayu Mas Trisna, SE',
-                10 => 'I Gede Yudiartawan, S.Kom',
-                11 => 'Bd. Ni Ketut Supartini, S.Tr.Keb',
-                12 => 'dr. I Made Sukadana, Sp.A',
-                13 => 'dr. Ni Wayan Murti, Sp.A',
-                14 => 'dr. I Ketut Agus Darmayasa, Sp.B',
-                15 => 'dr. I Dewa Gede Alit, Sp.KFR',
-                16 => 'drg. Ni Made Anggreni, Sp.KG',
-                17 => 'dr. I Wayan Wita, Sp.JP(K)',
-                18 => 'dr. Ni Luh Sukmawati, Sp.KJ',
-                19 => 'dr. I Made Dwi Artha, Sp.OG',
-                20 => 'dr. Ni Kadek Dwi Jayanthi, Sp.DV',
-                21 => 'dr. I Gede Eka Putra, Sp.M',
-                22 => 'dr. I Nyoman Sumartana, Sp.P',
-                23 => 'dr. I Gusti Agung Bagus Krisna, Sp.PD',
-                24 => 'dr. Ni Putu Ayu Lestari, Sp.S',
-                25 => 'dr. I Komang Adi Wiratama, Sp.THT-BKL',
-                26 => 'dr. I Made Pasek Adiputra',
-                27 => 'dr. Ni Wayan Candrawati, Sp.Rad',
-                28 => 'Ns. I Komang Yudi, M.Kep',
-                29 => 'Ns. Ni Ketut Astini, S.Kep',
-                30 => 'Ns. I Putu Agus Sudarma, S.Kep',
-            ];
-
-            $kasiName = $kasiUser ? $kasiUser->name : ($defaultKasiNames[$u->id] ?? 'Kepala Ruangan ' . $u->name);
-
-            // Status responsivitas unit: berdasarkan tingkat penyelesaian verifikasi
             $status = $verificationRate >= 80
                 ? 'EXCELLENT'
                 : ($verificationRate >= 50 ? 'WARNING' : 'CRITICAL');
@@ -197,8 +266,10 @@ class KabidController extends Controller
             return [
                 'unit_id' => $u->id,
                 'unit_name' => $u->name,
-                'kasi_name' => $kasiName,
-                'role' => 'Kepala Ruangan / Kasi',
+                'kasi_name' => $verifierDisplay,
+                'role' => 'Unit Pelayanan RS',
+                'verifier_display' => $verifierDisplay,
+                'verifiers_list' => $verifiers,
                 'total_reports' => $totalReports,
                 'total_incoming' => $totalReports,
                 'verified_reports' => $verifiedCount,
@@ -211,21 +282,18 @@ class KabidController extends Controller
             ];
         });
 
-        // Overall summary
-        $totalAllReports = $kasiData->sum('total_reports');
-        $totalAllVerified = $kasiData->sum('verified_reports');
-        $totalAllPending = $kasiData->sum('pending_reports');
-        $avgVerificationAll = $kasiData->count() > 0 ? round($kasiData->avg('verification_percentage')) : 100;
-
         $rooms = Room::where('is_active', true)->select(['id', 'name'])->orderBy('name')->get();
 
         return Inertia::render('Kabid/KasiResponsiveness', [
-            'kasiData' => $kasiData,
+            'kasiOfficers' => $kasiOfficersData,
+            'unitData' => $unitResponsivenessData,
+            'kasiData' => $unitResponsivenessData,
             'summary' => [
                 'total_reports' => $totalAllReports,
                 'total_verified' => $totalAllVerified,
                 'total_pending' => $totalAllPending,
                 'avg_verification_rate' => $avgVerificationAll,
+                'total_kasi_count' => $kasiUsers->count(),
             ],
             'rooms' => $rooms,
             'filters' => [

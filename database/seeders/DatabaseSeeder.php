@@ -237,6 +237,7 @@ class DatabaseSeeder extends Seeder
                 'role_id' => Role::ADMINISTRATOR,
                 'room_id' => null,
                 'is_active' => true,
+                'approved_at' => Carbon::now(),
                 'total_points' => 100,
                 'praise_count' => 0,
                 'complaint_count' => 0,

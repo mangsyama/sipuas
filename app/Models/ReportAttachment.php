@@ -7,9 +7,11 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Storage;
 
+use App\Traits\NormalizesTimestamps;
+
 class ReportAttachment extends Model
 {
-    use HasFactory;
+    use HasFactory, NormalizesTimestamps;
 
     protected $fillable = [
         'uuid',

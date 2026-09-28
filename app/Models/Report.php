@@ -9,9 +9,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
+use App\Traits\NormalizesTimestamps;
+
 class Report extends Model
 {
-    use HasFactory, SoftDeletes;
+    use HasFactory, SoftDeletes, NormalizesTimestamps;
 
     protected $fillable = [
         'uuid',
@@ -103,6 +105,23 @@ class Report extends Model
     {
         return $this->hasMany(StaffKpiLog::class, 'report_id');
     }
+
+    /**
+     * Human-readable relative time for complaint submission.
+     * Prevents misleading future phrasing in case of minor clock drift.
+     */
+     public function getCreatedAtHumanAttribute(): string
+     {
+         if (!$this->created_at) {
+             return '-';
+         }
+
+         if ($this->created_at->isFuture()) {
+             return 'Baru saja';
+         }
+
+         return $this->created_at->diffForHumans();
+     }
 
     /**
      * Generate unique ticket number formatted like LP-YYYY-MM-XXXX

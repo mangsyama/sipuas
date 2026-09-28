@@ -54,9 +54,7 @@ class LoginRequest extends FormRequest
             })
             ->first();
 
-        if ($user && $user->trashed()) {
-            $user->restore();
-        }
+        $wasTrashed = $user && $user->trashed();
 
         // 2. JIT Cross-Check ke Database Pesupeluh jika user belum ada di SIPUAS
         if (!$user) {
@@ -71,7 +69,7 @@ class LoginRequest extends FormRequest
                     ->first();
 
                 if ($pesupeluhUser && \Illuminate\Support\Facades\Hash::check($password, $pesupeluhUser->password)) {
-                    // Password Pesupeluh valid! Buat akun user di SIPUAS (pending approval)
+                    // Password Pesupeluh valid! Buat akun user di SIPUAS (menunggu pemilihan ruangan & klik aktivasi)
                     $user = \App\Models\User::create([
                         'uuid' => $pesupeluhUser->uuid ?? (string) \Illuminate\Support\Str::uuid(),
                         'name' => $pesupeluhUser->name,
@@ -79,7 +77,7 @@ class LoginRequest extends FormRequest
                         'nip' => $pesupeluhUser->nip,
                         'email' => $pesupeluhUser->email,
                         'phone_number' => $pesupeluhUser->phone_number,
-                        'room_id' => $pesupeluhUser->room_id ?? null,
+                        'room_id' => null, // Wajib dipilih di lingkungan SIPUAS
                         'telegram_chat_id' => $pesupeluhUser->telegram_chat_id ?? null,
                         'password' => $pesupeluhUser->password, // Hash Bcrypt langsung disalin
                         'role_id' => \App\Models\Role::STAFF,
@@ -87,14 +85,20 @@ class LoginRequest extends FormRequest
                         'praise_count' => 0,
                         'complaint_count' => 0,
                         'is_active' => false, // Menunggu aktivasi & approval administrator
+                        'activation_requested_at' => null, // Belum mengajukan permohonan verifikasi akun
                     ]);
+
+                    // Sinkronisasi pasfoto profil resmi dari Pesu Peluh jika tersedia
+                    \App\Services\PesupeluhService::syncUserProfilePhoto($user, $pesupeluhUser->profile_photo_path ?? null);
                 }
             } catch (\Throwable $e) {
                 \Illuminate\Support\Facades\Log::error('Pesupeluh JIT Auth Error: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
             }
         } else {
             // User sudah ada di SIPUAS: cek password lokal
-            if (!\Illuminate\Support\Facades\Hash::check($password, $user->password)) {
+            $passwordMatches = \Illuminate\Support\Facades\Hash::check($password, $user->password);
+
+            if (!$passwordMatches) {
                 // Jika password lokal tidak cocok, cek apakah password diperbarui di Pesupeluh
                 try {
                     $pesupeluhUser = \Illuminate\Support\Facades\DB::connection('pesupeluh')
@@ -111,20 +115,39 @@ class LoginRequest extends FormRequest
                         // Sinkronisasi password baru dari Pesupeluh ke SIPUAS
                         $user->password = $pesupeluhUser->password;
                         $user->save();
-                    } else {
-                        RateLimiter::hit($this->throttleKey());
-                        throw ValidationException::withMessages([
-                            'username' => trans('auth.failed'),
-                        ]);
+                        $passwordMatches = true;
+
+                        // Sinkronisasi foto profil jika tersedia di Pesupeluh
+                        \App\Services\PesupeluhService::syncUserProfilePhoto($user, $pesupeluhUser->profile_photo_path ?? null);
                     }
-                } catch (ValidationException $ve) {
-                    throw $ve;
                 } catch (\Throwable $e) {
-                    RateLimiter::hit($this->throttleKey());
-                    throw ValidationException::withMessages([
-                        'username' => trans('auth.failed'),
-                    ]);
+                    \Illuminate\Support\Facades\Log::error('Pesupeluh Password Sync Error: ' . $e->getMessage());
                 }
+            }
+
+            if (!$passwordMatches) {
+                RateLimiter::hit($this->throttleKey());
+                throw ValidationException::withMessages([
+                    'username' => trans('auth.failed'),
+                ]);
+            }
+
+            // Jika user sebelumnya pernah dihapus oleh admin (soft deleted), pulihkan akun
+            // TETAPI reset status agar wajib memilih ruangan dan mengajukan verifikasi aktivasi ulang
+            if ($wasTrashed) {
+                $user->restore();
+                $user->is_active = false;
+                $user->room_id = null;
+                $user->unit_id = null;
+                $user->approved_by = null;
+                $user->approved_at = null;
+                $user->activation_requested_at = null;
+                $user->save();
+            }
+
+            // Sinkronisasi foto dari Pesupeluh jika foto di SIPUAS masih kosong
+            if (empty($user->profile_photo_path)) {
+                \App\Services\PesupeluhService::syncUserProfilePhoto($user);
             }
         }
 

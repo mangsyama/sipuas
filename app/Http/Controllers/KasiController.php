@@ -164,7 +164,7 @@ class KasiController extends Controller
             ->get()
             ->map(fn($r) => [
                 'id' => $r->ticket_number,
-                'created_at_human' => $r->created_at ? $r->created_at->diffForHumans() : '-',
+                'created_at_human' => $r->created_at_human,
                 'created_at_formatted' => $r->created_at ? $r->created_at->translatedFormat('d M, H:i') : '-',
                 'reporter_name' => $r->is_anonymous ? 'Pasien Anonim' : ($r->reporter_name ?: 'Pasien / Keluarga'),
                 'target_object' => $r->target_object ?: 'Pelayanan Ruangan',
@@ -247,7 +247,7 @@ class KasiController extends Controller
                 'id' => $r->ticket_number,
                 'created_at' => $r->created_at ? $r->created_at->format('d M Y, H:i') : '-',
                 'created_at_full' => $r->created_at ? $r->created_at->translatedFormat('d M Y, H:i') . ' WITA' : '-',
-                'created_at_human' => $r->created_at ? $r->created_at->diffForHumans() : '-',
+                'created_at_human' => $r->created_at_human,
                 'created_at_time' => $r->created_at ? $r->created_at->format('H:i') . ' WITA' : '-',
                 'created_at_date' => $r->created_at ? $r->created_at->translatedFormat('d F Y') : '-',
                 'unit' => $r->room ? $r->room->name : ($r->unit ? $r->unit->name : 'Unit Umum'),
@@ -374,7 +374,7 @@ class KasiController extends Controller
                 return [
                     'id' => $s->id,
                     'name' => $s->name,
-                    'nip' => $s->nip ?? '-',
+                    'nip' => (string) ($s->nip ?? '-'),
                     'role' => $s->role ?? 'Staf Pelayanan',
                     'total_points' => $s->total_points,
                     'is_on_duty' => (bool)$s->is_on_duty,
@@ -384,7 +384,7 @@ class KasiController extends Controller
                     'clock_in_time' => $clockInTime,
                     'selected' => $isLinked || $autoSelected,
                 ];
-            });
+            })->values();
 
         // Format attachments
         $attachments = $report ? $report->attachments->where('category', '!=', 'VERIFICATION')->values()->map(function ($att) {
@@ -451,7 +451,7 @@ class KasiController extends Controller
                         $staffList->push([
                             'id' => $linkedStaff->id,
                             'name' => $linkedStaff->name,
-                            'nip' => $linkedStaff->nip ?? '-',
+                            'nip' => (string) ($linkedStaff->nip ?? '-'),
                             'role' => $linkedStaff->role ?? 'Staf Pelayanan',
                             'total_points' => $linkedStaff->total_points,
                             'is_on_duty' => (bool)$linkedStaff->is_on_duty,
@@ -491,7 +491,7 @@ class KasiController extends Controller
                 ? 'AI Heuristik Internal' 
                 : (($aiMeta['engine'] ?? ($aiMeta['provider'] ?? '')) === 'GROQ_AI' ? 'Groq AI (Llama-3)' : 'Sistem AI SIPUAS'),
             'created_at_time' => $report->created_at ? $report->created_at->format('H:i') . ' WITA' : '-',
-            'created_at_human' => $report->created_at ? $report->created_at->diffForHumans() : '-',
+            'created_at_human' => $report->created_at_human,
             'shift_info' => $report->created_at ? $report->created_at->format('H:i') . ' WITA' : 'Waktu Aduan',
             'status' => $report->status,
             'priority' => $report->priority,
@@ -555,11 +555,28 @@ class KasiController extends Controller
             ],
         ];
 
+        $allHospitalStaff = User::where('role_id', Role::STAFF)
+            ->where('is_active', true)
+            ->with('room')
+            ->orderBy('name')
+            ->get()
+            ->map(function ($s) {
+                return [
+                    'id' => $s->id,
+                    'name' => $s->name,
+                    'nip' => (string) ($s->nip ?? '-'),
+                    'role' => $s->role ?? 'Staf Pelayanan',
+                    'unit_name' => $s->room ? $s->room->name : 'Unit Umum',
+                    'total_points' => $s->total_points,
+                ];
+            })->values()->toArray();
+
         return Inertia::render('Kasi/Verify', [
             'id' => $report ? $report->ticket_number : ($id ?? ''),
             'reportDetail' => $reportDetail,
             'staffList' => $staffList,
             'staffMembers' => $staffList,
+            'allHospitalStaff' => $allHospitalStaff,
             'pesupeluhCategories' => $pesupeluhCategories,
             'pesupeluhRooms' => $pesupeluhRooms,
             'kpiCategories' => $kpiCategories,

@@ -12,6 +12,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -50,7 +51,7 @@ class RegisteredUserController extends Controller
         $request->validate([
             'name' => 'required|string|max:255',
             'username' => ['required', 'string', 'max:255', 'unique:'.User::class],
-            'nip' => ['required', 'string', 'regex:/^[0-9]+$/', 'max:18'],
+            'nip' => ['required', 'string', 'regex:/^[0-9]+$/', 'size:18'],
             'unit_id' => ['nullable', 'exists:rooms,id'],
             'phone_number' => ['nullable', 'string', 'regex:/^[0-9]+$/', 'max:15'],
             'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:'.User::class],
@@ -59,6 +60,7 @@ class RegisteredUserController extends Controller
         ], [
             'nip.required' => 'NIP wajib diisi.',
             'nip.regex' => 'NIP hanya boleh berisi angka.',
+            'nip.size' => 'NIP harus terdiri dari 18 digit angka.',
             'nip.max' => 'NIP maksimal 18 digit angka.',
             'phone_number.regex' => 'Nomor HP hanya boleh berisi angka.',
             'phone_number.max' => 'Nomor HP maksimal 15 digit angka.',
@@ -84,6 +86,7 @@ class RegisteredUserController extends Controller
             'password' => Hash::make($request->password),
             'role' => 'STAFF',
             'is_active' => false,
+            'activation_requested_at' => \Carbon\Carbon::now(),
         ]);
 
         event(new Registered($user));

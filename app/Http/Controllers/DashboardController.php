@@ -107,7 +107,7 @@ class DashboardController extends Controller
             ->map(function ($report) {
                 return [
                     'id' => $report->ticket_number,
-                    'created_at_human' => $report->created_at ? $report->created_at->diffForHumans() : 'Baru saja',
+                    'created_at_human' => $report->created_at_human ?: 'Baru saja',
                     'created_at_formatted' => $report->created_at ? $report->created_at->translatedFormat('d M, H:i') : '-',
                     'reporter_name' => $report->is_anonymous ? 'Pasien Anonim' : ($report->reporter_name ?: 'Pasien / Keluarga'),
                     'target_object' => $report->target_object ?: ($report->room ? $report->room->name : ($report->unit ? $report->unit->name : 'Pelayanan')),

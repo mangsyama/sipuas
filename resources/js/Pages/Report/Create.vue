@@ -724,7 +724,7 @@ const copyReceipt = () => {
                         <div class="space-y-1.5">
                             <div>
                                 <InputLabel for="unit_id" value="Ruangan Pelayanan *" />
-                                <p class="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                                <p class="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5 leading-relaxed font-normal">
                                     Pilih poliklinik, instalasi, bangsal rawat inap, atau unit kerja tempat kejadian.
                                 </p>
                             </div>
@@ -746,7 +746,7 @@ const copyReceipt = () => {
                         <div class="space-y-1.5">
                             <div>
                                 <InputLabel for="target_object" value="Nama / Fasilitas / Barang (Opsional)" />
-                                <p class="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                                <p class="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5 leading-relaxed font-normal">
                                     Sebutkan nama petugas, ciri fisik (jika tidak tahu namanya), fasilitas berkendala, atau kosongkan jika umum.
                                 </p>
                             </div>
@@ -816,7 +816,7 @@ const copyReceipt = () => {
                                     for="isi_laporan" 
                                     :value="isStaffReview ? 'Ceritakan Pengalaman / Apresiasi Anda *' : 'Isi Pujian / Masukan / Keluhan *'" 
                                 />
-                                <p class="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                                <p class="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5 leading-relaxed font-normal">
                                     {{ isStaffReview 
                                         ? 'Ceritakan pengalaman pelayanan, keramahan, kesigapan, atau ciri-ciri petugas jika tidak tahu namanya.' 
                                         : 'Uraikan apa yang terjadi, perkiraan waktu kejadian, ciri-ciri petugas (bila tidak tahu namanya), atau saran perbaikan Anda.' 
@@ -849,7 +849,7 @@ const copyReceipt = () => {
                         <div class="space-y-2.5">
                             <div>
                                 <InputLabel value="Lampirkan Bukti Foto / Video (Opsional)" />
-                                <p class="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                                <p class="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5 leading-relaxed font-normal">
                                     Foto kondisi sarana, tiket antrean, atau video singkat kejadian untuk mempercepat tindak lanjut.
                                 </p>
                             </div>
@@ -1059,7 +1059,7 @@ const copyReceipt = () => {
                         <div class="space-y-1.5">
                             <div>
                                 <InputLabel for="reporter_name" value="Nama Lengkap Pelapor (Opsional / Anonim)" />
-                                <p class="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                                <p class="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5 leading-relaxed font-normal">
                                     Nama Anda tidak akan dipublikasikan. Kosongkan jika ingin melapor secara anonim.
                                 </p>
                             </div>
@@ -1079,7 +1079,7 @@ const copyReceipt = () => {
                         <div class="space-y-1.5">
                             <div>
                                 <InputLabel for="reporter_phone" value="No. WhatsApp / Telepon (Opsional)" />
-                                <p class="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                                <p class="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5 leading-relaxed font-normal">
                                     Untuk menerima pesan notifikasi resmi perkembangan dan status penanganan aduan via WhatsApp.
                                 </p>
                             </div>

@@ -42,7 +42,7 @@ class HandleInertiaRequests extends Middleware
             if (!$canApproveUsers || ($user && $user->system_notify_enabled === false)) {
                 return 0;
             }
-            $allPendingUsers = \App\Models\User::where('is_active', false)->select(['id'])->get();
+            $allPendingUsers = \App\Models\User::where('is_active', false)->whereNotNull('activation_requested_at')->select(['id'])->get();
             $readNotificationIds = \App\Services\NotificationService::getReadIds($request, $user);
 
             return $allPendingUsers->filter(function ($u) use ($readNotificationIds) {
@@ -103,7 +103,8 @@ class HandleInertiaRequests extends Middleware
             $pendingUsers = collect();
             if ($canApproveUsers) {
                 $pendingUsers = \App\Models\User::where('is_active', false)
-                    ->latest('created_at')
+                    ->whereNotNull('activation_requested_at')
+                    ->latest('activation_requested_at')
                     ->take(8)
                     ->get();
             }
@@ -127,7 +128,7 @@ class HandleInertiaRequests extends Middleware
                     'route' => route('kasi.verify', $report->ticket_number),
                     'read_at' => null,
                     'created_at' => $report->created_at ? $report->created_at->toIso8601String() : now()->toIso8601String(),
-                    'time' => $report->created_at ? $report->created_at->diffForHumans() : 'Baru saja',
+                    'time' => $report->created_at_human ?: 'Baru saja',
                     'priority' => $report->priority ?? 'NORMAL',
                 ]);
             }
@@ -146,8 +147,8 @@ class HandleInertiaRequests extends Middleware
                     'message' => $pUser->name . ($pUser->nip ? ' (NIP: ' . $pUser->nip . ')' : '') . ' menunggu persetujuan akun.',
                     'route' => route('users.approvals'),
                     'read_at' => null,
-                    'created_at' => $pUser->created_at ? $pUser->created_at->toIso8601String() : now()->toIso8601String(),
-                    'time' => $pUser->created_at ? $pUser->created_at->diffForHumans() : 'Baru saja',
+                    'created_at' => $pUser->activation_requested_at ? $pUser->activation_requested_at->toIso8601String() : ($pUser->created_at ? $pUser->created_at->toIso8601String() : now()->toIso8601String()),
+                    'time' => $pUser->created_at_human ?: 'Baru saja',
                     'priority' => 'NORMAL',
                 ]);
             }

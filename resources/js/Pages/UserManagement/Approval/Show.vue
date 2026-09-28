@@ -19,7 +19,9 @@ import {
     RotateCcw,
     X,
     ChevronDown,
-    ChevronUp
+    ChevronUp,
+    Loader2,
+    ArrowLeft
 } from '@lucide/vue';
 
 const props = defineProps({
@@ -48,13 +50,14 @@ const showPhotoModal = ref(false);
 const showCustomPermissions = ref(false);
 
 const approveForm = useForm({
-    role_id: props.targetUser.role_id || 5,
+    role_id: '',
     unit_id: props.targetUser.unit_id || '',
     page_permissions: null,
     use_role_default: true,
 });
 
 const selectedPermissions = ref([]);
+const isRejecting = ref(false);
 
 const roleOptions = computed(() => {
     return (props.roles || []).map(r => ({
@@ -69,6 +72,7 @@ const unitOptions = computed(() => [
 ]);
 
 const getRoleDefaultPermissions = (roleId) => {
+    if (!roleId) return [];
     const role = (props.roles || []).find(r => Number(r.id) === Number(roleId));
     let perms = [];
     if (role && role.page_permissions) {
@@ -119,14 +123,23 @@ const resetToRoleDefault = () => {
 };
 
 const submitApprove = () => {
+    if (!approveForm.role_id) {
+        approveForm.setError('role_id', 'Silakan pilih peran jabatan terlebih dahulu.');
+        return;
+    }
     approveForm.page_permissions = approveForm.use_role_default ? null : selectedPermissions.value;
     approveForm.post(route('users.approvals.approve', { user: props.targetUser.id }));
 };
 
 const submitReject = () => {
+    if (isRejecting.value) return;
+    isRejecting.value = true;
     router.delete(route('users.approvals.reject', { user: props.targetUser.id }), {
         onSuccess: () => {
             showRejectModal.value = false;
+        },
+        onFinish: () => {
+            isRejecting.value = false;
         }
     });
 };
@@ -213,11 +226,11 @@ onUnmounted(() => {
                                         <div v-else class="h-20 w-20 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30 flex items-center justify-center font-black text-2xl">
                                             {{ targetUser.name ? targetUser.name.charAt(0).toUpperCase() : 'U' }}
                                         </div>
-                                        <div>
-                                            <div class="text-xs font-bold text-slate-900 dark:text-white truncate max-w-[150px] mx-auto">
+                                        <div class="w-full px-1">
+                                            <div class="text-xs font-bold text-slate-900 dark:text-white break-words text-center leading-snug">
                                                 {{ targetUser.name || 'Pengguna' }}
                                             </div>
-                                            <div class="text-[11px] text-slate-400 font-medium mt-0.5">
+                                            <div class="text-[11px] text-slate-400 font-medium mt-1 truncate">
                                                 @{{ targetUser.username || '-' }}
                                             </div>
                                         </div>
@@ -308,94 +321,154 @@ onUnmounted(() => {
                                 <p class="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Tentukan peran resmi dan unit penugasan staf sebelum disetujui.</p>
                             </div>
 
-                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <!-- Peran Jabatan -->
-                                <div class="space-y-1.5">
-                                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                                        Peran Jabatan Resmi <span class="text-rose-500">*</span>
-                                    </label>
-                                    <SearchableSelect
-                                        v-model="approveForm.role_id"
-                                        :options="roleOptions"
-                                        :searchable="true"
-                                        :absolute="false"
-                                        value-key="id"
-                                        label-key="name"
-                                        placeholder="Pilih Peran Jabatan"
-                                        search-placeholder="Cari peran..."
-                                    />
-                                    <div v-if="approveForm.errors.role_id" class="text-rose-500 text-[11px] font-medium">{{ approveForm.errors.role_id }}</div>
+                            <!-- Integrated Card Container that elongates when custom permissions open -->
+                            <div class="bg-slate-50/80 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800 rounded-xl p-4 sm:p-5 space-y-4 transition-all">
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <!-- Peran Jabatan -->
+                                    <div class="space-y-1.5">
+                                        <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                                            Peran Jabatan Resmi <span class="text-rose-500">*</span>
+                                        </label>
+                                        <SearchableSelect
+                                            v-model="approveForm.role_id"
+                                            :options="roleOptions"
+                                            :searchable="true"
+                                            :absolute="false"
+                                            value-key="id"
+                                            label-key="name"
+                                            placeholder="Pilih Peran Jabatan"
+                                            search-placeholder="Cari peran..."
+                                        />
+                                        <div v-if="approveForm.errors.role_id" class="text-rose-500 text-[11px] font-medium">{{ approveForm.errors.role_id }}</div>
+                                    </div>
+
+                                    <!-- Penugasan Ruangan Pelayanan -->
+                                    <div class="space-y-1.5">
+                                        <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                                            Penugasan Ruangan Pelayanan Resmi
+                                        </label>
+                                        <SearchableSelect
+                                            v-model="approveForm.unit_id"
+                                            :options="unitOptions"
+                                            :searchable="true"
+                                            :absolute="false"
+                                            value-key="id"
+                                            label-key="name"
+                                            subtitle-key="code"
+                                            placeholder="Semua Ruangan (Global)"
+                                            search-placeholder="Cari ruangan atau lokasi gedung..."
+                                        />
+                                        <div v-if="approveForm.errors.unit_id" class="text-rose-500 text-[11px] font-medium">{{ approveForm.errors.unit_id }}</div>
+                                    </div>
                                 </div>
 
-                                <!-- Penugasan Ruangan Pelayanan -->
-                                <div class="space-y-1.5">
-                                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                                        Penugasan Ruangan Pelayanan Resmi
-                                    </label>
-                                    <SearchableSelect
-                                        v-model="approveForm.unit_id"
-                                        :options="unitOptions"
-                                        :searchable="true"
-                                        :absolute="false"
-                                        value-key="id"
-                                        label-key="name"
-                                        subtitle-key="code"
-                                        placeholder="Semua Ruangan (Global)"
-                                        search-placeholder="Cari ruangan atau lokasi gedung..."
-                                    />
-                                    <div v-if="approveForm.errors.unit_id" class="text-rose-500 text-[11px] font-medium">{{ approveForm.errors.unit_id }}</div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- SEKSI 3: KUSTOMISASI HAK AKSES HALAMAN (OPSIONAL) -->
-                        <div class="space-y-3 pt-2">
-                            <button
-                                type="button"
-                                @click="showCustomPermissions = !showCustomPermissions"
-                                class="inline-flex items-center gap-2 text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer"
-                            >
-                                <KeyRound class="h-4 w-4" />
-                                <span>{{ showCustomPermissions ? 'Sembunyikan Kustomisasi Hak Akses Halaman' : 'Kustomisasi Hak Akses Halaman Khusus (Opsional)' }}</span>
-                                <ChevronUp v-if="showCustomPermissions" class="h-3.5 w-3.5" />
-                                <ChevronDown v-else class="h-3.5 w-3.5" />
-                            </button>
-
-                            <div v-if="showCustomPermissions" class="p-5 rounded-2xl bg-slate-50/70 dark:bg-slate-950/30 border border-slate-200 dark:border-slate-800 space-y-4">
-                                <div class="flex items-center justify-between">
-                                    <span class="text-xs text-slate-500 dark:text-slate-400">
-                                        Secara default pendaftar akan mewarisi seluruh hak akses halaman dari peran yang dipilih di atas.
-                                    </span>
-                                    <button
-                                        type="button"
-                                        @click="resetToRoleDefault"
-                                        :disabled="approveForm.use_role_default"
-                                        class="text-xs font-semibold px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-slate-100 disabled:opacity-40"
+                                <!-- Collapsible Dropdown Accordion for Custom Permissions -->
+                                <div>
+                                    <div
+                                        @click="showCustomPermissions = !showCustomPermissions"
+                                        :class="[
+                                            'p-3.5 rounded-xl border flex items-center justify-between transition-all duration-200 cursor-pointer select-none group',
+                                            showCustomPermissions 
+                                                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-950 dark:text-emerald-200 shadow-xs' 
+                                                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 shadow-xs'
+                                        ]"
                                     >
-                                        Gunakan Default Peran
-                                    </button>
-                                </div>
-
-                                <div class="space-y-5 pt-2">
-                                    <div v-for="group in allPermissionKeys" :key="group.group" class="space-y-2">
-                                        <h5 class="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
-                                            {{ group.group }}
-                                        </h5>
-                                        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-                                            <div
-                                                v-for="perm in group.permissions"
-                                                :key="perm.key"
-                                                @click="togglePermission(perm.key)"
+                                        <div class="flex items-center gap-3">
+                                            <div 
                                                 :class="[
-                                                    'p-2.5 rounded-xl border text-xs font-medium flex items-center justify-between gap-2 cursor-pointer transition select-none',
-                                                    isPermissionChecked(perm.key)
-                                                        ? 'bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border-emerald-500/40'
-                                                        : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800'
+                                                    'h-9 w-9 rounded-xl flex items-center justify-center shrink-0 transition',
+                                                    showCustomPermissions 
+                                                        ? 'bg-emerald-600 text-white shadow-sm' 
+                                                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 group-hover:bg-slate-200 dark:group-hover:bg-slate-700'
                                                 ]"
                                             >
-                                                <span class="truncate">{{ perm.label }}</span>
-                                                <div :class="['h-3.5 w-3.5 rounded flex items-center justify-center shrink-0 border transition-all', isPermissionChecked(perm.key) ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-slate-300 dark:border-slate-700']">
-                                                    <Check v-if="isPermissionChecked(perm.key)" class="h-2.5 w-2.5 stroke-[3]" />
+                                                <KeyRound class="h-4.5 w-4.5" />
+                                            </div>
+                                            <div>
+                                                <div class="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                                    <span>Kustomisasi Hak Akses Halaman Khusus</span>
+                                                    <span class="text-[10px] font-normal text-slate-400 dark:text-slate-500">(Opsional)</span>
+                                                </div>
+                                                <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                                                    {{ !approveForm.role_id ? 'Silakan pilih peran jabatan di atas terlebih dahulu' : (approveForm.use_role_default ? 'Saat ini mengikuti seluruh hak akses bawaan dari peran' : 'Hak akses halaman telah dimodifikasi secara spesifik') }}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div class="flex items-center gap-2">
+                                            <span 
+                                                :class="[
+                                                    'h-7 px-3 rounded-lg text-xs font-semibold border flex items-center justify-center transition shrink-0',
+                                                    !approveForm.role_id
+                                                        ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 border-amber-200 dark:border-amber-800'
+                                                        : (approveForm.use_role_default 
+                                                            ? 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700' 
+                                                            : 'bg-emerald-600 text-white border-emerald-600 font-bold shadow-xs')
+                                                ]"
+                                            >
+                                                {{ !approveForm.role_id ? 'Pilih Peran Dulu' : (approveForm.use_role_default ? 'Default Peran' : 'Kustom') }}
+                                            </span>
+                                            <div 
+                                                :class="[
+                                                    'h-7 w-7 rounded-lg flex items-center justify-center transition-colors',
+                                                    showCustomPermissions 
+                                                        ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/20' 
+                                                        : 'text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800'
+                                                ]"
+                                            >
+                                                <ChevronDown 
+                                                    :class="[
+                                                        'h-4 w-4 transition-transform duration-200',
+                                                        showCustomPermissions ? 'rotate-180' : ''
+                                                    ]" 
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Expanded Content within Container -->
+                                    <div 
+                                        v-if="showCustomPermissions" 
+                                        class="mt-3.5 p-4 sm:p-5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-4 animate-spa-fade-in shadow-xs"
+                                    >
+                                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+                                            <div class="text-xs text-slate-500 dark:text-slate-400">
+                                                Pilih modul/halaman yang diizinkan untuk staf ini, atau kembalikan ke default peran.
+                                            </div>
+                                            <button
+                                                type="button"
+                                                @click="resetToRoleDefault"
+                                                :disabled="approveForm.use_role_default"
+                                                class="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer shrink-0 self-start sm:self-auto"
+                                            >
+                                                <RotateCcw class="h-3.5 w-3.5" />
+                                                <span>Gunakan Default Peran</span>
+                                            </button>
+                                        </div>
+
+                                        <div class="space-y-5 pt-1">
+                                            <div v-for="group in allPermissionKeys" :key="group.group" class="space-y-2">
+                                                <h5 class="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide flex items-center gap-1.5">
+                                                    <KeyRound class="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                                                    <span>{{ group.group }}</span>
+                                                </h5>
+                                                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                                                    <div
+                                                        v-for="perm in group.permissions"
+                                                        :key="perm.key"
+                                                        @click="togglePermission(perm.key)"
+                                                        :class="[
+                                                            'p-2.5 rounded-xl border text-xs font-medium flex items-center justify-between gap-2 cursor-pointer transition select-none',
+                                                            isPermissionChecked(perm.key)
+                                                                ? 'bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border-emerald-500/40 font-semibold'
+                                                                : 'bg-slate-50/60 dark:bg-slate-950/40 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                                                        ]"
+                                                    >
+                                                        <span class="truncate">{{ perm.label }}</span>
+                                                        <div :class="['h-3.5 w-3.5 rounded flex items-center justify-center shrink-0 border transition-all', isPermissionChecked(perm.key) ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-slate-300 dark:border-slate-700']">
+                                                            <Check v-if="isPermissionChecked(perm.key)" class="h-2.5 w-2.5 stroke-[3]" />
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
@@ -409,6 +482,16 @@ onUnmounted(() => {
                     <!-- Footer Actions Card -->
                     <div class="px-6 py-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div>
+                            <Link
+                                :href="route('users.approvals')"
+                                class="w-full sm:w-auto px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 transition text-center justify-center flex items-center gap-1.5"
+                            >
+                                <ArrowLeft class="h-4 w-4" />
+                                <span>Kembali</span>
+                            </Link>
+                        </div>
+
+                        <div class="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2.5 w-full sm:w-auto">
                             <button
                                 type="button"
                                 @click="showRejectModal = true"
@@ -417,15 +500,6 @@ onUnmounted(() => {
                                 <Trash2 class="h-4 w-4" />
                                 <span>Tolak Pendaftaran</span>
                             </button>
-                        </div>
-
-                        <div class="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2.5 w-full sm:w-auto">
-                            <Link
-                                :href="route('users.approvals')"
-                                class="w-full sm:w-auto px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 transition text-center justify-center flex items-center"
-                            >
-                                Kembali
-                            </Link>
                             <button
                                 type="submit"
                                 :disabled="approveForm.processing"
@@ -481,17 +555,20 @@ onUnmounted(() => {
                     <button
                         type="button"
                         @click="showRejectModal = false"
-                        class="h-9 px-4 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition cursor-pointer"
+                        :disabled="isRejecting"
+                        class="h-9 px-4 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         Batal
                     </button>
                     <button
                         type="button"
                         @click="submitReject"
-                        class="h-9 px-4 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+                        :disabled="isRejecting"
+                        class="h-9 px-4 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                        <Trash2 class="h-4 w-4" />
-                        <span>Ya, Tolak & Hapus</span>
+                        <Loader2 v-if="isRejecting" class="h-4 w-4 animate-spin" />
+                        <Trash2 v-else class="h-4 w-4" />
+                        <span>{{ isRejecting ? 'Menolak...' : 'Ya, Tolak & Hapus' }}</span>
                     </button>
                 </div>
             </div>

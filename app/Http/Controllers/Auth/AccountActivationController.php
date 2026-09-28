@@ -30,6 +30,12 @@ class AccountActivationController extends Controller
                 : redirect()->route('dashboard');
         }
 
+        // Jika user belum memiliki foto profil di SIPUAS, sinkronkan dari Pesu Peluh
+        if (empty($user->profile_photo_path)) {
+            \App\Services\PesupeluhService::syncUserProfilePhoto($user);
+            $user->refresh();
+        }
+
         $user->load('room');
 
         $rooms = Room::where('is_active', true)
@@ -44,6 +50,7 @@ class AccountActivationController extends Controller
                 'nip' => $user->nip,
                 'email' => $user->email,
                 'phone_number' => $user->phone_number,
+                'profile_photo_path' => $user->profile_photo_path,
                 'room_id' => $user->room_id,
                 'room_name' => $user->room ? $user->room->name : null,
                 'room_location' => $user->room ? $user->room->location_info : null,
@@ -51,7 +58,8 @@ class AccountActivationController extends Controller
                 'unit_id' => $user->room_id,
                 'unit_name' => $user->room ? $user->room->name : null,
                 'is_active' => (bool) $user->is_active,
-                'has_requested' => !empty($user->room_id),
+                'has_requested' => !is_null($user->activation_requested_at),
+                'activation_requested_at' => $user->activation_requested_at ? $user->activation_requested_at->format('d M Y, H:i') : null,
                 'created_at' => $user->created_at ? $user->created_at->format('d M Y, H:i') : null,
             ],
             'rooms' => $rooms,
@@ -89,7 +97,19 @@ class AccountActivationController extends Controller
         $user->update([
             'room_id' => $validated['room_id'],
             'phone_number' => $validated['phone_number'],
+            'activation_requested_at' => \Carbon\Carbon::now(),
         ]);
+
+        if (empty($user->profile_photo_path)) {
+            \App\Services\PesupeluhService::syncUserProfilePhoto($user);
+            $user->refresh();
+        }
+
+        try {
+            event(new \App\Events\NewUserRegistered($user));
+        } catch (\Throwable $bErr) {
+            \Illuminate\Support\Facades\Log::info('Realtime broadcast notice: ' . $bErr->getMessage());
+        }
 
         return redirect()->route('activation.notice')->with('status', 'Permohonan aktivasi akun berhasil diajukan! Administrator akan memverifikasi dan mengaktifkan akun Anda.');
     }
