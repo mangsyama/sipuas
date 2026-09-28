@@ -25,13 +25,13 @@ const copyReceipt = () => {
     <Head title="Konfirmasi Laporan" />
 
     <div class="min-h-screen flex flex-col justify-between sm:justify-center items-center relative overflow-x-hidden font-sans bg-white dark:bg-slate-900 sm:bg-transparent p-0 sm:p-6 text-slate-900 dark:text-slate-100">
-        <!-- Background Image with Blur & Dark Overlay (Desktop/Tablet Fixed) -->
-        <div class="hidden sm:block fixed inset-0 z-0 bg-cover bg-center bg-no-repeat filter blur-xs sm:blur-sm scale-105 pointer-events-none" style="background-image: url('/images/hospital-hero.jpg');"></div>
-        <div class="hidden sm:block fixed inset-0 z-0 bg-slate-900/55 dark:bg-slate-950/80 transition-colors duration-200 pointer-events-none"></div>
+        <!-- Background Image with Soft Blur and Overlay (Desktop/Tablet Fixed, Optimized WebP) -->
+        <div class="hidden sm:block fixed inset-0 z-0 bg-cover bg-center bg-no-repeat filter blur-xs sm:blur-sm scale-105 pointer-events-none" style="background-image: url('/images/hospital-hero.webp');"></div>
+        <div class="hidden sm:block fixed inset-0 z-0 bg-slate-900/40 dark:bg-slate-950/75 transition-colors duration-200 pointer-events-none"></div>
 
         <!-- Ambient Glow Elements matching SIPUAS emerald theme (Desktop/Tablet) -->
-        <div class="pointer-events-none hidden sm:block fixed top-[-15%] left-[-10%] h-[70vw] w-[70vw] max-w-[800px] max-h-[800px] rounded-full bg-emerald-600/[0.08] blur-[130px] dark:bg-emerald-600/20"></div>
-        <div class="pointer-events-none hidden sm:block fixed right-[-10%] bottom-[-10%] h-[60vw] w-[60vw] max-w-[700px] max-h-[700px] rounded-full bg-teal-600/[0.08] blur-[120px] dark:bg-teal-900/30"></div>
+        <div class="pointer-events-none hidden sm:block fixed top-[-15%] left-[-10%] h-[60vw] w-[60vw] max-w-[700px] max-h-[700px] rounded-full bg-emerald-500/15 blur-3xl"></div>
+        <div class="pointer-events-none hidden sm:block fixed right-[-10%] bottom-[-10%] h-[50vw] w-[50vw] max-w-[600px] max-h-[600px] rounded-full bg-teal-500/15 blur-3xl"></div>
 
         <main class="w-full sm:max-w-[420px] mx-auto z-10 flex flex-col flex-1 sm:flex-initial my-auto">
             <!-- Solid Container Card with Integrated Header -->
