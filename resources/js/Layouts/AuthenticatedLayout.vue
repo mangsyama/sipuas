@@ -146,7 +146,6 @@ onMounted(() => {
     registerNotificationListeners();
     startHeartbeatPoller();
     window.addEventListener('show-toast', handleDemoToast);
-    window.addEventListener('show-demo-toast', handleDemoToast);
     if (typeof window !== 'undefined') {
         window.$toast = (message, type = 'success', title = null) => {
             showNotificationToast({
@@ -165,7 +164,6 @@ onMounted(() => {
 onUnmounted(() => {
     stopHeartbeatPoller();
     window.removeEventListener('show-toast', handleDemoToast);
-    window.removeEventListener('show-demo-toast', handleDemoToast);
     window.removeEventListener('trigger-custom-alert', handleCustomAlert);
     window.removeEventListener('keydown', handleCustomAlertKeyDown);
     window.removeEventListener('popstate', handleCustomAlertPopState);
@@ -315,118 +313,108 @@ const permissions = computed(() => page.props.auth?.page_permissions || []);
 const roleId = computed(() => Number(user.value?.role_id));
 const roleName = computed(() => (user.value?.role || '').toUpperCase());
 
-const isAdmin = computed(() => roleId.value === 1 || roleName.value === 'ADMINISTRATOR' || roleName.value === 'SUPERADMIN');
-const isDirekturOrKabid = computed(() => roleId.value === 2 || roleId.value === 3 || roleName.value === 'DIREKTUR' || roleName.value === 'KABID' || roleName.value === 'KEPALA BIDANG');
+const isDirektur = computed(() => roleId.value === 2 || roleName.value === 'DIREKTUR');
+const isKabid = computed(() => roleId.value === 3 || roleName.value === 'KABID' || roleName.value === 'KEPALA BIDANG');
 const isKasi = computed(() => roleId.value === 4 || roleName.value === 'KASI' || roleName.value === 'KEPALA SEKSI');
 const isStaff = computed(() => roleId.value === 5 || roleName.value === 'STAFF');
 
-const dashboardRoute = computed(() => {
-    if (isStaff.value) return route('staff.attendance');
-    if (isKasi.value) return route('kasi.dashboard');
-    if (isDirekturOrKabid.value) return route('kabid.dashboard');
-    return route('dashboard');
-});
+const canAccess = (permissionDef) => {
+    if (!permissionDef) return true;
+    const required = Array.isArray(permissionDef) ? permissionDef : [permissionDef];
+    return required.some(key => permissions.value.includes(key));
+};
 
 const menuGroups = computed(() => {
-    // 1. Modul Staf Pelayanan (Khusus Staff)
-    if (isStaff.value) {
-        return [
-            {
-                title: 'MODUL STAF PELAYANAN',
-                items: [
-                    { label: 'Presensi', routeName: 'staff.attendance', icon: Clock },
-                    { label: 'Dashboard Staf', routeName: 'staff.dashboard', icon: UserCheck }
-                ]
-            }
-        ];
-    }
-
-    // 2. Modul Kepala Seksi (Khusus Kasi)
-    if (isKasi.value) {
-        return [
-            {
-                title: 'MODUL KASI',
-                items: [
-                    { label: 'Dashboard Kasi', routeName: 'kasi.dashboard', icon: LayoutDashboard },
-                    { label: 'Aduan & Verifikasi', routeName: 'kasi.feed', icon: FileText },
-                    { label: 'Digital Logbook Staf', routeName: 'kasi.logbook', icon: History },
-                    { label: 'Laporan & Ekspor', routeName: 'kasi.reports', icon: FileBarChart2 }
-                ]
-            }
-        ];
-    }
-
-    // 3. Modul Kepala Bidang (Khusus Kabid & Direktur)
-    if (isDirekturOrKabid.value) {
-        return [
-            {
-                title: 'MODUL KABID',
-                items: [
-                    { label: 'Dashboard Kabid', routeName: 'kabid.dashboard', icon: LayoutDashboard },
-                    { label: 'Responsivitas Kasi', routeName: 'kabid.kasi-responsiveness', icon: BarChart3 },
-                    { label: 'Leaderboard Staf', routeName: 'kabid.leaderboard', icon: Award },
-                    { label: 'Laporan & Ekspor', routeName: 'kabid.reports', icon: FileBarChart2 }
-                ]
-            }
-        ];
-    }
-
-    // 4. Administrator RS (Semua Modul Terbuka Penuh)
-    return [
+    const rawGroups = [
         {
             title: 'MENU UTAMA',
             items: [
-                { label: 'Dashboard Utama', routeName: 'dashboard', icon: LayoutDashboard }
+                { label: 'Dashboard Utama', routeName: 'dashboard', permission: 'dashboard', icon: LayoutDashboard }
             ]
         },
         {
             title: 'MODUL STAF PELAYANAN',
             items: [
-                { label: 'Presensi', routeName: 'staff.attendance', icon: Clock },
-                { label: 'Dashboard Staf', routeName: 'staff.dashboard', icon: UserCheck }
+                { label: 'Presensi', routeName: 'staff.attendance', permission: 'staff.attendance', icon: Clock },
+                { label: 'Dashboard Staf', routeName: 'staff.dashboard', permission: 'staff.dashboard', icon: UserCheck }
             ]
         },
         {
             title: 'MODUL KASI',
             items: [
-                { label: 'Dashboard Kasi', routeName: 'kasi.dashboard', icon: LayoutDashboard },
-                { label: 'Aduan & Verifikasi', routeName: 'kasi.feed', icon: FileText },
-                { label: 'Digital Logbook Staf', routeName: 'kasi.logbook', icon: History },
-                { label: 'Laporan & Ekspor', routeName: 'kasi.reports', icon: FileBarChart2 }
+                { label: 'Dashboard Kasi', routeName: 'kasi.dashboard', permission: 'kasi.dashboard', icon: LayoutDashboard },
+                { label: 'Aduan & Verifikasi', routeName: 'kasi.feed', permission: ['kasi.feed', 'kasi.verify'], icon: FileText },
+                { label: 'Digital Logbook Staf', routeName: 'kasi.logbook', permission: 'kasi.logbook', icon: History },
+                { label: 'Laporan & Ekspor', routeName: 'kasi.reports', permission: ['reports.index', 'kasi.reports'], icon: FileBarChart2 }
             ]
         },
         {
             title: 'MODUL KABID',
             items: [
-                { label: 'Dashboard Kabid', routeName: 'kabid.dashboard', icon: LayoutDashboard },
-                { label: 'Responsivitas Kasi', routeName: 'kabid.kasi-responsiveness', icon: BarChart3 },
-                { label: 'Leaderboard Staf', routeName: 'kabid.leaderboard', icon: Award },
-                { label: 'Laporan & Ekspor', routeName: 'kabid.reports', icon: FileBarChart2 }
+                { label: 'Dashboard Kabid', routeName: 'kabid.dashboard', permission: ['executive.dashboard', 'kabid.dashboard'], icon: LayoutDashboard },
+                { label: 'Responsivitas Kasi', routeName: 'kabid.kasi-responsiveness', permission: ['executive.kasi-responsiveness', 'kabid.kasi-responsiveness'], icon: BarChart3 },
+                { label: 'Leaderboard Staf', routeName: 'kabid.leaderboard', permission: ['executive.leaderboard', 'kabid.leaderboard'], icon: Award },
+                { label: 'Laporan & Ekspor', routeName: 'kabid.reports', permission: ['reports.index', 'kabid.reports'], icon: FileBarChart2 }
             ]
         },
         {
             title: 'MASTER DATA',
             items: [
-                { label: 'Persetujuan Pendaftar', routeName: 'users.approvals', icon: UserCheck },
-                { label: 'Daftar Pengguna', routeName: 'users.index', icon: Users },
-                { label: 'Daftar Ruangan', routeName: 'rooms.index', icon: MapPin }
+                { label: 'Persetujuan Pendaftar', routeName: 'users.approvals', permission: 'users.approvals', icon: UserCheck },
+                { label: 'Daftar Pengguna', routeName: 'users.index', permission: 'users.index', icon: Users },
+                { label: 'Daftar Ruangan', routeName: 'rooms.index', permission: 'rooms.index', icon: MapPin }
             ]
         },
         {
             title: 'SYSTEM/INTEGRASI',
             items: [
-                { label: 'Integrasi AI', routeName: 'admin.ai-settings.index', icon: Sparkles },
-                { label: 'WhatsApp Gateway', routeName: 'admin.wa-gateway.index', icon: MessageSquareCode },
-                { label: 'Generator QR Code', routeName: 'admin.qr-generator.index', icon: QrCode }
+                { label: 'Integrasi AI', routeName: 'admin.ai-settings.index', permission: 'admin.ai-settings.index', icon: Sparkles },
+                { label: 'WhatsApp Gateway', routeName: 'admin.wa-gateway.index', permission: 'admin.wa-gateway.index', icon: MessageSquareCode },
+                { label: 'Generator QR Code', routeName: 'admin.qr-generator.index', permission: 'admin.qr-generator.index', icon: QrCode }
             ]
         },
         {
             title: 'AREA PUBLIK PASIEN',
             items: [
-                { label: 'Form Laporan', routeName: 'report.create', icon: QrCode }
+                { label: 'Form Laporan', routeName: 'report.create', permission: 'report.create', icon: QrCode }
             ]
         }
     ];
+
+    return rawGroups
+        .map(group => {
+            const filteredItems = group.items.filter(item => {
+                if (item.children) {
+                    const validChildren = item.children.filter(child => canAccess(child.permission || child.routeName));
+                    item.children = validChildren;
+                    return validChildren.length > 0;
+                }
+                return canAccess(item.permission || item.routeName);
+            });
+            return {
+                ...group,
+                items: filteredItems
+            };
+        })
+        .filter(group => group.items.length > 0);
+});
+
+const dashboardRoute = computed(() => {
+    if (canAccess('dashboard')) return route('dashboard');
+    if (isStaff.value && canAccess('staff.attendance')) return route('staff.attendance');
+    if (isStaff.value && canAccess('staff.dashboard')) return route('staff.dashboard');
+    if (isKasi.value && canAccess('kasi.dashboard')) return route('kasi.dashboard');
+    if (isKabid.value && canAccess(['executive.dashboard', 'kabid.dashboard'])) return route('kabid.dashboard');
+
+    for (const group of menuGroups.value) {
+        if (group.items && group.items.length > 0) {
+            const first = group.items[0];
+            if (first && first.routeName) {
+                return route(first.routeName);
+            }
+        }
+    }
+    return route('dashboard');
 });
 
 const handleItemClick = (item, group) => {
@@ -590,8 +578,23 @@ const removeToast = (id) => {
     toasts.value = toasts.value.filter(t => t.id !== id);
 };
 
+const recentToasts = new Map();
 const showNotificationToast = (normalized) => {
     if (!normalized) return;
+    const msg = String(normalized.message || normalized.text || '').trim();
+    const now = Date.now();
+    // Cegah kemunculan notifikasi / toast ganda untuk pesan yang sama dalam selang 2.5 detik
+    if (msg && recentToasts.has(msg) && now - recentToasts.get(msg) < 2500) {
+        return;
+    }
+    if (msg) {
+        recentToasts.set(msg, now);
+        if (recentToasts.size > 20) {
+            recentToasts.clear();
+            recentToasts.set(msg, now);
+        }
+    }
+
     const id = Date.now() + Math.random();
     toasts.value.push({
         id,

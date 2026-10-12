@@ -41,6 +41,7 @@ class UserManagementController extends Controller
                     ['key' => 'kasi.dashboard', 'label' => 'Dashboard Kasi'],
                     ['key' => 'kasi.feed', 'label' => 'Aduan & Verifikasi'],
                     ['key' => 'kasi.logbook', 'label' => 'Digital Logbook Staf'],
+                    ['key' => 'kasi.reports', 'label' => 'Laporan & Ekspor'],
                 ],
             ],
             [

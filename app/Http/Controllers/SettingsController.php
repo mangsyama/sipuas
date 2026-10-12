@@ -14,25 +14,7 @@ class SettingsController extends Controller
      */
     public function index(Request $request): Response
     {
-        $user = $request->user()->load(['roleRelation', 'unit']);
-
-        return Inertia::render('UserSettings/Index', [
-            'user' => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'email' => $user->email,
-                'username' => $user->username ?? '-',
-                'nip' => $user->nip ?? '-',
-                'phone_number' => $user->phone_number ?? '-',
-                'role' => $user->role,
-                'role_id' => $user->role_id,
-                'unit_name' => $user->unit ? $user->unit->name : 'Semua Unit (Global)',
-                'system_notify_enabled' => (bool)$user->system_notify_enabled,
-                'wa_notify_enabled' => (bool)$user->wa_notify_enabled,
-                'is_active' => (bool)$user->is_active,
-                'created_at' => $user->created_at ? $user->created_at->format('d M Y') : '-',
-            ],
-        ]);
+        return Inertia::render('UserSettings/Index');
     }
 
     /**

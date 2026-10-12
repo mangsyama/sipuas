@@ -71,7 +71,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/reports/{id}', fn () => redirect()->route('reports.index'))->name('reports.show');
     });
 
-    // Pengaturan Sistem & Preferensi Notifikasi (Semua Pengguna Terautentikasi)
+    // Pengaturan Akun & Sistem (User Settings)
     Route::get('/settings', [\App\Http\Controllers\SettingsController::class, 'index'])->name('settings.index');
     Route::patch('/settings/notifications', [\App\Http\Controllers\SettingsController::class, 'updateNotifications'])->name('settings.notifications.update');
     Route::patch('/profile/notifications', [\App\Http\Controllers\SettingsController::class, 'updateNotifications'])->name('profile.update-notifications');

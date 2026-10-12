@@ -18,9 +18,14 @@ class ProfileController extends Controller
      */
     public function edit(Request $request): Response
     {
-        return Inertia::render('Profile/Edit', [
-            'mustVerifyEmail' => $request->user() instanceof MustVerifyEmail,
+        $user = $request->user();
+        $user->load(['roleRelation', 'room']);
+
+        return Inertia::render('UserProfile/Edit', [
+            'mustVerifyEmail' => $user instanceof MustVerifyEmail,
             'status' => session('status'),
+            'user' => $user,
+            'rooms' => \App\Models\Room::orderBy('name', 'asc')->get(),
         ]);
     }
 
@@ -29,15 +34,42 @@ class ProfileController extends Controller
      */
     public function update(ProfileUpdateRequest $request): RedirectResponse
     {
-        $request->user()->fill($request->validated());
+        $user = $request->user();
+        $user->fill($request->safe()->except(['profile_photo']));
 
-        if ($request->user()->isDirty('email')) {
-            $request->user()->email_verified_at = null;
+        if ($user->isDirty('email')) {
+            $user->email_verified_at = null;
         }
 
-        $request->user()->save();
+        if ($request->profile_photo === 'delete') {
+            if ($user->profile_photo_path) {
+                $oldPath = str_replace('/storage/', '', $user->profile_photo_path);
+                \Illuminate\Support\Facades\Storage::disk('public')->delete($oldPath);
+            }
+            $user->profile_photo_path = null;
+        } elseif ($request->hasFile('profile_photo')) {
+            $newPath = \App\Services\SecureFileUpload::saveUploadedFile($request->file('profile_photo'), 'profile_photos', 'profile_');
+            if ($newPath) {
+                if ($user->profile_photo_path) {
+                    $oldPath = str_replace('/storage/', '', $user->profile_photo_path);
+                    \Illuminate\Support\Facades\Storage::disk('public')->delete($oldPath);
+                }
+                $user->profile_photo_path = $newPath;
+            }
+        } elseif ($request->filled('profile_photo') && str_starts_with($request->profile_photo, 'data:image')) {
+            $newPath = \App\Services\SecureFileUpload::saveBase64($request->profile_photo, 'profile_photos', 'profile_');
+            if ($newPath) {
+                if ($user->profile_photo_path) {
+                    $oldPath = str_replace('/storage/', '', $user->profile_photo_path);
+                    \Illuminate\Support\Facades\Storage::disk('public')->delete($oldPath);
+                }
+                $user->profile_photo_path = $newPath;
+            }
+        }
 
-        return Redirect::route('profile.edit');
+        $user->save();
+
+        return Redirect::route('profile.edit')->with('success', 'Data profil berhasil diperbarui.');
     }
 
     /**

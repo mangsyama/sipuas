@@ -36,7 +36,7 @@ class DatabaseSeeder extends Seeder
                 'id' => Role::DIREKTUR,
                 'name' => 'DIREKTUR',
                 'page_permissions' => [
-                    'executive.dashboard', 'executive.kasi-responsiveness', 'executive.leaderboard', 'reports.index',
+                    'dashboard',
                 ],
             ],
             [
@@ -50,7 +50,7 @@ class DatabaseSeeder extends Seeder
                 'id' => Role::KEPALA_SEKSI,
                 'name' => 'KEPALA SEKSI',
                 'page_permissions' => [
-                    'kasi.dashboard', 'kasi.feed', 'kasi.verify', 'kasi.logbook',
+                    'kasi.dashboard', 'kasi.feed', 'kasi.verify', 'kasi.logbook', 'kasi.reports', 'reports.index',
                 ],
             ],
             [

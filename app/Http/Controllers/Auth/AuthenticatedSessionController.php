@@ -38,6 +38,27 @@ class AuthenticatedSessionController extends Controller
             return redirect()->route('activation.notice');
         }
 
+        // 1. Jika user memiliki custom permissions khusus
+        if ($user && $user->page_permissions !== null) {
+            if ($user->hasPageAccess('dashboard')) {
+                return redirect()->intended(route('dashboard', absolute: false));
+            }
+            if ($user->hasPageAccess('executive.dashboard')) {
+                return redirect()->intended(route('kabid.dashboard', absolute: false));
+            }
+            if ($user->hasPageAccess('kasi.dashboard')) {
+                return redirect()->intended(route('kasi.dashboard', absolute: false));
+            }
+            if ($user->hasPageAccess('staff.attendance')) {
+                return redirect()->intended(route('staff.attendance', absolute: false));
+            }
+            if ($user->hasPageAccess('users.index')) {
+                return redirect()->intended(route('users.index', absolute: false));
+            }
+            return redirect()->intended(route('dashboard', absolute: false));
+        }
+
+        // 2. Default login redirect berdasarkan peran bawaan
         if ($user && $user->isStaff()) {
             return redirect()->intended(route('staff.attendance', absolute: false));
         }
@@ -46,7 +67,7 @@ class AuthenticatedSessionController extends Controller
             return redirect()->intended(route('kasi.dashboard', absolute: false));
         }
 
-        if ($user && in_array((int)$user->role_id, [\App\Models\Role::KEPALA_BIDANG, \App\Models\Role::DIREKTUR])) {
+        if ($user && (int)$user->role_id === \App\Models\Role::KEPALA_BIDANG) {
             return redirect()->intended(route('kabid.dashboard', absolute: false));
         }
 

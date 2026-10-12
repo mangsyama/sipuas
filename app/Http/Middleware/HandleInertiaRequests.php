@@ -36,8 +36,8 @@ class HandleInertiaRequests extends Middleware
         $permissions = $user ? $user->getEffectivePermissions() : [];
         $userRoomId = $user ? ($user->room_id ?? $user->unit_id) : null;
 
-        // 1. Pending Approvals Count (Khusus Administrator / hak akses users.approvals - Hanya yang belum dibaca)
-        $canApproveUsers = $user && ($user->isAdministrator() || $user->hasPageAccess('users.approvals'));
+        // 1. Pending Approvals Count (Khusus pengguna yang memiliki hak akses users.approvals - Hanya yang belum dibaca)
+        $canApproveUsers = $user && $user->hasPageAccess('users.approvals');
         $pendingApprovalsCount = function () use ($canApproveUsers, $request, $user) {
             if (!$canApproveUsers || ($user && $user->system_notify_enabled === false)) {
                 return 0;
@@ -52,12 +52,10 @@ class HandleInertiaRequests extends Middleware
 
         // 2. Pending Reports Count (Aduan Masuk yang perlu diverifikasi - Hanya yang belum dibaca)
         $canSeeReports = $user && (
-            $user->isAdministrator() || 
-            $user->isKasi() || 
-            $user->isKabid() || 
-            $user->isDirektur() || 
             $user->hasPageAccess('kasi.feed') || 
-            $user->hasPageAccess('kasi.verify')
+            $user->hasPageAccess('kasi.verify') ||
+            $user->hasPageAccess('executive.dashboard') ||
+            $user->hasPageAccess('dashboard')
         );
 
         $pendingReportsCount = function () use ($canSeeReports, $userRoomId, $user, $request) {

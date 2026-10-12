@@ -217,7 +217,7 @@ const goToPage = (page) => {
                             Laporan Responsivitas Kepala Seksi
                         </h2>
                         <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 max-w-2xl leading-relaxed">
-                            Pemantauan kinerja verifikasi dan kecepatan tanggap Tim Kepala Seksi (Kasi) terhadap aduan di seluruh unit rumah sakit.
+                            Pemantauan kecepatan verifikasi dan tanggap aduan Tim Kasi rumah sakit.
                         </p>
                     </div>
                 </div>

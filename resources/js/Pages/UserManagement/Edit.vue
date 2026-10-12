@@ -122,13 +122,32 @@ const permissionForm = useForm({
 
 const getRoleDefaultPermissions = (roleId) => {
     const role = (props.roles || []).find(r => Number(r.id) === Number(roleId));
-    let perms = [];
     if (role && role.page_permissions) {
-        perms = Array.isArray(role.page_permissions)
+        return Array.isArray(role.page_permissions)
             ? [...role.page_permissions]
             : (typeof role.page_permissions === 'string' ? JSON.parse(role.page_permissions) : []);
     }
-    return perms;
+    const rId = Number(roleId);
+    if (rId === 1) { // ADMINISTRATOR
+        const allKeys = [];
+        (props.allPermissionKeys || []).forEach(group => {
+            (group.permissions || []).forEach(p => {
+                allKeys.push(p.key);
+                if (p.key === 'kasi.feed') allKeys.push('kasi.verify');
+            });
+        });
+        return Array.from(new Set(allKeys));
+    }
+    if (rId === 2) { // DIREKTUR
+        return ['dashboard'];
+    }
+    if (rId === 3) { // KABID
+        return ['executive.dashboard', 'executive.kasi-responsiveness', 'executive.leaderboard', 'reports.index'];
+    }
+    if (rId === 4) { // KASI
+        return ['kasi.dashboard', 'kasi.feed', 'kasi.verify', 'kasi.logbook', 'kasi.reports', 'reports.index'];
+    }
+    return ['staff.attendance', 'staff.dashboard'];
 };
 
 const activeRoleDefaultPermissions = computed(() => {

@@ -107,8 +107,9 @@ class AccountActivationController extends Controller
 
         try {
             event(new \App\Events\NewUserRegistered($user));
+            \App\Services\NotificationService::notifyApproversNewRegistration($user);
         } catch (\Throwable $bErr) {
-            \Illuminate\Support\Facades\Log::info('Realtime broadcast notice: ' . $bErr->getMessage());
+            \Illuminate\Support\Facades\Log::info('Activation request notification notice: ' . $bErr->getMessage());
         }
 
         return redirect()->route('activation.notice')->with('status', 'Permohonan aktivasi akun berhasil diajukan! Administrator akan memverifikasi dan mengaktifkan akun Anda.');

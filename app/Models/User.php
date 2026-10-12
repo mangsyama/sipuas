@@ -226,7 +226,7 @@ class User extends Authenticatable
 
     public function isKabid(): bool
     {
-        return in_array((int)$this->role_id, [Role::ADMINISTRATOR, Role::DIREKTUR, Role::KEPALA_BIDANG]);
+        return in_array((int)$this->role_id, [Role::ADMINISTRATOR, Role::KEPALA_BIDANG]);
     }
 
     public function isKasi(): bool
@@ -281,11 +281,14 @@ class User extends Authenticatable
 
         // 4. Default fallback by role_id
         return $this->memoizedPermissions = match ((int)$this->role_id) {
-            Role::DIREKTUR, Role::KEPALA_BIDANG => [
+            Role::DIREKTUR => [
+                'dashboard',
+            ],
+            Role::KEPALA_BIDANG => [
                 'executive.dashboard', 'executive.kasi-responsiveness', 'executive.leaderboard', 'reports.index',
             ],
             Role::KEPALA_SEKSI => [
-                'kasi.dashboard', 'kasi.feed', 'kasi.verify', 'kasi.logbook',
+                'kasi.dashboard', 'kasi.feed', 'kasi.verify', 'kasi.logbook', 'kasi.reports', 'reports.index',
             ],
             default => [
                 'staff.attendance', 'staff.dashboard',

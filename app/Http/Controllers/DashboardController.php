@@ -22,24 +22,35 @@ class DashboardController extends Controller
         $user = $request->user();
 
         if ($user) {
-            // Staf pelayanan diarahkan langsung ke halaman presensi staf
-            if ($user->isStaff()) {
+            if (!$user->hasPageAccess('dashboard')) {
+                if ($user->hasPageAccess('kasi.dashboard')) {
+                    return redirect()->route('kasi.dashboard');
+                }
+                if ($user->hasPageAccess('executive.dashboard')) {
+                    return redirect()->route('kabid.dashboard');
+                }
+                if ($user->hasPageAccess('staff.attendance')) {
+                    return redirect()->route('staff.attendance');
+                }
+                if ($user->hasPageAccess('users.index')) {
+                    return redirect()->route('users.index');
+                }
+                return redirect()->route('profile.edit');
+            }
+
+            // Staf pelayanan bawaan (tanpa custom override) diarahkan langsung ke halaman presensi staf
+            if ($user->isStaff() && $user->page_permissions === null) {
                 return redirect()->route('staff.attendance');
             }
 
-            // Kasi diarahkan langsung ke Dashboard Kasi
-            if ((int)$user->role_id === Role::KEPALA_SEKSI) {
+            // Kasi bawaan (tanpa custom override) diarahkan langsung ke Dashboard Kasi
+            if ((int)$user->role_id === Role::KEPALA_SEKSI && $user->page_permissions === null) {
                 return redirect()->route('kasi.dashboard');
             }
 
-            // Kabid & Direktur diarahkan langsung ke Dashboard Kabid
-            if (in_array((int)$user->role_id, [Role::KEPALA_BIDANG, Role::DIREKTUR])) {
+            // Kabid & Direktur bawaan (tanpa custom override) diarahkan langsung ke Dashboard Kabid
+            if (in_array((int)$user->role_id, [Role::KEPALA_BIDANG, Role::DIREKTUR]) && $user->page_permissions === null) {
                 return redirect()->route('kabid.dashboard');
-            }
-
-            // Pengguna non-administrator lainnya diarahkan ke Dashboard Kasi
-            if (!$user->isAdministrator()) {
-                return redirect()->route('kasi.dashboard');
             }
         }
 

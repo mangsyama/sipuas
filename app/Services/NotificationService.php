@@ -117,4 +117,51 @@ class NotificationService
     {
         return self::markAsRead($ids, $request, $user);
     }
+
+    /**
+     * Send WhatsApp alert to all approvers who have access to 'users.approvals' (including Kasi/Admin with custom permissions).
+     */
+    public static function notifyApproversNewRegistration(User $newUser): void
+    {
+        try {
+            $newUser->loadMissing('room');
+            $roomName = $newUser->room ? $newUser->room->name : 'Staf Pelayanan RS';
+            $registeredTime = \Illuminate\Support\Carbon::now()->translatedFormat('d F Y, H:i') . ' WITA';
+
+            // Ambil semua pengguna aktif yang memiliki nomor HP dan mengaktifkan notifikasi WA
+            $approvers = User::query()
+                ->where('is_active', true)
+                ->whereNotNull('phone_number')
+                ->where('phone_number', '!=', '')
+                ->where('id', '!=', $newUser->id)
+                ->get()
+                ->filter(function (User $user) {
+                    // Validasi apakah user memiliki hak akses ke halaman persetujuan pendaftar (users.approvals)
+                    return $user->hasPageAccess('users.approvals') && ($user->wa_notify_enabled !== false);
+                });
+
+            foreach ($approvers as $approver) {
+                $approverPhone = $approver->phone_number;
+                $approverName = $approver->name;
+
+                $waMsg = "Halo *{$approverName}*,\n\n"
+                    . "Pemberitahuan Sistem *SIPUAS*:\n"
+                    . "Terdapat *Pengajuan Pendaftaran/Aktivasi Akun Baru* yang membutuhkan verifikasi dan persetujuan Anda:\n\n"
+                    . "• *Nama :* {$newUser->name}\n"
+                    . "• *NIP :* " . ($newUser->nip ?: '-') . "\n"
+                    . "• *Username :* {$newUser->username}\n"
+                    . "• *Ruangan :* {$roomName}\n"
+                    . "• *Waktu :* {$registeredTime}\n\n"
+                    . "Silakan masuk ke aplikasi SIPUAS pada menu *Persetujuan Pendaftar* untuk meninjau dan menyetujui akun tersebut.\n\n"
+                    . "Salam hormat,\n_Sistem Manajemen SIPUAS_";
+
+                dispatch(function () use ($approverPhone, $waMsg) {
+                    \App\Channels\WaGatewayChannel::sendDirect($approverPhone, $waMsg);
+                })->afterResponse();
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('WA Notification New Registration Error: ' . $e->getMessage());
+        }
+    }
 }
+

@@ -87,7 +87,6 @@ createInertiaApp({
                                 type: opts.icon || 'success'
                             };
                             window.dispatchEvent(new CustomEvent('show-toast', { detail: eventDetail }));
-                            window.dispatchEvent(new CustomEvent('show-demo-toast', { detail: eventDetail }));
                             return Promise.resolve({ isConfirmed: true });
                         }
 
@@ -115,7 +114,6 @@ createInertiaApp({
                             type: icon
                         };
                         window.dispatchEvent(new CustomEvent('show-toast', { detail: eventDetail }));
-                        window.dispatchEvent(new CustomEvent('show-demo-toast', { detail: eventDetail }));
                         return Promise.resolve({ isConfirmed: true });
                     }
                 }

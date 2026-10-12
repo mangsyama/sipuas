@@ -93,8 +93,9 @@ class RegisteredUserController extends Controller
 
         try {
             event(new \App\Events\NewUserRegistered($user));
+            \App\Services\NotificationService::notifyApproversNewRegistration($user);
         } catch (\Throwable $bErr) {
-            \Illuminate\Support\Facades\Log::info('Realtime broadcast notice: ' . $bErr->getMessage());
+            \Illuminate\Support\Facades\Log::info('New user registration notification notice: ' . $bErr->getMessage());
         }
 
         return redirect()->route('login')->with('status', 'Pendaftaran berhasil! Akun Anda sedang menunggu proses verifikasi dan persetujuan dari Administrator.');
