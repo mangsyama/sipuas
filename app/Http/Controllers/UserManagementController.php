@@ -58,6 +58,7 @@ class UserManagementController extends Controller
                 'permissions' => [
                     ['key' => 'users.approvals', 'label' => 'Persetujuan Pendaftar'],
                     ['key' => 'users.index', 'label' => 'Daftar Pengguna'],
+                    ['key' => 'staff-management.index', 'label' => 'Daftar Staf'],
                     ['key' => 'rooms.index', 'label' => 'Daftar Ruangan'],
                 ],
             ],
@@ -241,7 +242,10 @@ class UserManagementController extends Controller
         $validated['approved_by'] = Auth::id();
         $validated['activation_requested_at'] = null;
 
-        User::create($validated);
+        $newUser = User::create($validated);
+        if (!empty($newUser->nip)) {
+            \App\Models\Staff::where('nip', $newUser->nip)->update(['user_id' => $newUser->id]);
+        }
 
         return redirect()->back()->with('success', 'Pengguna berhasil ditambahkan.');
     }

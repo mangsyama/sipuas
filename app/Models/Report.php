@@ -101,6 +101,18 @@ class Report extends Model
                     ->withTimestamps();
     }
 
+    public function hospitalStaff(): BelongsToMany
+    {
+        return $this->belongsToMany(Staff::class, 'report_staff', 'report_id', 'staff_id')
+                    ->withPivot('action_type', 'points')
+                    ->withTimestamps();
+    }
+
+    public function reportStaff(): HasMany
+    {
+        return $this->hasMany(ReportStaff::class, 'report_id');
+    }
+
     public function kpiLogs(): HasMany
     {
         return $this->hasMany(StaffKpiLog::class, 'report_id');

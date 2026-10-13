@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import ReportDetailModal from '@/Components/ReportDetailModal.vue';
 import { Head, Link } from '@inertiajs/vue3';
@@ -25,8 +25,20 @@ const props = defineProps({
 });
 
 const staffLogbooks = ref(props.staffLogbooks || []);
+const searchQuery = ref('');
 const selectedLogForModal = ref(null);
 const showDetailModal = ref(false);
+
+const filteredStaffLogbooks = computed(() => {
+    if (!searchQuery.value.trim()) return staffLogbooks.value;
+    const q = searchQuery.value.toLowerCase().trim();
+    return staffLogbooks.value.filter(s => {
+        return (s.name && s.name.toLowerCase().includes(q))
+            || (s.nip && s.nip.toLowerCase().includes(q))
+            || (s.role && s.role.toLowerCase().includes(q))
+            || (s.room_name && s.room_name.toLowerCase().includes(q));
+    });
+});
 
 const openReportDetail = (log) => {
     selectedLogForModal.value = log;
@@ -72,20 +84,35 @@ const getCategoryLabel = (log) => {
                         </p>
                     </div>
                 </div>
+
+                <!-- Search Filter Bar -->
+                <div class="relative w-full sm:w-72">
+                    <Search class="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+                    <input
+                        type="text"
+                        v-model="searchQuery"
+                        placeholder="Cari nama staf, NIP, atau unit..."
+                        class="w-full h-10 pl-10 pr-4 text-xs rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:border-emerald-500 transition"
+                    />
+                </div>
             </div>
 
             <!-- Staf Logbook Cards -->
-            <div v-if="staffLogbooks.length === 0" class="bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 rounded-2xl p-12 text-center shadow-sm space-y-2">
+            <div v-if="filteredStaffLogbooks.length === 0" class="bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 rounded-2xl p-12 text-center shadow-sm space-y-2">
                 <div class="h-12 w-12 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mx-auto">
                     <Users class="h-6 w-6" />
                 </div>
-                <h3 class="text-sm font-bold text-slate-800 dark:text-slate-200">Belum Ada Data Staf Terdaftar</h3>
-                <p class="text-xs text-slate-400">Data rekam jejak KPI staf unit akan muncul di sini setelah staf ditambahkan.</p>
+                <h3 class="text-sm font-bold text-slate-800 dark:text-slate-200">
+                    {{ searchQuery ? 'Tidak Ada Staf yang Cocok' : 'Belum Ada Data Staf Terdaftar' }}
+                </h3>
+                <p class="text-xs text-slate-400">
+                    {{ searchQuery ? 'Coba gunakan kata kunci pencarian nama atau NIP yang lain.' : 'Data rekam jejak KPI staf unit akan muncul di sini setelah staf ditambahkan.' }}
+                </p>
             </div>
 
             <div v-else class="space-y-4">
                 <div
-                    v-for="staff in staffLogbooks"
+                    v-for="staff in filteredStaffLogbooks"
                     :key="staff.id"
                     class="bg-white dark:bg-slate-900 border border-transparent dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-4"
                 >
@@ -96,7 +123,10 @@ const getCategoryLabel = (log) => {
                             </div>
                             <div>
                                 <h3 class="text-base font-bold text-slate-900 dark:text-white">{{ staff.name }}</h3>
-                                <p class="text-xs text-slate-400">NIP: {{ staff.nip }} • {{ staff.role }}</p>
+                                <p class="text-xs text-slate-400">
+                                    NIP: {{ staff.nip }} • {{ staff.role }}
+                                    <span v-if="staff.room_name" class="font-medium text-emerald-600 dark:text-emerald-400"> • {{ staff.room_name }}</span>
+                                </p>
                             </div>
                         </div>
 

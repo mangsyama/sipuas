@@ -14,6 +14,7 @@ class StaffKpiLog extends Model
 
     protected $fillable = [
         'user_id',
+        'staff_id',
         'report_id',
         'verified_by',
         'action_type',
@@ -40,6 +41,11 @@ class StaffKpiLog extends Model
     public function staff(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id');
+    }
+
+    public function hospitalStaff(): BelongsTo
+    {
+        return $this->belongsTo(Staff::class, 'staff_id');
     }
 
     public function report(): BelongsTo

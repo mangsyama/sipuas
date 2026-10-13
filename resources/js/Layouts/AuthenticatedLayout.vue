@@ -362,6 +362,7 @@ const menuGroups = computed(() => {
             items: [
                 { label: 'Persetujuan Pendaftar', routeName: 'users.approvals', permission: 'users.approvals', icon: UserCheck },
                 { label: 'Daftar Pengguna', routeName: 'users.index', permission: 'users.index', icon: Users },
+                { label: 'Daftar Staf', routeName: 'staff-management.index', permission: ['staff-management.index', 'rooms.index', 'users.index'], icon: Contact },
                 { label: 'Daftar Ruangan', routeName: 'rooms.index', permission: 'rooms.index', icon: MapPin }
             ]
         },
@@ -935,6 +936,7 @@ const searchableItems = [
     { label: 'Layanan Penunjang (Managemen Layanan)', routeName: 'service-management.supporting-units', description: 'Pengelolaan data divisi dan unit penunjang' },
     { label: 'Persetujuan Registrasi', routeName: 'users.approvals', description: 'Persetujuan pendaftar pengguna baru' },
     { label: 'Daftar Pengguna', routeName: 'users.index', description: 'Kelola data pengguna sistem' },
+    { label: 'Daftar Staf', routeName: 'staff-management.index', description: 'Pengelolaan daftar staf dan penempatan ruangan RS' },
     { label: 'Daftar Ruangan', routeName: 'rooms.index', description: 'Pengelolaan data master ruangan dan lokasi RS' },
     { label: 'Pengaturan Profil', routeName: 'settings.index', description: 'Ubah sandi, tema, dan profil' },
     { label: 'Sistem Desain - Ringkasan', routeName: 'design-system.index', description: 'Ringkasan panduan warna, tema dark mode, & tipografi' },
@@ -988,6 +990,7 @@ const mobilePageTitles = [
     { routeName: 'service-management.supporting-units', label: 'Layanan Penunjang' },
     { routeName: 'users.approvals', label: 'Persetujuan Registrasi' },
     { routeName: 'users.index', label: 'Daftar Pengguna' },
+    { routeName: 'staff-management.index', label: 'Daftar Staf' },
     { routeName: 'rooms.index', label: 'Daftar Ruangan' },
     { routeName: 'users.show', label: 'Detail Pengguna' },
     { routeName: 'users.edit', label: 'Edit Pengguna' },

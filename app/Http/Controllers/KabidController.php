@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Report;
 use App\Models\Role;
 use App\Models\Room;
+use App\Models\Staff;
 use App\Models\Unit;
 use App\Models\User;
 use Carbon\Carbon;
@@ -45,7 +46,12 @@ class KabidController extends Controller
         $negativePercent = $totalRsReports > 0 ? round(($totalNegative / $totalRsReports) * 100, 1) : 0;
         $neutralPercent = $totalRsReports > 0 ? round(($totalNeutral / $totalRsReports) * 100, 1) : 0;
         $completionRate = $totalRsReports > 0 ? round(($totalVerified / $totalRsReports) * 100, 1) : 100;
-        $totalKpiPoints = User::where('role_id', Role::STAFF)->sum('total_points');
+        $staffMasterPoints = Staff::where('is_active', true)->sum('total_points');
+        $staffUserPoints = User::where('role_id', Role::STAFF)
+            ->where('is_active', true)
+            ->whereNotIn('id', Staff::whereNotNull('user_id')->pluck('user_id'))
+            ->sum('total_points');
+        $totalKpiPoints = $staffMasterPoints + $staffUserPoints;
 
         // Real Response Time Calculation (Calculated from real difference between created_at and verified_at)
         $avgResponseFormatted = $this->calculateRealAvgResponse(clone $reportQuery);
@@ -307,25 +313,72 @@ class KabidController extends Controller
     }
 
     /**
-     * Leaderboard & Rankings
+     * Leaderboard & Rankings (mendukung Master Staf dan User Staf).
      */
     public function leaderboard(Request $request): Response
     {
-        $staffQuery = User::where('role_id', Role::STAFF)
+        // 1. Ambil seluruh data staf master aktif
+        $staffList = Staff::where('is_active', true)->with('rooms')->get();
+
+        $existingNips = $staffList->pluck('nip')->filter()->map(fn($n) => strtolower(trim($n)))->toArray();
+        $existingUserIds = $staffList->pluck('user_id')->filter()->toArray();
+
+        // 2. Ambil user staf yang belum tercakup di Master Staff
+        $extraUsers = User::where('role_id', Role::STAFF)
+            ->where('is_active', true)
             ->with('unit')
-            ->where('is_active', true);
-
-        $totalStaff = (clone $staffQuery)->count();
-        $totalPraises = (clone $staffQuery)->sum('praise_count');
-        $totalComplaints = (clone $staffQuery)->sum('complaint_count');
-        $avgPoints = (clone $staffQuery)->avg('total_points') ? round((clone $staffQuery)->avg('total_points')) : 100;
-        $coachingCount = (clone $staffQuery)->where('complaint_count', '>', 0)->count();
-
-        $topPerformers = (clone $staffQuery)
-            ->orderByDesc('total_points')
-            ->orderByDesc('praise_count')
-            ->take(5)
             ->get()
+            ->filter(function ($u) use ($existingNips, $existingUserIds) {
+                if (in_array($u->id, $existingUserIds)) return false;
+                if ($u->nip && in_array(strtolower(trim($u->nip)), $existingNips)) return false;
+                return true;
+            });
+
+        // 3. Gabungkan koleksi data staf
+        $combinedStaff = collect();
+
+        foreach ($staffList as $s) {
+            $unitName = $s->rooms->pluck('name')->join(', ') ?: 'Unit Pelayanan RS';
+            $firstRoomId = $s->rooms->first()?->id;
+
+            $combinedStaff->push((object)[
+                'id' => 'staff-' . $s->id,
+                'name' => $s->name,
+                'nip' => $s->nip ?: '-',
+                'unit_name' => $unitName,
+                'room_id' => $firstRoomId,
+                'total_points' => (int) $s->total_points,
+                'praise_count' => (int) $s->praise_count,
+                'complaint_count' => (int) $s->complaint_count,
+            ]);
+        }
+
+        foreach ($extraUsers as $u) {
+            $unitName = $u->unit ? $u->unit->name : 'Unit Pelayanan RS';
+            $combinedStaff->push((object)[
+                'id' => 'user-' . $u->id,
+                'name' => $u->name,
+                'nip' => $u->nip ?: '-',
+                'unit_name' => $unitName,
+                'room_id' => $u->room_id,
+                'total_points' => (int) $u->total_points,
+                'praise_count' => (int) $u->praise_count,
+                'complaint_count' => (int) $u->complaint_count,
+            ]);
+        }
+
+        $totalStaff = $combinedStaff->count();
+        $totalPraises = $combinedStaff->sum('praise_count');
+        $totalComplaints = $combinedStaff->sum('complaint_count');
+        $avgPoints = $totalStaff > 0 ? round($combinedStaff->avg('total_points')) : 100;
+        $coachingCount = $combinedStaff->where('complaint_count', '>', 0)->count();
+
+        $topPerformers = $combinedStaff
+            ->sortBy([
+                ['total_points', 'desc'],
+                ['praise_count', 'desc'],
+            ])
+            ->take(5)
             ->values()
             ->map(function ($s, $idx) {
                 $rank = $idx + 1;
@@ -336,16 +389,15 @@ class KabidController extends Controller
                     default => 'Top Performer #' . $rank,
                 };
 
-                $latestPraise = Report::where('room_id', $s->room_id)
-                    ->where('ai_sentiment', 'POSITIF')
-                    ->latest()
-                    ->first();
+                $latestPraise = $s->room_id 
+                    ? Report::where('room_id', $s->room_id)->where('ai_sentiment', 'POSITIF')->latest()->first()
+                    : null;
 
                 return [
                     'rank' => $rank,
                     'name' => $s->name,
                     'nip' => $s->nip ?: '-',
-                    'unit' => $s->unit ? $s->unit->name : 'Unit Pelayanan RS',
+                    'unit' => $s->unit_name,
                     'points' => $s->total_points,
                     'praise_count' => $s->praise_count,
                     'badge' => $badge,
@@ -353,18 +405,18 @@ class KabidController extends Controller
                 ];
             });
 
-        $bottomPerformers = (clone $staffQuery)
+        $bottomPerformers = $combinedStaff
             ->where('complaint_count', '>', 0)
-            ->orderBy('total_points')
-            ->orderByDesc('complaint_count')
+            ->sortBy([
+                ['total_points', 'asc'],
+                ['complaint_count', 'desc'],
+            ])
             ->take(5)
-            ->get()
             ->values()
             ->map(function ($s, $idx) {
-                $latestReport = Report::where('room_id', $s->room_id)
-                    ->where('ai_sentiment', 'NEGATIF')
-                    ->latest()
-                    ->first();
+                $latestReport = $s->room_id
+                    ? Report::where('room_id', $s->room_id)->where('ai_sentiment', 'NEGATIF')->latest()->first()
+                    : null;
 
                 $complaintSnippet = $latestReport 
                     ? ($latestReport->ai_category ? '[' . $latestReport->ai_category . '] ' : '') . $latestReport->isi_laporan
@@ -374,7 +426,7 @@ class KabidController extends Controller
                     'rank' => $idx + 1,
                     'name' => $s->name,
                     'nip' => $s->nip ?: '-',
-                    'unit' => $s->unit ? $s->unit->name : 'Unit Pelayanan RS',
+                    'unit' => $s->unit_name,
                     'complaint_deductions' => $s->complaint_count,
                     'points' => $s->total_points,
                     'reason' => $complaintSnippet,

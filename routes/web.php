@@ -160,8 +160,17 @@ Route::middleware('auth')->group(function () {
         Route::delete('/units/{room}', [\App\Http\Controllers\RoomManagementController::class, 'destroy'])->name('units.destroy');
         Route::patch('/units/{room}/toggle-status', [\App\Http\Controllers\RoomManagementController::class, 'toggleStatus'])->name('units.toggle-status');
 
-        // Redirect legacy staff route to users
-        Route::get('/staff', fn () => redirect()->route('users.index'))->name('staff.index');
+        // Master Data 3: Hospital Staff Management (Manajemen Staf RS)
+        Route::get('/staff-management', [\App\Http\Controllers\StaffManagementController::class, 'index'])->name('staff-management.index');
+        Route::get('/staff-management/template', [\App\Http\Controllers\StaffManagementController::class, 'downloadTemplate'])->name('staff-management.template');
+        Route::post('/staff-management/import', [\App\Http\Controllers\StaffManagementController::class, 'import'])->name('staff-management.import');
+        Route::post('/staff-management', [\App\Http\Controllers\StaffManagementController::class, 'store'])->name('staff-management.store');
+        Route::put('/staff-management/{id}', [\App\Http\Controllers\StaffManagementController::class, 'update'])->name('staff-management.update');
+        Route::delete('/staff-management/{id}', [\App\Http\Controllers\StaffManagementController::class, 'destroy'])->name('staff-management.destroy');
+        Route::patch('/staff-management/{id}/toggle-status', [\App\Http\Controllers\StaffManagementController::class, 'toggleStatus'])->name('staff-management.toggle-status');
+
+        // Alias compatibility
+        Route::get('/staff', fn () => redirect()->route('staff-management.index'))->name('staff.index');
 
         // Generator QR Code
         Route::get('/admin/qr-generator', [\App\Http\Controllers\QrGeneratorController::class, 'index'])->name('admin.qr-generator.index');

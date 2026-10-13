@@ -514,7 +514,7 @@ const addOtherStaff = (staff) => {
         is_on_duty: false,
         active_at_time: false,
         attendance_type: 'MANUAL_EXTERNAL',
-        attendance_label: staff.unit_name ? `Unit ${staff.unit_name}` : 'Staf RS',
+        attendance_label: staff.unit_name || null,
         clock_in_time: null,
         selected: true,
         selected_default: true,
@@ -1704,7 +1704,7 @@ const finishVerification = () => {
                                                                     Hadir Hari Ini
                                                                 </span>
                                                                 <span
-                                                                    v-else-if="staff.attendance_type === 'MANUAL_EXTERNAL'"
+                                                                    v-else-if="staff.attendance_type === 'MANUAL_EXTERNAL' && staff.attendance_label && staff.attendance_label !== 'Staf Terpilih'"
                                                                     :class="[
                                                                         'px-1.5 py-0.5 rounded text-[10px] font-semibold border',
                                                                         staff.selected 
@@ -1712,20 +1712,21 @@ const finishVerification = () => {
                                                                             : 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300 border-purple-300 dark:border-purple-800'
                                                                     ]"
                                                                 >
-                                                                    ★ {{ staff.attendance_label || 'Staf Terpilih' }}
+                                                                    {{ staff.attendance_label }}
                                                                 </span>
                                                                 <span
-                                                                    v-else
+                                                                    v-else-if="staff.attendance_type === 'ASSIGNED'"
                                                                     :class="[
                                                                         'px-1.5 py-0.5 rounded text-[10px] font-medium border',
                                                                         staff.selected 
                                                                             ? 'bg-white/20 text-white border-white/30' 
-                                                                            : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                                                                            : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
                                                                     ]"
-                                                                    title="Belum melakukan presensi sistem, namun dapat dipilih manual jika bertugas fisik"
+                                                                    title="Terdaftar dalam penempatan ruangan ini pada Master Staf RS"
                                                                 >
-                                                                    Belum Clock-In (Bisa Dipilih Manual)
+                                                                    Ditempatkan di Ruangan Ini
                                                                 </span>
+
                                                             </div>
                                                             <div :class="['text-[10px] font-normal mt-0.5', staff.selected ? 'text-white/80' : 'text-slate-500 dark:text-slate-400']">
                                                                 {{ staff.role }} • NIP: {{ staff.nip }}
@@ -2621,8 +2622,8 @@ const finishVerification = () => {
                                         <span class="text-xs font-bold text-slate-800 dark:text-slate-100">
                                             {{ staff.name }}
                                         </span>
-                                        <span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-                                            {{ staff.unit_name || 'Unit Umum' }}
+                                        <span v-if="staff.unit_name" class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                                            {{ staff.unit_name }}
                                         </span>
                                     </div>
                                     <p class="text-[10.5px] text-slate-400 mt-0.5">

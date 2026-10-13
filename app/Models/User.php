@@ -267,7 +267,7 @@ class User extends Authenticatable
                 'staff.attendance', 'staff.dashboard',
                 'kasi.dashboard', 'kasi.feed', 'kasi.verify', 'kasi.logbook',
                 'executive.dashboard', 'executive.kasi-responsiveness', 'executive.leaderboard', 'reports.index',
-                'users.approvals', 'users.index', 'rooms.index',
+                'users.approvals', 'users.index', 'rooms.index', 'staff-management.index',
                 'admin.ai-settings.index', 'admin.wa-gateway.index', 'admin.qr-generator.index',
                 'report.create',
             ];

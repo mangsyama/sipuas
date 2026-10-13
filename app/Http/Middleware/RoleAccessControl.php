@@ -76,7 +76,14 @@ class RoleAccessControl
         'units.update' => ['rooms.index'],
         'units.destroy' => ['rooms.index'],
         'units.toggle-status' => ['rooms.index'],
-        'staff.index' => ['users.index'],
+
+        // Staff Management
+        'staff-management.index' => ['staff-management.index', 'rooms.index', 'users.index'],
+        'staff-management.store' => ['staff-management.index', 'rooms.index', 'users.index'],
+        'staff-management.update' => ['staff-management.index', 'rooms.index', 'users.index'],
+        'staff-management.destroy' => ['staff-management.index', 'rooms.index', 'users.index'],
+        'staff-management.toggle-status' => ['staff-management.index', 'rooms.index', 'users.index'],
+        'staff.index' => ['staff-management.index', 'rooms.index', 'users.index'],
         
         // System Integrations
         'admin.ai-settings.index' => ['admin.ai-settings.index'],

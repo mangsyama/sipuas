@@ -6,6 +6,7 @@ use App\Models\Report;
 use App\Models\ReportAttachment;
 use App\Models\ReportStaff;
 use App\Models\Role;
+use App\Models\Staff;
 use App\Models\StaffAttendance;
 use App\Models\StaffKpiLog;
 use App\Models\User;
@@ -295,7 +296,7 @@ class KasiController extends Controller
     {
         $report = null;
         if ($id) {
-            $query = Report::with(['room', 'unit', 'attachments', 'staff', 'verifier']);
+            $query = Report::with(['room', 'unit', 'attachments', 'staff', 'hospitalStaff', 'reportStaff', 'verifier']);
             if (is_numeric($id)) {
                 $query->where(function ($q) use ($id) {
                     $q->where('ticket_number', (string)$id)->orWhere('id', (int)$id);
@@ -307,7 +308,7 @@ class KasiController extends Controller
         }
 
         if (!$report) {
-            $report = Report::with(['room', 'unit', 'attachments', 'staff', 'verifier'])->latest()->first();
+            $report = Report::with(['room', 'unit', 'attachments', 'staff', 'hospitalStaff', 'reportStaff', 'verifier'])->latest()->first();
         }
 
         // Tandai notifikasi laporan ini otomatis terbaca saat dibuka/diverifikasi oleh user secara eksplisit
@@ -327,64 +328,119 @@ class KasiController extends Controller
                 ->groupBy('user_id') 
             : collect();
 
-        $staffList = User::where('room_id', $roomId)
-            ->where('role_id', Role::STAFF)
-            ->where('is_active', true)
-            ->get()
-            ->map(function ($s) use ($report, $reportTime, $attendancesOnDate) {
-                $isLinked = $report && $report->staff->contains('id', $s->id);
-                $isPending = $report && $report->status === 'PENDING';
+        // 1. Ambil seluruh staf dari Master Staff Management yang BENAR-BENAR ditugaskan di ruangan ini (Many-to-Many)
+        $hospitalStaffInRoom = $roomId 
+            ? Staff::where('is_active', true)
+                ->whereHas('rooms', function ($q) use ($roomId) {
+                    $q->where('rooms.id', $roomId);
+                })
+                ->get()
+            : collect();
 
-                // Evaluasi kehadiran presensi nyata (Clock-In)
-                $userAtts = $attendancesOnDate->get($s->id, collect());
-                $activeAtTime = false;
-                $attendanceType = 'NONE';
-                $attendanceLabel = 'Belum Presensi';
-                $clockInTime = null;
+        // 2. Ambil juga pengguna sistem dengan role staf di ruangan ini (kompatibilitas akun sistem)
+        $userStaffInRoom = $roomId 
+            ? User::where('room_id', $roomId)
+                ->where('role_id', Role::STAFF)
+                ->where('is_active', true)
+                ->get()
+            : collect();
 
-                foreach ($userAtts as $att) {
-                    $in = $att->check_in_at ? Carbon::parse($att->check_in_at) : null;
-                    $out = $att->check_out_at ? Carbon::parse($att->check_out_at) : null;
+        // Gabungkan staf master dan staf user (hindari duplikasi berdasarkan user_id atau nip)
+        $combinedStaff = collect();
+        $seenNips = [];
+        $seenUserIds = [];
 
-                    if ($in && $reportTime) {
-                        // Jika laporan masuk saat staf sedang dinas (setelah check-in dan belum checkout / checkout setelah jam aduan)
-                        if ($reportTime->gte($in) && (!$out || $reportTime->lte($out) || $att->status === 'ON_DUTY')) {
-                            $activeAtTime = true;
-                            $attendanceType = 'ACTIVE_AT_REPORT';
-                            $attendanceLabel = 'Berdinas saat aduan (' . $in->format('H.i') . ')';
-                            $clockInTime = $in->format('H.i');
-                            break;
-                        }
-                    }
+        foreach ($hospitalStaffInRoom as $hs) {
+            $combinedStaff->push([
+                'type' => 'STAFF_MASTER',
+                'user_id' => $hs->user_id,
+                'id' => $hs->id,
+                'name' => $hs->name,
+                'nip' => $hs->nip,
+                'role' => $hs->position ?: 'Staf Pelayanan',
+                'total_points' => $hs->total_points,
+                'is_on_duty' => false,
+            ]);
+            if ($hs->nip) $seenNips[] = $hs->nip;
+            if ($hs->user_id) $seenUserIds[] = $hs->user_id;
+        }
 
-                    if ($in) {
-                        $attendanceType = 'TODAY';
-                        $attendanceLabel = 'Hadir Hari Ini (' . $in->format('H.i') . ')';
+        foreach ($userStaffInRoom as $us) {
+            if (($us->nip && in_array($us->nip, $seenNips)) || in_array($us->id, $seenUserIds)) {
+                continue;
+            }
+            $combinedStaff->push([
+                'type' => 'USER',
+                'user_id' => $us->id,
+                'id' => $us->id,
+                'name' => $us->name,
+                'nip' => $us->nip,
+                'role' => $us->role ?: 'Staf Pelayanan',
+                'total_points' => $us->total_points,
+                'is_on_duty' => (bool)$us->is_on_duty,
+            ]);
+        }
+
+        // Ambil ID staf yang sudah tertaut pada laporan ini (jika laporan sudah pernah diverifikasi)
+        $linkedStaffIds = $report ? $report->reportStaff->pluck('staff_id')->filter()->toArray() : [];
+        $linkedUserIds = $report ? $report->reportStaff->pluck('user_id')->filter()->toArray() : [];
+
+        $staffList = $combinedStaff->map(function ($s) use ($report, $reportTime, $attendancesOnDate, $linkedStaffIds, $linkedUserIds) {
+            $isLinked = ($s['type'] === 'STAFF_MASTER' && in_array($s['id'], $linkedStaffIds))
+                || ($s['user_id'] && in_array($s['user_id'], $linkedUserIds));
+            $isPending = $report && $report->status === 'PENDING';
+
+            // Evaluasi presensi nyata (Clock-In) jika staf ini memiliki data user/presensi
+            $userAtts = $s['user_id'] ? $attendancesOnDate->get($s['user_id'], collect()) : collect();
+            $activeAtTime = false;
+            $attendanceType = 'ASSIGNED';
+            $attendanceLabel = 'Terdaftar di Ruangan Ini';
+            $clockInTime = null;
+
+            foreach ($userAtts as $att) {
+                $in = $att->check_in_at ? Carbon::parse($att->check_in_at) : null;
+                $out = $att->check_out_at ? Carbon::parse($att->check_out_at) : null;
+
+                if ($in && $reportTime) {
+                    if ($reportTime->gte($in) && (!$out || $reportTime->lte($out) || $att->status === 'ON_DUTY')) {
+                        $activeAtTime = true;
+                        $attendanceType = 'ACTIVE_AT_REPORT';
+                        $attendanceLabel = 'Berdinas saat aduan (' . $in->format('H.i') . ')';
                         $clockInTime = $in->format('H.i');
+                        break;
                     }
                 }
 
-                if (!$activeAtTime && $s->is_on_duty) {
-                    $attendanceLabel = 'Sedang On-Duty';
+                if ($in) {
+                    $attendanceType = 'TODAY';
+                    $attendanceLabel = 'Hadir Hari Ini (' . $in->format('H.i') . ')';
+                    $clockInTime = $in->format('H.i');
                 }
+            }
 
-                // Otomatis centang staf yang tercatat berdinas saat kejadian jika aduan belum diverifikasi
-                $autoSelected = $isPending && $activeAtTime;
+            if (!$activeAtTime && !empty($s['is_on_duty'])) {
+                $attendanceLabel = 'Sedang On-Duty';
+            }
 
-                return [
-                    'id' => $s->id,
-                    'name' => $s->name,
-                    'nip' => (string) ($s->nip ?? '-'),
-                    'role' => $s->role ?? 'Staf Pelayanan',
-                    'total_points' => $s->total_points,
-                    'is_on_duty' => (bool)$s->is_on_duty,
-                    'active_at_time' => $activeAtTime,
-                    'attendance_type' => $attendanceType,
-                    'attendance_label' => $attendanceLabel,
-                    'clock_in_time' => $clockInTime,
-                    'selected' => $isLinked || $autoSelected,
-                ];
-            })->values();
+            // Otomatis centang staf yang tercatat berdinas saat kejadian jika aduan belum diverifikasi
+            $autoSelected = $isPending && $activeAtTime;
+
+            return [
+                'id' => $s['id'],
+                'type' => $s['type'],
+                'user_id' => $s['user_id'],
+                'name' => $s['name'],
+                'nip' => (string) ($s['nip'] ?? '-'),
+                'role' => $s['role'] ?? 'Staf Pelayanan',
+                'total_points' => $s['total_points'],
+                'is_on_duty' => !empty($s['is_on_duty']) || $activeAtTime,
+                'active_at_time' => $activeAtTime,
+                'attendance_type' => $attendanceType,
+                'attendance_label' => $attendanceLabel,
+                'clock_in_time' => $clockInTime,
+                'selected' => $isLinked || $autoSelected,
+            ];
+        })->values();
 
         // Format attachments
         $attachments = $report ? $report->attachments->where('category', '!=', 'VERIFICATION')->values()->map(function ($att) {
@@ -444,12 +500,58 @@ class KasiController extends Controller
             }
 
             // Pastikan staf yang terkait saat verifikasi selalu ada dalam daftar staf
-            if ($report->staff->isNotEmpty()) {
-                $existingStaffIds = $staffList->pluck('id')->toArray();
+            $existingStaffIds = $staffList->pluck('id')->toArray();
+            if ($report->reportStaff->isNotEmpty()) {
+                foreach ($report->reportStaff as $rs) {
+                    if ($rs->staff_id) {
+                        $st = Staff::find($rs->staff_id);
+                        if ($st && !in_array($st->id, $existingStaffIds)) {
+                            $staffList->push([
+                                'id' => $st->id,
+                                'type' => 'STAFF_MASTER',
+                                'user_id' => $st->user_id,
+                                'name' => $st->name,
+                                'nip' => (string) ($st->nip ?? '-'),
+                                'role' => $st->position ?? 'Staf Pelayanan',
+                                'total_points' => $st->total_points,
+                                'is_on_duty' => false,
+                                'active_at_time' => false,
+                                'attendance_type' => 'NONE',
+                                'attendance_label' => 'Staf Terkait',
+                                'clock_in_time' => null,
+                                'selected' => true,
+                            ]);
+                            $existingStaffIds[] = $st->id;
+                        }
+                    } elseif ($rs->user_id) {
+                        $usr = User::find($rs->user_id);
+                        if ($usr && !in_array($usr->id, $existingStaffIds)) {
+                            $staffList->push([
+                                'id' => $usr->id,
+                                'type' => 'USER',
+                                'user_id' => $usr->id,
+                                'name' => $usr->name,
+                                'nip' => (string) ($usr->nip ?? '-'),
+                                'role' => $usr->role ?? 'Staf Pelayanan',
+                                'total_points' => $usr->total_points,
+                                'is_on_duty' => (bool)$usr->is_on_duty,
+                                'active_at_time' => false,
+                                'attendance_type' => 'NONE',
+                                'attendance_label' => 'Staf Terkait',
+                                'clock_in_time' => null,
+                                'selected' => true,
+                            ]);
+                            $existingStaffIds[] = $usr->id;
+                        }
+                    }
+                }
+            } elseif ($report->staff->isNotEmpty()) {
                 foreach ($report->staff as $linkedStaff) {
                     if (!in_array($linkedStaff->id, $existingStaffIds)) {
                         $staffList->push([
                             'id' => $linkedStaff->id,
+                            'type' => 'USER',
+                            'user_id' => $linkedStaff->id,
                             'name' => $linkedStaff->name,
                             'nip' => (string) ($linkedStaff->nip ?? '-'),
                             'role' => $linkedStaff->role ?? 'Staf Pelayanan',
@@ -555,21 +657,44 @@ class KasiController extends Controller
             ],
         ];
 
-        $allHospitalStaff = User::where('role_id', Role::STAFF)
-            ->where('is_active', true)
-            ->with('room')
+        $allHospitalStaff = Staff::where('is_active', true)
+            ->with('rooms')
             ->orderBy('name')
             ->get()
             ->map(function ($s) {
+                $roomNames = $s->rooms->pluck('name')->join(', ');
                 return [
                     'id' => $s->id,
+                    'type' => 'STAFF_MASTER',
                     'name' => $s->name,
                     'nip' => (string) ($s->nip ?? '-'),
-                    'role' => $s->role ?? 'Staf Pelayanan',
-                    'unit_name' => $s->room ? $s->room->name : 'Unit Umum',
+                    'role' => $s->position ?? 'Staf Pelayanan',
+                    'unit_name' => $roomNames ?: null,
                     'total_points' => $s->total_points,
                 ];
             })->values()->toArray();
+
+        // Gabungkan juga data User bertipe Staf jika ada yang belum terdaftar di Master Staff
+        $existingNames = array_map('strtolower', array_column($allHospitalStaff, 'name'));
+        $userStaffAll = User::where('role_id', Role::STAFF)
+            ->where('is_active', true)
+            ->with('room')
+            ->orderBy('name')
+            ->get();
+
+        foreach ($userStaffAll as $us) {
+            if (!in_array(strtolower($us->name), $existingNames)) {
+                $allHospitalStaff[] = [
+                    'id' => $us->id,
+                    'type' => 'USER',
+                    'name' => $us->name,
+                    'nip' => (string) ($us->nip ?? '-'),
+                    'role' => $us->role ?? 'Staf Pelayanan',
+                    'unit_name' => $us->room ? $us->room->name : null,
+                    'total_points' => $us->total_points,
+                ];
+            }
+        }
 
         return Inertia::render('Kasi/Verify', [
             'id' => $report ? $report->ticket_number : ($id ?? ''),
@@ -692,15 +817,55 @@ class KasiController extends Controller
             }
         }
 
-        // Sync report staff & update staff KPI logs directly on User model (hanya jika bukan DIBATALKAN)
+        // Sync report staff & update staff KPI logs (mendukung Master Staf dan User Staf)
         if ($validated['action_type'] !== 'DIBATALKAN') {
             $selectedStaffIds = $validated['selected_staff_ids'] ?? [];
             foreach ($selectedStaffIds as $staffId) {
-                $staff = User::find($staffId);
-                if (!$staff) continue;
+                // 1. Cek apakah ini staf dari Master Staff Management
+                $staffMember = Staff::find($staffId);
+                $userStaff = null;
 
+                if ($staffMember) {
+                    if ($validated['action_type'] === 'PENAMBAHAN') {
+                        $staffMember->increment('praise_count');
+                        $staffMember->increment('total_points', abs($points));
+                    } elseif ($validated['action_type'] === 'PEMOTONGAN') {
+                        $staffMember->increment('complaint_count');
+                        $staffMember->decrement('total_points', abs($points));
+                    }
+                    $staffMember->update(['last_point_update_at' => Carbon::now()]);
+
+                    if ($staffMember->user_id) {
+                        $userStaff = User::find($staffMember->user_id);
+                    } elseif (!empty($staffMember->nip)) {
+                        $userStaff = User::where('nip', $staffMember->nip)->first();
+                        if ($userStaff) {
+                            $staffMember->update(['user_id' => $userStaff->id]);
+                        }
+                    }
+                } else {
+                    // 2. Fallback cek apakah ini ID dari model User
+                    $userStaff = User::find($staffId);
+                }
+
+                if ($userStaff) {
+                    if ($validated['action_type'] === 'PENAMBAHAN') {
+                        $userStaff->increment('praise_count');
+                        $userStaff->increment('total_points', abs($points));
+                    } elseif ($validated['action_type'] === 'PEMOTONGAN') {
+                        $userStaff->increment('complaint_count');
+                        $userStaff->decrement('total_points', abs($points));
+                    }
+                    $userStaff->update(['last_point_update_at' => Carbon::now()]);
+                }
+
+                // Catat ke ReportStaff (dengan staff_id atau user_id)
                 ReportStaff::updateOrCreate(
-                    ['report_id' => $report->id, 'user_id' => $staff->id],
+                    [
+                        'report_id' => $report->id,
+                        'staff_id' => $staffMember ? $staffMember->id : null,
+                        'user_id' => $userStaff ? $userStaff->id : ($staffMember?->user_id ?? null)
+                    ],
                     [
                         'action_type' => $validated['action_type'],
                         'kpi_category' => $kpiCategory,
@@ -709,19 +874,10 @@ class KasiController extends Controller
                     ]
                 );
 
-                // Update Staff Balance Points only for PENAMBAHAN / PEMOTONGAN
-                if ($validated['action_type'] === 'PENAMBAHAN') {
-                    $staff->increment('praise_count');
-                    $staff->increment('total_points', abs($points));
-                } elseif ($validated['action_type'] === 'PEMOTONGAN') {
-                    $staff->increment('complaint_count');
-                    $staff->decrement('total_points', abs($points));
-                }
-                $staff->update(['last_point_update_at' => Carbon::now()]);
-
-                // Add KPI Log
+                // Tambahkan KPI Log
                 StaffKpiLog::create([
-                    'user_id' => $staff->id,
+                    'staff_id' => $staffMember ? $staffMember->id : null,
+                    'user_id' => $userStaff ? $userStaff->id : ($staffMember?->user_id ?? null),
                     'report_id' => $report->id,
                     'verified_by' => $request->user() ? $request->user()->id : null,
                     'action_type' => $validated['action_type'],
@@ -790,13 +946,35 @@ class KasiController extends Controller
     }
 
     /**
-     * Display Logbook KPI history of staff in unit.
+     * Display Logbook KPI history of staff in unit (mendukung Master Staf dan User Staf).
      */
     public function logbook(Request $request): Response
     {
         $user = $request->user();
+        $userRoomId = $user ? ($user->room_id ?? $user->unit_id) : null;
 
-        $query = User::where('role_id', Role::STAFF)
+        // 1. Ambil seluruh staf dari Master Staff (Staff)
+        $staffMasterQuery = Staff::where('is_active', true)
+            ->with([
+                'rooms',
+                'user',
+                'kpiLogs' => fn($q) => $q->latest('logged_at'),
+                'kpiLogs.report.attachments',
+                'kpiLogs.report.room',
+                'kpiLogs.verifier'
+            ]);
+
+        if ($userRoomId && !$user->isSuperAdmin()) {
+            $staffMasterQuery->whereHas('rooms', fn($q) => $q->where('rooms.id', $userRoomId));
+        }
+
+        $staffList = $staffMasterQuery->orderBy('name')->get();
+
+        $existingNips = $staffList->pluck('nip')->filter()->map(fn($n) => strtolower(trim($n)))->toArray();
+        $existingUserIds = $staffList->pluck('user_id')->filter()->toArray();
+
+        // 2. Ambil juga pengguna sistem dengan role Staf yang belum terdaftar di Master Staff
+        $userStaffQuery = User::where('role_id', Role::STAFF)
             ->with([
                 'room',
                 'unit',
@@ -807,81 +985,134 @@ class KasiController extends Controller
             ])
             ->where('is_active', true);
 
-        $userRoomId = $user ? ($user->room_id ?? $user->unit_id) : null;
         if ($userRoomId && !$user->isSuperAdmin()) {
-            $query->where('room_id', $userRoomId);
+            $userStaffQuery->where('room_id', $userRoomId);
         }
 
-        $staffLogbooks = $query->get()->map(function ($s) {
-            return [
-                'id' => $s->id,
+        $extraUserStaff = $userStaffQuery->get()->filter(function ($u) use ($existingNips, $existingUserIds) {
+            if (in_array($u->id, $existingUserIds)) return false;
+            if ($u->nip && in_array(strtolower(trim($u->nip)), $existingNips)) return false;
+            return true;
+        });
+
+        // 3. Mapping data logbook terpadu
+        $staffLogbooks = collect();
+
+        foreach ($staffList as $s) {
+            $roomName = $s->rooms->pluck('name')->join(', ');
+            $logs = $s->kpiLogs;
+
+            // Jika staf memiliki akun user, gabungkan juga kpiLogs yang tercatat via user_id
+            if ($s->user_id) {
+                $existingLogIds = $logs->pluck('id')->toArray();
+                $extraLogs = StaffKpiLog::where('user_id', $s->user_id)
+                    ->whereNotIn('id', $existingLogIds)
+                    ->with(['report.attachments', 'report.room', 'verifier'])
+                    ->latest('logged_at')
+                    ->get();
+                if ($extraLogs->isNotEmpty()) {
+                    $logs = $logs->concat($extraLogs)->sortByDesc('logged_at')->values();
+                }
+            }
+
+            $staffLogbooks->push([
+                'id' => 'staff-' . $s->id,
+                'staff_id' => $s->id,
+                'user_id' => $s->user_id,
                 'name' => $s->name,
                 'nip' => $s->nip ?? '-',
-                'role' => $s->role ?? 'STAFF',
+                'role' => $s->position ?? 'Staf Pelayanan',
+                'room_name' => $roomName ?: null,
                 'total_points' => $s->total_points,
                 'praise_count' => $s->praise_count,
                 'complaint_count' => $s->complaint_count,
-                'last_update' => $s->last_point_update_at ? $s->last_point_update_at->format('Y-m-d H:i') : '-',
-                'history' => $s->kpiLogs->map(function ($log) {
-                    $report = $log->report;
-                    $verificationAttachments = ($report && $report->attachments)
-                        ? $report->attachments->where('category', 'VERIFICATION')->values()->map(function ($att) {
-                            return [
-                                'id' => $att->id,
-                                'file_name' => $att->file_name,
-                                'file_type' => $att->file_type,
-                                'mime_type' => $att->mime_type,
-                                'file_size' => $att->file_size_bytes ? round($att->file_size_bytes / 1024, 1) . ' KB' : '-',
-                                'url' => \Illuminate\Support\Facades\Storage::url($att->file_path),
-                            ];
-                        }) : [];
+                'last_update' => $s->last_point_update_at ? $s->last_point_update_at->format('Y-m-d H:i') : ($s->updated_at ? $s->updated_at->format('Y-m-d H:i') : '-'),
+                'history' => $this->formatKpiHistory($logs),
+            ]);
+        }
 
-                    $evidenceAttachments = ($report && $report->attachments)
-                        ? $report->attachments->where('category', '!=', 'VERIFICATION')->values()->map(function ($att) {
-                            return [
-                                'id' => $att->id,
-                                'file_name' => $att->file_name,
-                                'file_type' => $att->file_type,
-                                'mime_type' => $att->mime_type,
-                                'file_size' => $att->file_size_bytes ? round($att->file_size_bytes / 1024, 1) . ' KB' : '-',
-                                'url' => \Illuminate\Support\Facades\Storage::url($att->file_path),
-                            ];
-                        }) : [];
-
-                    return [
-                        'id' => $log->id,
-                        'ticket_number' => $report ? $report->ticket_number : 'EVALUASI_MANUAL',
-                        'type' => $log->action_type,
-                        'kpi_category' => $log->kpi_category,
-                        'severity_level' => $log->severity_level,
-                        'points' => $log->points,
-                        'note' => $log->note,
-                        'verifier_name' => $log->verifier ? $log->verifier->name : 'Supervisor Kasi',
-                        'date' => $log->logged_at ? $log->logged_at->format('d M Y, H:i') : ($log->created_at ? $log->created_at->format('d M Y, H:i') : '-'),
-                        'has_attachment' => count($verificationAttachments) > 0,
-                        'attachments' => $verificationAttachments,
-                        'report_detail' => $report ? [
-                            'ticket_number' => $report->ticket_number,
-                            'isi_laporan' => $report->isi_laporan,
-                            'room_name' => $report->room ? $report->room->name : ($report->unit ? $report->unit->name : '-'),
-                            'ai_sentiment' => $report->ai_sentiment,
-                            'ai_category' => $report->ai_category,
-                            'status' => $report->status,
-                            'supervisor_notes' => $report->supervisor_notes,
-                            'verified_at' => $report->verified_at ? $report->verified_at->format('d M Y, H:i') : '-',
-                            'created_at' => $report->created_at ? $report->created_at->format('d M Y, H:i') : '-',
-                            'reporter_name' => $report->is_anonymous ? 'Anonim (Pasien/Pengunjung)' : ($report->reporter_name ?: 'Pasien/Pengunjung'),
-                            'verification_attachments' => $verificationAttachments,
-                            'evidence_attachments' => $evidenceAttachments,
-                        ] : null,
-                    ];
-                }),
-            ];
-        });
+        foreach ($extraUserStaff as $u) {
+            $roomName = $u->room ? $u->room->name : ($u->unit ? $u->unit->name : null);
+            $staffLogbooks->push([
+                'id' => 'user-' . $u->id,
+                'staff_id' => null,
+                'user_id' => $u->id,
+                'name' => $u->name,
+                'nip' => $u->nip ?? '-',
+                'role' => $u->role ?? 'Staf Pelayanan',
+                'room_name' => $roomName ?: null,
+                'total_points' => $u->total_points,
+                'praise_count' => $u->praise_count,
+                'complaint_count' => $u->complaint_count,
+                'last_update' => $u->last_point_update_at ? $u->last_point_update_at->format('Y-m-d H:i') : ($u->updated_at ? $u->updated_at->format('Y-m-d H:i') : '-'),
+                'history' => $this->formatKpiHistory($u->kpiLogs),
+            ]);
+        }
 
         return Inertia::render('Kasi/Logbook', [
-            'staffLogbooks' => $staffLogbooks,
+            'staffLogbooks' => $staffLogbooks->values(),
         ]);
+    }
+
+    /**
+     * Helper to format KPI logs collection into uniform logbook history structure.
+     */
+    private function formatKpiHistory($logs)
+    {
+        return $logs->map(function ($log) {
+            $report = $log->report;
+            $verificationAttachments = ($report && $report->attachments)
+                ? $report->attachments->where('category', 'VERIFICATION')->values()->map(function ($att) {
+                    return [
+                        'id' => $att->id,
+                        'file_name' => $att->file_name,
+                        'file_type' => $att->file_type,
+                        'mime_type' => $att->mime_type,
+                        'file_size' => $att->file_size_bytes ? round($att->file_size_bytes / 1024, 1) . ' KB' : '-',
+                        'url' => \Illuminate\Support\Facades\Storage::url($att->file_path),
+                    ];
+                }) : [];
+
+            $evidenceAttachments = ($report && $report->attachments)
+                ? $report->attachments->where('category', '!=', 'VERIFICATION')->values()->map(function ($att) {
+                    return [
+                        'id' => $att->id,
+                        'file_name' => $att->file_name,
+                        'file_type' => $att->file_type,
+                        'mime_type' => $att->mime_type,
+                        'file_size' => $att->file_size_bytes ? round($att->file_size_bytes / 1024, 1) . ' KB' : '-',
+                        'url' => \Illuminate\Support\Facades\Storage::url($att->file_path),
+                    ];
+                }) : [];
+
+            return [
+                'id' => $log->id,
+                'ticket_number' => $report ? $report->ticket_number : 'EVALUASI_MANUAL',
+                'type' => $log->action_type,
+                'kpi_category' => $log->kpi_category,
+                'severity_level' => $log->severity_level,
+                'points' => $log->points,
+                'note' => $log->note,
+                'verifier_name' => $log->verifier ? $log->verifier->name : 'Supervisor Kasi',
+                'date' => $log->logged_at ? $log->logged_at->format('d M Y, H:i') : ($log->created_at ? $log->created_at->format('d M Y, H:i') : '-'),
+                'has_attachment' => count($verificationAttachments) > 0,
+                'attachments' => $verificationAttachments,
+                'report_detail' => $report ? [
+                    'ticket_number' => $report->ticket_number,
+                    'isi_laporan' => $report->isi_laporan,
+                    'room_name' => $report->room ? $report->room->name : ($report->unit ? $report->unit->name : '-'),
+                    'ai_sentiment' => $report->ai_sentiment,
+                    'ai_category' => $report->ai_category,
+                    'status' => $report->status,
+                    'supervisor_notes' => $report->supervisor_notes,
+                    'verified_at' => $report->verified_at ? $report->verified_at->format('d M Y, H:i') : '-',
+                    'created_at' => $report->created_at ? $report->created_at->format('d M Y, H:i') : '-',
+                    'reporter_name' => $report->is_anonymous ? 'Anonim (Pasien/Pengunjung)' : ($report->reporter_name ?: 'Pasien/Pengunjung'),
+                    'verification_attachments' => $verificationAttachments,
+                    'evidence_attachments' => $evidenceAttachments,
+                ] : null,
+            ];
+        })->values();
     }
 
     /**
