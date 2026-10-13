@@ -37,8 +37,8 @@ Route::middleware('auth')->group(function () {
         Route::post('/attendance/check-out', [\App\Http\Controllers\AttendanceController::class, 'checkOut'])->name('attendance.check-out');
     });
 
-    // Modul Kepala Seksi (Kasi) — PRD System
-    Route::middleware('role:kasi')->group(function () {
+    // Modul Kepala Seksi (Kasi) & Verifikasi Laporan — PRD System
+    Route::middleware('role:kasi,kabid,admin')->group(function () {
         Route::get('/kasi/dashboard', [KasiController::class, 'dashboard'])->name('kasi.dashboard');
         Route::get('/kasi/feed', [KasiController::class, 'feed'])->name('kasi.feed');
         Route::get('/kasi/verify/{id?}', [KasiController::class, 'verify'])->name('kasi.verify');

@@ -24,9 +24,9 @@ class RoleAccessControl
         
         // Kasi
         'kasi.dashboard' => ['kasi.dashboard'],
-        'kasi.feed' => ['kasi.feed', 'kasi.verify'],
-        'kasi.verify' => ['kasi.feed', 'kasi.verify'],
-        'kasi.verify.process' => ['kasi.feed', 'kasi.verify'],
+        'kasi.feed' => ['kasi.feed', 'kasi.verify', 'executive.dashboard', 'kabid.dashboard'],
+        'kasi.verify' => ['kasi.feed', 'kasi.verify', 'executive.dashboard', 'kabid.dashboard'],
+        'kasi.verify.process' => ['kasi.feed', 'kasi.verify', 'executive.dashboard', 'kabid.dashboard'],
         'kasi.logbook' => ['kasi.logbook'],
         'kasi.reports' => ['reports.index', 'kasi.reports'],
         'kasi.reports.destroy' => ['reports.index', 'kasi.reports'],

@@ -236,21 +236,37 @@ class ReportController extends Controller
                     $waktuLaporan
                 ) {
                     try {
-                        $kasiUsers = \App\Models\User::where('role_id', \App\Models\Role::KEPALA_SEKSI)
+                        $targetRoles = [
+                            \App\Models\Role::KEPALA_SEKSI,
+                            \App\Models\Role::KEPALA_BIDANG,
+                            \App\Models\Role::ADMINISTRATOR,
+                        ];
+
+                        $officerUsers = \App\Models\User::whereIn('role_id', $targetRoles)
                             ->where('is_active', true)
                             ->where('wa_notify_enabled', true)
                             ->whereNotNull('phone_number')
+                            ->where('phone_number', '!=', '')
                             ->where(function ($q) use ($roomId) {
-                                if ($roomId) {
-                                    $q->where('room_id', $roomId)
-                                      ->orWhereNull('room_id');
-                                } else {
-                                    $q->whereNull('room_id');
-                                }
+                                // Kabid & Administrator memantau seluruh ruangan/unit RS
+                                $q->whereIn('role_id', [\App\Models\Role::KEPALA_BIDANG, \App\Models\Role::ADMINISTRATOR])
+                                  // Kasi menerima notifikasi sesuai ruangannya atau jika seksi umum (room_id null)
+                                  ->orWhere(function ($kasiQuery) use ($roomId) {
+                                      $kasiQuery->where('role_id', \App\Models\Role::KEPALA_SEKSI);
+                                      if ($roomId) {
+                                          $kasiQuery->where(function ($rq) use ($roomId) {
+                                              $rq->where('room_id', $roomId)
+                                                 ->orWhereNull('room_id');
+                                          });
+                                      } else {
+                                          $kasiQuery->whereNull('room_id');
+                                      }
+                                  });
                             })
-                            ->get();
+                            ->get()
+                            ->unique('phone_number');
 
-                        if ($kasiUsers->isNotEmpty()) {
+                        if ($officerUsers->isNotEmpty()) {
                             $targetLabel = !empty($targetObject) && $targetObject !== '-' ? $targetObject : '-';
 
                             $waMessage = "🔔 *NOTIFIKASI SIPUAS*\n"
@@ -263,8 +279,8 @@ class ReportController extends Controller
                                 . "Lihat Laporan:\n"
                                 . "{$verifyUrl}";
 
-                            foreach ($kasiUsers as $kasi) {
-                                WaGatewayChannel::sendDirect($kasi->phone_number, $waMessage);
+                            foreach ($officerUsers as $officer) {
+                                WaGatewayChannel::sendDirect($officer->phone_number, $waMessage);
                             }
                         }
                     } catch (\Throwable $e) {

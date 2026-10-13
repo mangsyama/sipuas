@@ -1154,23 +1154,27 @@ onUnmounted(() => {
                                 <div class="space-y-1 text-[11px] text-slate-600 dark:text-slate-300">
                                     <div class="flex items-start gap-1.5">
                                         <span class="font-bold text-emerald-600 dark:text-emerald-400 shrink-0">• Nama Staf:</span>
-                                        <span>Wajib diisi</span>
+                                        <span class="font-semibold text-emerald-700 dark:text-emerald-300">Wajib diisi</span>
                                     </div>
                                     <div class="flex items-start gap-1.5">
-                                        <span class="font-bold text-emerald-600 dark:text-emerald-400 shrink-0">• NIP:</span>
-                                        <span>Wajib 18 digit angka</span>
+                                        <span class="font-bold text-emerald-600 dark:text-emerald-400 shrink-0">• Status Aktif:</span>
+                                        <span class="font-semibold text-emerald-700 dark:text-emerald-300">Wajib diisi ("Aktif" atau "Tidak Aktif")</span>
                                     </div>
                                     <div class="flex items-start gap-1.5">
-                                        <span class="font-bold text-emerald-600 dark:text-emerald-400 shrink-0">• Jabatan:</span>
-                                        <span>Wajib (misal: Perawat Pelaksana)</span>
+                                        <span class="font-bold text-slate-500 dark:text-slate-400 shrink-0">• NIP:</span>
+                                        <span>Opsional (boleh dikosongkan)</span>
+                                    </div>
+                                    <div class="flex items-start gap-1.5">
+                                        <span class="font-bold text-slate-500 dark:text-slate-400 shrink-0">• Jabatan:</span>
+                                        <span>Opsional (default: "Staf Pelaksana")</span>
                                     </div>
                                     <div class="flex items-start gap-1.5">
                                         <span class="font-bold text-slate-500 dark:text-slate-400 shrink-0">• Nomor HP:</span>
-                                        <span>Opsional (10–15 digit)</span>
+                                        <span>Opsional (boleh dikosongkan)</span>
                                     </div>
                                     <div class="flex items-start gap-1.5">
                                         <span class="font-bold text-slate-500 dark:text-slate-400 shrink-0">• Ruangan:</span>
-                                        <span>Opsional, pisahkan koma jika multi-ruangan (contoh: "IGD, ICU")</span>
+                                        <span>Opsional, pisahkan koma jika multi-ruangan (contoh: "Poli Bedah, IGD")</span>
                                     </div>
                                 </div>
                             </div>

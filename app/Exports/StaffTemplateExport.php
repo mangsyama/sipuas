@@ -62,6 +62,14 @@ class StaffTemplateExport implements FromArray, WithHeadings, WithStyles, Should
                 '',
                 'Aktif',
             ],
+            [
+                'I Wayan Artawan',
+                '',
+                '',
+                '',
+                '',
+                'Aktif',
+            ],
         ];
     }
 

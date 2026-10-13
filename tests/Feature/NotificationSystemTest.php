@@ -10,6 +10,7 @@ use App\Models\Room;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class NotificationSystemTest extends TestCase
@@ -205,5 +206,86 @@ class NotificationSystemTest extends TestCase
                  ->where('auth.pending_approvals_count', 0)
                  ->where('unread_notifications_count', 0)
         );
+    }
+
+    public function test_kabid_can_access_kasi_verify_page(): void
+    {
+        $room = Room::first();
+        $report = Report::create([
+            'ticket_number' => 'LP-KABID-VERIFY',
+            'room_id' => $room->id,
+            'isi_laporan' => 'Ulasan pelayanan poli oleh pasien.',
+            'status' => 'PENDING',
+        ]);
+
+        $kabid = User::factory()->create([
+            'role_id' => Role::KEPALA_BIDANG,
+            'room_id' => null,
+            'is_active' => true,
+        ]);
+
+        $res = $this->actingAs($kabid)->get(route('kasi.verify', $report->ticket_number));
+        $res->assertOk();
+    }
+
+    public function test_wa_notification_is_sent_to_kasi_kabid_and_admin_with_identical_message(): void
+    {
+        Http::fake([
+            '*' => Http::response(['status' => true], 200),
+        ]);
+
+        $room = Room::first();
+
+        // 1. Admin
+        $admin = User::where('role_id', Role::ADMINISTRATOR)->first();
+        $admin->update([
+            'phone_number' => '081111111111',
+            'wa_notify_enabled' => true,
+        ]);
+
+        // 2. Kabid
+        $kabid = User::factory()->create([
+            'role_id' => Role::KEPALA_BIDANG,
+            'phone_number' => '082222222222',
+            'wa_notify_enabled' => true,
+            'is_active' => true,
+        ]);
+
+        // 3. Kasi (untuk ruangan yang bersangkutan)
+        $kasi = User::factory()->create([
+            'role_id' => Role::KEPALA_SEKSI,
+            'room_id' => $room->id,
+            'phone_number' => '083333333333',
+            'wa_notify_enabled' => true,
+            'is_active' => true,
+        ]);
+
+        $response = $this->post(route('report.store'), [
+            'room_id' => $room->id,
+            'isi_laporan' => 'Laporan pelayanan ruangan poli bedah sangat cepat.',
+            'reporter_name' => 'Budi Santoso',
+            'reporter_phone' => '089999999999',
+        ]);
+
+        $response->assertRedirectContains('/report/success');
+
+        // Verify WA Gateway received requests for Admin, Kabid, and Kasi
+        Http::assertSent(function ($request) {
+            return $request['target'] === '081111111111'
+                && str_contains($request['message'], '🔔 *NOTIFIKASI SIPUAS*')
+                && str_contains($request['message'], 'Ada laporan pelayanan baru masuk ke sistem:');
+        });
+
+        Http::assertSent(function ($request) {
+            return $request['target'] === '082222222222'
+                && str_contains($request['message'], '🔔 *NOTIFIKASI SIPUAS*')
+                && str_contains($request['message'], 'Ada laporan pelayanan baru masuk ke sistem:');
+        });
+
+        Http::assertSent(function ($request) {
+            return $request['target'] === '083333333333'
+                && str_contains($request['message'], '🔔 *NOTIFIKASI SIPUAS*')
+                && str_contains($request['message'], 'Ada laporan pelayanan baru masuk ke sistem:');
+        });
     }
 }
