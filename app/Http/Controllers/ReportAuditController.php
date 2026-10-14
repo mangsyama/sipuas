@@ -33,8 +33,8 @@ class ReportAuditController extends Controller
 
         $query = Report::query()
             ->with([
-                'room:id,name,location_info',
-                'verifier:id,name,role',
+                'room:id,name,building_name,location_floor',
+                'verifier:id,name',
                 'reportStaff.hospitalStaff:id,name,nip,position,total_points',
                 'reportStaff.user:id,name,nip,total_points',
             ])
@@ -106,7 +106,7 @@ class ReportAuditController extends Controller
 
         // Data Ruangan Aktif untuk Dropdown Filter Standar
         $rooms = Room::query()
-            ->select('id', 'name', 'location_info')
+            ->select('id', 'name', 'building_name', 'location_floor')
             ->where('is_active', true)
             ->orderBy('name')
             ->get();
