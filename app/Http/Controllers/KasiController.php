@@ -951,9 +951,8 @@ class KasiController extends Controller
     public function logbook(Request $request): Response
     {
         $user = $request->user();
-        $userRoomId = $user ? ($user->room_id ?? $user->unit_id) : null;
 
-        // 1. Ambil seluruh staf dari Master Staff (Staff)
+        // 1. Ambil seluruh staf dari Master Staff (Staff) aktif
         $staffMasterQuery = Staff::where('is_active', true)
             ->with([
                 'rooms',
@@ -963,10 +962,6 @@ class KasiController extends Controller
                 'kpiLogs.report.room',
                 'kpiLogs.verifier'
             ]);
-
-        if ($userRoomId && !$user->isSuperAdmin()) {
-            $staffMasterQuery->whereHas('rooms', fn($q) => $q->where('rooms.id', $userRoomId));
-        }
 
         $staffList = $staffMasterQuery->orderBy('name')->get();
 
@@ -985,10 +980,6 @@ class KasiController extends Controller
             ])
             ->where('is_active', true);
 
-        if ($userRoomId && !$user->isSuperAdmin()) {
-            $userStaffQuery->where('room_id', $userRoomId);
-        }
-
         $extraUserStaff = $userStaffQuery->get()->filter(function ($u) use ($existingNips, $existingUserIds) {
             if (in_array($u->id, $existingUserIds)) return false;
             if ($u->nip && in_array(strtolower(trim($u->nip)), $existingNips)) return false;
@@ -1000,6 +991,7 @@ class KasiController extends Controller
 
         foreach ($staffList as $s) {
             $roomName = $s->rooms->pluck('name')->join(', ');
+            $roomIds = $s->rooms->pluck('id')->toArray();
             $logs = $s->kpiLogs;
 
             // Jika staf memiliki akun user, gabungkan juga kpiLogs yang tercatat via user_id
@@ -1023,6 +1015,7 @@ class KasiController extends Controller
                 'nip' => $s->nip ?? '-',
                 'role' => $s->position ?? 'Staf Pelayanan',
                 'room_name' => $roomName ?: null,
+                'room_ids' => $roomIds,
                 'total_points' => $s->total_points,
                 'praise_count' => $s->praise_count,
                 'complaint_count' => $s->complaint_count,
@@ -1033,6 +1026,7 @@ class KasiController extends Controller
 
         foreach ($extraUserStaff as $u) {
             $roomName = $u->room ? $u->room->name : ($u->unit ? $u->unit->name : null);
+            $roomIds = array_values(array_filter([$u->room_id, $u->unit_id]));
             $staffLogbooks->push([
                 'id' => 'user-' . $u->id,
                 'staff_id' => null,
@@ -1041,6 +1035,7 @@ class KasiController extends Controller
                 'nip' => $u->nip ?? '-',
                 'role' => $u->role ?? 'Staf Pelayanan',
                 'room_name' => $roomName ?: null,
+                'room_ids' => $roomIds,
                 'total_points' => $u->total_points,
                 'praise_count' => $u->praise_count,
                 'complaint_count' => $u->complaint_count,
@@ -1049,8 +1044,15 @@ class KasiController extends Controller
             ]);
         }
 
+        // Ambil semua daftar ruangan aktif RS
+        $rooms = Room::where('is_active', true)
+            ->select(['id', 'name'])
+            ->orderBy('name')
+            ->get();
+
         return Inertia::render('Kasi/Logbook', [
             'staffLogbooks' => $staffLogbooks->values(),
+            'rooms' => $rooms,
         ]);
     }
 

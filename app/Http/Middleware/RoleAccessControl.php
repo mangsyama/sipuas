@@ -85,6 +85,10 @@ class RoleAccessControl
         'staff-management.toggle-status' => ['staff-management.index', 'rooms.index', 'users.index'],
         'staff.index' => ['staff-management.index', 'rooms.index', 'users.index'],
         
+        // Report Audit (Master Data)
+        'admin.report-audit.index' => ['admin.report-audit.index'],
+        'admin.report-audit.update' => ['admin.report-audit.index'],
+        
         // System Integrations
         'admin.ai-settings.index' => ['admin.ai-settings.index'],
         'admin.ai-settings.update' => ['admin.ai-settings.index'],

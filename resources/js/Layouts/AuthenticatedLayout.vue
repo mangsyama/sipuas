@@ -4,7 +4,7 @@ import Dropdown from '@/Components/Dropdown.vue';
 import DropdownLink from '@/Components/DropdownLink.vue';
 import NotificationItem from '@/Components/NotificationItem.vue';
 import { Link, usePage, router } from '@inertiajs/vue3';
-import { Sun, Moon, Languages, LayoutDashboard, FileText, User, X, ChevronRight, ChevronLeft, ChevronDown, Settings, LogOut, Activity, Users, FileBarChart2, History, Shield, ShieldAlert, UserCheck, ArrowLeft, Database, Search, Building2, Layers, MapPin, Hospital, Palette, Play, Type, Bell, Clock, CheckCircle2, AlertTriangle, AlertCircle, HelpCircle, Wrench, Check, CheckCheck, Eye, MessageSquareCode, QrCode, Radio, Award, BarChart3, Sparkles, Contact } from '@lucide/vue';
+import { Sun, Moon, Languages, LayoutDashboard, FileText, User, X, ChevronRight, ChevronLeft, ChevronDown, Settings, LogOut, Activity, Users, FileBarChart2, History, Shield, ShieldAlert, ShieldCheck, UserCheck, ArrowLeft, Database, Search, Building2, Layers, MapPin, Hospital, Palette, Play, Type, Bell, Clock, CheckCircle2, AlertTriangle, AlertCircle, HelpCircle, Wrench, Check, CheckCheck, Eye, MessageSquareCode, QrCode, Radio, Award, BarChart3, Sparkles, Contact } from '@lucide/vue';
 
 
 
@@ -363,7 +363,8 @@ const menuGroups = computed(() => {
                 { label: 'Persetujuan Pendaftar', routeName: 'users.approvals', permission: 'users.approvals', icon: UserCheck },
                 { label: 'Daftar Pengguna', routeName: 'users.index', permission: 'users.index', icon: Users },
                 { label: 'Daftar Staf', routeName: 'staff-management.index', permission: ['staff-management.index', 'rooms.index', 'users.index'], icon: Contact },
-                { label: 'Daftar Ruangan', routeName: 'rooms.index', permission: 'rooms.index', icon: MapPin }
+                { label: 'Daftar Ruangan', routeName: 'rooms.index', permission: 'rooms.index', icon: MapPin },
+                { label: 'Audit Laporan Masyarakat', routeName: 'admin.report-audit.index', permission: 'admin.report-audit.index', icon: ShieldCheck }
             ]
         },
         {
@@ -938,6 +939,7 @@ const searchableItems = [
     { label: 'Daftar Pengguna', routeName: 'users.index', description: 'Kelola data pengguna sistem' },
     { label: 'Daftar Staf', routeName: 'staff-management.index', description: 'Pengelolaan daftar staf dan penempatan ruangan RS' },
     { label: 'Daftar Ruangan', routeName: 'rooms.index', description: 'Pengelolaan data master ruangan dan lokasi RS' },
+    { label: 'Audit Laporan Masyarakat', routeName: 'admin.report-audit.index', description: 'Audit verifikasi aduan, koreksi poin penilaian staf, dan validasi laporan' },
     { label: 'Pengaturan Profil', routeName: 'settings.index', description: 'Ubah sandi, tema, dan profil' },
     { label: 'Sistem Desain - Ringkasan', routeName: 'design-system.index', description: 'Ringkasan panduan warna, tema dark mode, & tipografi' },
     { label: 'Sistem Desain - Tombol & Badge', routeName: 'design-system.buttons-badges', description: 'Koleksi komponen tombol, animasi loading, & badge status' },
@@ -992,6 +994,7 @@ const mobilePageTitles = [
     { routeName: 'users.index', label: 'Daftar Pengguna' },
     { routeName: 'staff-management.index', label: 'Daftar Staf' },
     { routeName: 'rooms.index', label: 'Daftar Ruangan' },
+    { routeName: 'admin.report-audit.index', label: 'Audit Laporan Masyarakat' },
     { routeName: 'users.show', label: 'Detail Pengguna' },
     { routeName: 'users.edit', label: 'Edit Pengguna' },
     { routeName: 'profile.edit', label: 'Profil Saya' },

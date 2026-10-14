@@ -60,6 +60,7 @@ class UserManagementController extends Controller
                     ['key' => 'users.index', 'label' => 'Daftar Pengguna'],
                     ['key' => 'staff-management.index', 'label' => 'Daftar Staf'],
                     ['key' => 'rooms.index', 'label' => 'Daftar Ruangan'],
+                    ['key' => 'admin.report-audit.index', 'label' => 'Audit Laporan Masyarakat'],
                 ],
             ],
             [

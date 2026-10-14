@@ -2,6 +2,7 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import SearchableSelect from '@/Components/SearchableSelect.vue';
+import Modal from '@/Components/Modal.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { 
     UserCheck, 
@@ -481,47 +482,130 @@ watch(() => [props.staffList, props.staffMembers], () => {
     staffList.value = getEffectiveStaffList();
 }, { deep: true });
 
-// Staff External Addition
+const roomStaffCount = computed(() => {
+    const raw = (props.staffList && props.staffList.length > 0) ? props.staffList : (props.staffMembers || []);
+    return raw.length;
+});
+
+// Daftar staf yang ditampilkan pada card utama verifikasi
+const displayedStaffList = computed(() => {
+    // 1. Saat melihat detail verifikasi (isVerified), HANYA tampilkan staf yang terpilih
+    if (isVerified.value) {
+        return (staffList.value || []).filter(s => s.selected);
+    }
+
+    // 2. Saat verifikasi, tampilkan semua staf yang ditempatkan di ruangan ini
+    // dengan staf yang sudah terpilih berada di paling atas
+    const list = [...(staffList.value || [])];
+    return list.sort((a, b) => {
+        if (a.selected && !b.selected) return -1;
+        if (!a.selected && b.selected) return 1;
+        return 0;
+    });
+});
+
+// Staff External Addition & Complete Hospital Staff Modal
 const showAddOtherStaffModal = ref(false);
 const otherStaffSearchQuery = ref('');
 
-const availableOtherHospitalStaff = computed(() => {
-    const existingIds = new Set((staffList.value || []).map(s => s.id));
-    const all = [...(props.allHospitalStaff || [])];
-    let remaining = all.filter(s => !existingIds.has(s.id));
-    
+const findInStaffList = (staff) => {
+    return (staffList.value || []).find(s => {
+        if (s.id === staff.id && (!s.type || !staff.type || s.type === staff.type)) return true;
+        if (s.nip && staff.nip && s.nip !== '-' && s.nip === staff.nip) return true;
+        if (s.name && staff.name && s.name.trim().toLowerCase() === staff.name.trim().toLowerCase()) return true;
+        return false;
+    });
+};
+
+const isStaffSelected = (staff) => {
+    const existing = findInStaffList(staff);
+    return !!existing?.selected;
+};
+
+const toggleStaffFromModal = (staff) => {
+    if (isVerified.value) return;
+    const existing = findInStaffList(staff);
+    if (existing) {
+        existing.selected = !existing.selected;
+    } else {
+        staffList.value.push({
+            id: staff.id,
+            type: staff.type || 'STAFF_MASTER',
+            user_id: staff.user_id || null,
+            name: staff.name,
+            nip: staff.nip || '-',
+            role: staff.role || 'Staf Pelayanan',
+            unit: staff.unit_name,
+            total_points: staff.total_points || 100,
+            is_on_duty: false,
+            active_at_time: false,
+            attendance_type: 'MANUAL_EXTERNAL',
+            attendance_label: staff.unit_name || 'Staf Tambahan',
+            clock_in_time: null,
+            selected: true,
+            selected_default: true,
+        });
+    }
+    // Re-assign array reference to trigger immediate full reactivity across computed properties
+    staffList.value = [...staffList.value];
+};
+
+const addOtherStaff = (staff) => {
+    toggleStaffFromModal(staff);
+};
+
+// Modal Cari Staf — Menampilkan TOTAL staf RS secara lengkap dengan staf terpilih di paling atas
+const modalStaffList = computed(() => {
+    const map = new Map();
+
+    // 1. Masukkan semua staf rumah sakit aktif
+    (props.allHospitalStaff || []).forEach(s => {
+        map.set(s.id, {
+            ...s,
+            type: s.type || 'STAFF_MASTER',
+            unit_name: s.unit_name || '-',
+        });
+    });
+
+    // 2. Sinkronkan dengan staf yang ada di staffList lokal
+    (staffList.value || []).forEach(s => {
+        if (!map.has(s.id)) {
+            map.set(s.id, {
+                id: s.id,
+                type: s.type || 'STAFF_MASTER',
+                name: s.name,
+                nip: s.nip || '-',
+                role: s.role || 'Staf Pelayanan',
+                unit_name: s.unit || s.attendance_label || '-',
+                total_points: s.total_points || 100,
+            });
+        }
+    });
+
+    let all = Array.from(map.values());
+
+    // Filter berdasarkan query pencarian
     if (otherStaffSearchQuery.value && otherStaffSearchQuery.value.trim()) {
         const q = otherStaffSearchQuery.value.toLowerCase().trim();
-        remaining = remaining.filter(s => {
+        all = all.filter(s => {
             const name = String(s.name || '').toLowerCase();
             const nip = String(s.nip || '').toLowerCase();
             const unit = String(s.unit_name || '').toLowerCase();
-            return name.includes(q) || nip.includes(q) || unit.includes(q);
+            const role = String(s.role || '').toLowerCase();
+            return name.includes(q) || nip.includes(q) || unit.includes(q) || role.includes(q);
         });
     }
-    return remaining;
-});
 
-const addOtherStaff = (staff) => {
-    if (isVerified.value) return;
-    staffList.value.push({
-        id: staff.id,
-        name: staff.name,
-        nip: staff.nip || '-',
-        role: staff.role || 'Staf Pelayanan',
-        unit: staff.unit_name,
-        total_points: staff.total_points || 100,
-        is_on_duty: false,
-        active_at_time: false,
-        attendance_type: 'MANUAL_EXTERNAL',
-        attendance_label: staff.unit_name || null,
-        clock_in_time: null,
-        selected: true,
-        selected_default: true,
+    // Urutkan: Staf yang sudah terpilih berada di PALING ATAS
+    return all.sort((a, b) => {
+        const aSelected = isStaffSelected(a) ? 1 : 0;
+        const bSelected = isStaffSelected(b) ? 1 : 0;
+        if (bSelected !== aSelected) {
+            return bSelected - aSelected;
+        }
+        return String(a.name || '').localeCompare(String(b.name || ''));
     });
-    showAddOtherStaffModal.value = false;
-    otherStaffSearchQuery.value = '';
-};
+});
 
 // PESU PELUH Disposisi Integration
 const alreadyDispatchedToPesupeluh = computed(() => !!report.value?.pesupeluh_ticket_number);
@@ -1608,11 +1692,14 @@ const finishVerification = () => {
                                             <label class="text-[11px] font-medium text-slate-400 dark:text-slate-500 flex items-center gap-1.5">
                                                 <Users class="h-3.5 w-3.5 text-slate-400" />
                                                 <span>Pencocokan Staf Bertugas yang Terkait:</span>
-                                                <span class="text-rose-500 font-bold">*</span>
+                                                <span v-if="!isVerified" class="text-rose-500 font-bold">*</span>
                                             </label>
-                                            <div class="flex items-center gap-2">
+                                            <div class="flex items-center gap-2 flex-wrap">
                                                 <span class="px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300">
-                                                    {{ selectedStaffList.length }} dari {{ staffList.length }} Staf Terpilih
+                                                    {{ roomStaffCount }} Staf di Ruangan Ini
+                                                </span>
+                                                <span class="px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200">
+                                                    {{ selectedStaffList.length }} Terpilih
                                                 </span>
                                                 <span class="px-2 py-0.5 rounded-lg text-[10px] font-medium bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hidden sm:inline-flex items-center gap-1">
                                                     <Clock class="h-3 w-3 text-slate-400" />
@@ -1621,135 +1708,132 @@ const finishVerification = () => {
                                             </div>
                                         </div>
 
-                                        <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed font-normal">
-                                            {{ isVerified 
-                                                ? 'Daftar staf unit yang telah ditautkan dan dievaluasi pada verifikasi laporan ini:' 
-                                                : 'Pilih staf yang bertanggung jawab atas kejadian ini. Staf yang clock-in otomatis ditandai, dan staf yang belum clock-in tetap dapat dipilih secara manual sesuai bukti kehadiran fisik di lapangan:' 
-                                            }}
+                                        <p v-if="isVerified" class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed font-normal">
+                                            Daftar staf yang ditautkan pada verifikasi laporan ini:
                                         </p>
 
-
-                                        <!-- Staff List Checkbox Grid -->
-                                        <div v-if="staffList.length > 0" class="space-y-2">
-                                            <div class="max-h-60 overflow-y-auto pr-1 space-y-2">
-                                                <label
-                                                    v-for="staff in staffList"
-                                                    :key="staff.id"
-                                                    @click="isVerified ? $event.preventDefault() : null"
-                                                    :class="[
-                                                        'flex items-center justify-between p-3 rounded-xl border select-none transition',
-                                                        isVerified
-                                                            ? (staff.selected 
-                                                                ? (actionType === 'PEMOTONGAN' 
-                                                                    ? 'cursor-not-allowed bg-rose-600 text-white border-rose-600 shadow-sm' 
-                                                                    : 'cursor-not-allowed bg-emerald-600 text-white border-emerald-600 shadow-sm')
-                                                                : 'cursor-not-allowed opacity-50 bg-slate-100/50 dark:bg-slate-900/30 border-slate-200 dark:border-slate-800')
-                                                            : (staff.selected 
-                                                                ? (actionType === 'PEMOTONGAN'
-                                                                    ? 'cursor-pointer bg-rose-600 text-white border-rose-600 shadow-sm'
-                                                                    : 'cursor-pointer bg-emerald-600 text-white border-emerald-600 shadow-sm')
-                                                                : 'cursor-pointer bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300')
-                                                    ]"
-                                                >
-                                                    <div class="flex items-center gap-3">
-                                                        <!-- Accessible sr-only checkbox -->
-                                                        <input
-                                                            type="checkbox"
-                                                            v-model="staff.selected"
-                                                            :disabled="isVerified"
-                                                            class="sr-only"
-                                                        />
-
-                                                        <!-- Bulatan selector dengan ikon centang saat dipilih -->
-                                                        <div :class="[
-                                                            'h-4 w-4 rounded-full flex items-center justify-center shrink-0 transition-all',
-                                                            staff.selected
-                                                                ? 'bg-white shadow-xs'
-                                                                : 'border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800'
-                                                        ]">
-                                                            <Check 
-                                                                v-if="staff.selected" 
-                                                                :class="[
-                                                                    'h-2.5 w-2.5 stroke-[3]',
-                                                                    actionType === 'PEMOTONGAN' ? 'text-rose-600' : 'text-emerald-600'
-                                                                ]" 
+                                        <!-- Staff List Checkbox Grid (2 Kolom di Desktop/Tablet) -->
+                                        <div v-if="displayedStaffList.length > 0" class="space-y-2.5">
+                                            <div class="max-h-72 overflow-y-auto pr-1">
+                                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                                    <label
+                                                        v-for="staff in displayedStaffList"
+                                                        :key="staff.id"
+                                                        @click="isVerified ? $event.preventDefault() : null"
+                                                        :class="[
+                                                            'flex items-center justify-between p-3 rounded-xl border select-none transition gap-2.5',
+                                                            isVerified
+                                                                ? (staff.selected 
+                                                                    ? (actionType === 'PEMOTONGAN' 
+                                                                        ? 'cursor-default bg-rose-600 text-white border-rose-600 shadow-sm' 
+                                                                        : 'cursor-default bg-emerald-600 text-white border-emerald-600 shadow-sm')
+                                                                    : 'cursor-default opacity-50 bg-slate-100/50 dark:bg-slate-900/30 border-slate-200 dark:border-slate-800')
+                                                                : (staff.selected 
+                                                                    ? (actionType === 'PEMOTONGAN'
+                                                                        ? 'cursor-pointer bg-rose-600 text-white border-rose-600 shadow-sm'
+                                                                        : 'cursor-pointer bg-emerald-600 text-white border-emerald-600 shadow-sm')
+                                                                    : 'cursor-pointer bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700')
+                                                        ]"
+                                                    >
+                                                        <div class="flex items-center gap-2.5 min-w-0 flex-1 mr-1">
+                                                            <!-- Accessible sr-only checkbox -->
+                                                            <input
+                                                                type="checkbox"
+                                                                v-model="staff.selected"
+                                                                :disabled="isVerified"
+                                                                class="sr-only"
                                                             />
-                                                        </div>
-                                                        <div>
-                                                            <div class="flex items-center gap-1.5 flex-wrap">
-                                                                <span :class="['text-xs font-semibold', staff.selected ? 'text-white' : 'text-slate-800 dark:text-slate-100']">
-                                                                    {{ staff.name }}
-                                                                </span>
-                                                                <span
-                                                                    v-if="staff.attendance_type === 'ACTIVE_AT_REPORT'"
-                                                                    :class="[
-                                                                        'px-1.5 py-0.5 rounded text-[10px] font-semibold border',
-                                                                        staff.selected 
-                                                                            ? 'bg-white/20 text-white border-white/30' 
-                                                                            : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800'
-                                                                    ]"
-                                                                    title="Tercatat berdinas saat jam aduan diterima"
-                                                                >
-                                                                    ✓ On-Duty saat Kejadian
-                                                                </span>
-                                                                <span
-                                                                    v-else-if="staff.attendance_type === 'TODAY'"
-                                                                    :class="[
-                                                                        'px-1.5 py-0.5 rounded text-[10px] font-medium border',
-                                                                        staff.selected 
-                                                                            ? 'bg-white/20 text-white border-white/30' 
-                                                                            : 'bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border-blue-200 dark:border-blue-800'
-                                                                    ]"
-                                                                >
-                                                                    Hadir Hari Ini
-                                                                </span>
-                                                                <span
-                                                                    v-else-if="staff.attendance_type === 'MANUAL_EXTERNAL' && staff.attendance_label && staff.attendance_label !== 'Staf Terpilih'"
-                                                                    :class="[
-                                                                        'px-1.5 py-0.5 rounded text-[10px] font-semibold border',
-                                                                        staff.selected 
-                                                                            ? 'bg-white/20 text-white border-white/30' 
-                                                                            : 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300 border-purple-300 dark:border-purple-800'
-                                                                    ]"
-                                                                >
-                                                                    {{ staff.attendance_label }}
-                                                                </span>
-                                                                <span
-                                                                    v-else-if="staff.attendance_type === 'ASSIGNED'"
-                                                                    :class="[
-                                                                        'px-1.5 py-0.5 rounded text-[10px] font-medium border',
-                                                                        staff.selected 
-                                                                            ? 'bg-white/20 text-white border-white/30' 
-                                                                            : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
-                                                                    ]"
-                                                                    title="Terdaftar dalam penempatan ruangan ini pada Master Staf RS"
-                                                                >
-                                                                    Ditempatkan di Ruangan Ini
-                                                                </span>
 
+                                                            <!-- Bulatan selector dengan ikon centang saat dipilih -->
+                                                            <div :class="[
+                                                                'h-4 w-4 rounded-full flex items-center justify-center shrink-0 transition-all',
+                                                                staff.selected
+                                                                    ? 'bg-white shadow-xs'
+                                                                    : 'border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800'
+                                                            ]">
+                                                                <Check 
+                                                                    v-if="staff.selected" 
+                                                                    :class="[
+                                                                        'h-2.5 w-2.5 stroke-[3]',
+                                                                        actionType === 'PEMOTONGAN' ? 'text-rose-600' : 'text-emerald-600'
+                                                                    ]" 
+                                                                />
                                                             </div>
-                                                            <div :class="['text-[10px] font-normal mt-0.5', staff.selected ? 'text-white/80' : 'text-slate-500 dark:text-slate-400']">
-                                                                {{ staff.role }} • NIP: {{ staff.nip }}
-                                                                <span v-if="staff.clock_in_time" :class="staff.selected ? 'text-white/70' : 'text-slate-400'">
-                                                                    (Presensi: {{ staff.clock_in_time }})
-                                                                </span>
+                                                            <div class="min-w-0 flex-1">
+                                                                <div class="flex items-center gap-1.5 flex-wrap">
+                                                                    <span :class="['text-xs font-semibold truncate', staff.selected ? 'text-white' : 'text-slate-800 dark:text-slate-100']">
+                                                                        {{ staff.name }}
+                                                                    </span>
+                                                                    <span
+                                                                        v-if="staff.attendance_type === 'ACTIVE_AT_REPORT'"
+                                                                        :class="[
+                                                                            'px-1.5 py-0.5 rounded text-[10px] font-semibold border',
+                                                                            staff.selected 
+                                                                                ? 'bg-white/20 text-white border-white/30' 
+                                                                                : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800'
+                                                                        ]"
+                                                                        title="Tercatat berdinas saat jam aduan diterima"
+                                                                    >
+                                                                        ✓ On-Duty
+                                                                    </span>
+                                                                    <span
+                                                                        v-else-if="staff.attendance_type === 'TODAY'"
+                                                                        :class="[
+                                                                            'px-1.5 py-0.5 rounded text-[10px] font-medium border',
+                                                                            staff.selected 
+                                                                                ? 'bg-white/20 text-white border-white/30' 
+                                                                                : 'bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border-blue-200 dark:border-blue-800'
+                                                                        ]"
+                                                                    >
+                                                                        Hadir Hari Ini
+                                                                    </span>
+                                                                    <span
+                                                                        v-else-if="staff.attendance_type === 'MANUAL_EXTERNAL' && staff.attendance_label && staff.attendance_label !== 'Staf Terpilih'"
+                                                                        :class="[
+                                                                            'px-1.5 py-0.5 rounded text-[10px] font-semibold border truncate max-w-[120px]',
+                                                                            staff.selected 
+                                                                                ? 'bg-white/20 text-white border-white/30' 
+                                                                                : 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300 border-purple-300 dark:border-purple-800'
+                                                                        ]"
+                                                                    >
+                                                                        {{ staff.attendance_label }}
+                                                                    </span>
+                                                                    <span
+                                                                        v-else-if="staff.attendance_type === 'ASSIGNED'"
+                                                                        :class="[
+                                                                            'px-1.5 py-0.5 rounded text-[10px] font-medium border',
+                                                                            staff.selected 
+                                                                                ? 'bg-white/20 text-white border-white/30' 
+                                                                                : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                                                                        ]"
+                                                                        title="Terdaftar dalam penempatan ruangan ini pada Master Staf RS"
+                                                                    >
+                                                                        Ruangan Ini
+                                                                    </span>
+                                                                </div>
+                                                                <div :class="['text-[10px] font-normal mt-0.5 truncate', staff.selected ? 'text-white/80' : 'text-slate-500 dark:text-slate-400']">
+                                                                    {{ staff.role }} • NIP: {{ staff.nip }}
+                                                                    <span v-if="staff.clock_in_time" :class="staff.selected ? 'text-white/70' : 'text-slate-400'">
+                                                                        (Presensi: {{ staff.clock_in_time }})
+                                                                    </span>
+                                                                </div>
                                                             </div>
                                                         </div>
-                                                    </div>
-                                                    <div class="text-right flex-shrink-0">
-                                                        <span :class="[
-                                                            'text-[11px] font-semibold block',
-                                                            staff.selected
-                                                                ? 'text-white'
-                                                                : (actionType === 'PEMOTONGAN' && isVerified ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400')
-                                                        ]">
-                                                            {{ staff.total_points }} Poin
-                                                        </span>
-                                                        <span v-if="isVerified && staff.selected" class="text-[10px] font-semibold text-white/90">
-                                                            {{ actionType === 'PEMOTONGAN' ? `Dievaluasi (-${pointValue})` : `Diberi Reward (+${pointValue})` }}
-                                                        </span>
-                                                    </div>
-                                                </label>
+                                                        <div class="text-right flex-shrink-0">
+                                                            <span :class="[
+                                                                'text-[11px] font-semibold block',
+                                                                staff.selected
+                                                                    ? 'text-white'
+                                                                    : (actionType === 'PEMOTONGAN' && isVerified ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400')
+                                                            ]">
+                                                                {{ staff.total_points }} Poin
+                                                            </span>
+                                                            <span v-if="isVerified && staff.selected" class="text-[10px] font-semibold text-white/90">
+                                                                {{ actionType === 'PEMOTONGAN' ? `Dievaluasi (-${pointValue})` : `Diberi Reward (+${pointValue})` }}
+                                                            </span>
+                                                        </div>
+                                                    </label>
+                                                </div>
                                             </div>
 
                                             <!-- Tombol Cari Staf di bawah list (hanya jika belum diverifikasi) -->
@@ -1757,35 +1841,41 @@ const finishVerification = () => {
                                                 v-if="!isVerified"
                                                 type="button"
                                                 @click="showAddOtherStaffModal = true"
-                                                class="w-full h-9 px-3 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50/80 hover:bg-slate-100 dark:bg-slate-900/50 dark:hover:bg-slate-800/80 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 text-xs font-medium flex items-center justify-center gap-1.5 transition cursor-pointer active:scale-[0.98]"
+                                                class="w-full h-10 px-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-300 text-xs font-semibold flex items-center justify-center gap-2 transition cursor-pointer shadow-xs active:scale-[0.99]"
                                                 title="Cari staf rumah sakit jika ada yang bertugas di lapangan saat kejadian"
                                             >
-                                                <Search class="h-3.5 w-3.5" />
+                                                <Search class="h-4 w-4 text-slate-500 dark:text-slate-400" />
                                                 <span>Cari Staf</span>
                                             </button>
                                         </div>
 
-                                        <!-- If No Staff at All — empty state with button centered -->
-                                        <div v-else class="text-center py-8 border border-dashed border-slate-200 dark:border-slate-800 rounded-xl space-y-3 bg-white/50 dark:bg-slate-900/50">
+                                        <!-- If No Staff Displayed — empty state with button centered -->
+                                        <div v-else class="text-center py-6 border border-dashed border-slate-200 dark:border-slate-800 rounded-xl space-y-2.5 bg-slate-50/50 dark:bg-slate-950/40 p-4">
                                             <div class="h-10 w-10 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mx-auto">
                                                 <Users class="h-5 w-5" />
                                             </div>
                                             <div class="space-y-1 px-4">
-                                                <p class="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                                                    Tidak ada staf yang tercatat bertugas di sistem pada unit {{ report.unit }}.
+                                                <p v-if="isVerified" class="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                                                    Tidak ada staf yang ditautkan pada verifikasi laporan ini.
                                                 </p>
-                                                <p class="text-[11px] text-slate-500 dark:text-slate-400 font-normal">
-                                                    Gunakan tombol di bawah untuk mencari staf jika ada yang bertugas fisik di lapangan saat kejadian.
+                                                <p v-else class="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                                                    Tidak ada staf yang tercatat bertugas saat jam kejadian.
+                                                </p>
+                                                <p v-if="isVerified" class="text-[11px] text-slate-500 dark:text-slate-400 font-normal">
+                                                    Laporan ini diselesaikan dengan status {{ actionType === 'DIBATALKAN' ? 'Dibatalkan (Gugur)' : 'Netral (0 Poin KPI)' }}.
+                                                </p>
+                                                <p v-else class="text-[11px] text-slate-500 dark:text-slate-400 font-normal">
+                                                    Gunakan tombol "Cari Staf" di bawah untuk memilih staf yang bertugas di lapangan saat kejadian.
                                                 </p>
                                             </div>
                                             <button
                                                 v-if="!isVerified"
                                                 type="button"
                                                 @click="showAddOtherStaffModal = true"
-                                                class="mx-auto h-9 px-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 hover:bg-slate-200/80 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-xs active:scale-95"
+                                                class="mx-auto h-10 px-5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-300 text-xs font-semibold flex items-center gap-2 transition cursor-pointer shadow-xs active:scale-95"
                                                 title="Cari staf rumah sakit"
                                             >
-                                                <Search class="h-3.5 w-3.5" />
+                                                <Search class="h-4 w-4 text-slate-500 dark:text-slate-400" />
                                                 <span>Cari Staf</span>
                                             </button>
                                         </div>
@@ -2551,122 +2641,148 @@ const finishVerification = () => {
             </Transition>
         </Teleport>
 
-        <!-- Modal Cari Staf -->
-        <Teleport to="body">
-            <Transition
-                enter-active-class="transition ease-out duration-200"
-                enter-from-class="opacity-0"
-                enter-to-class="opacity-100"
-                leave-active-class="transition ease-in duration-150"
-                leave-from-class="opacity-100"
-                leave-to-class="opacity-0"
-            >
-                <div v-if="showAddOtherStaffModal" class="fixed inset-0 z-[9999] flex items-center justify-center p-4">
-                    <div class="fixed inset-0 bg-black/50 backdrop-blur-xs transition-opacity" @click="showAddOtherStaffModal = false"></div>
-
-                    <div class="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[85vh] z-10">
-                        <!-- Modal Header -->
-                        <div class="p-4 sm:p-5 border-b border-slate-200/80 dark:border-slate-800 flex items-center justify-between gap-3">
-                            <div class="flex items-center gap-2.5 min-w-0">
-                                <div class="h-9 w-9 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center shrink-0 border border-slate-200 dark:border-slate-700">
-                                    <Search class="h-4.5 w-4.5" />
-                                </div>
-                                <div class="min-w-0">
-                                    <h3 class="text-sm font-bold text-slate-900 dark:text-white truncate">
-                                        Cari Staf
-                                    </h3>
-                                    <p class="text-[11px] text-slate-500 dark:text-slate-400 truncate">
-                                        Pilih staf yang bertugas fisik di lapangan saat kejadian
-                                    </p>
-                                </div>
-                            </div>
-                            <button
-                                type="button"
-                                @click="showAddOtherStaffModal = false"
-                                class="h-8 w-8 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 flex items-center justify-center transition shrink-0 cursor-pointer"
-                            >
-                                <X class="h-4 w-4" />
-                            </button>
+        <!-- Modal Cari & Pilih Staf (Komponen Standar Modal dengan Tema Hitam Netral) -->
+        <Modal
+            :show="showAddOtherStaffModal"
+            max-width="4xl"
+            :close-on-click-outside="true"
+            @close="showAddOtherStaffModal = false"
+        >
+            <div class="flex flex-col flex-1 overflow-hidden min-h-screen sm:min-h-0 sm:max-h-[88vh] bg-white dark:bg-slate-900">
+                <!-- Modal Header -->
+                <div class="p-4 sm:p-5 border-b border-slate-200/80 dark:border-slate-800 flex items-center justify-between gap-3 shrink-0 bg-white dark:bg-slate-900">
+                    <div class="flex items-center gap-3 min-w-0">
+                        <div class="h-10 w-10 rounded-xl bg-slate-900 text-white dark:bg-white dark:text-slate-900 flex items-center justify-center shrink-0 border border-slate-800 dark:border-slate-200 shadow-xs">
+                            <Search class="h-5 w-5" />
                         </div>
-
-                        <!-- Search Bar -->
-                        <div class="p-3.5 sm:p-4 border-b border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50">
-                            <div class="relative">
-                                <Search class="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                                <input
-                                    v-model="otherStaffSearchQuery"
-                                    type="text"
-                                    placeholder="Ketik nama, NIP, atau unit staf..."
-                                    class="w-full pl-10 pr-8 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-slate-400 dark:focus:border-slate-600 transition"
-                                />
-                                <button
-                                    v-if="otherStaffSearchQuery"
-                                    type="button"
-                                    @click="otherStaffSearchQuery = ''"
-                                    class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
-                                >
-                                    <X class="h-3.5 w-3.5" />
-                                </button>
-                            </div>
+                        <div class="min-w-0">
+                            <h3 class="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white truncate">
+                                Cari & Pilih Staf
+                            </h3>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 truncate">
+                                Daftar seluruh staf rumah sakit untuk verifikasi laporan
+                            </p>
                         </div>
+                    </div>
+                    <button
+                        type="button"
+                        @click="showAddOtherStaffModal = false"
+                        class="h-9 w-9 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 flex items-center justify-center transition shrink-0 cursor-pointer"
+                        title="Tutup Modal (Esc)"
+                    >
+                        <X class="h-5 w-5" />
+                    </button>
+                </div>
 
-                        <!-- Staff List -->
-                        <div class="p-3 sm:p-4 overflow-y-auto space-y-2 flex-1 min-h-[160px] max-h-[350px]">
-                            <div
-                                v-for="staff in availableOtherHospitalStaff"
-                                :key="'other-' + staff.id"
-                                class="p-3 rounded-xl border border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-slate-900 flex items-center justify-between gap-3 transition shadow-2xs"
-                            >
-                                <div class="min-w-0">
+                <!-- Search Bar -->
+                <div class="p-3.5 sm:p-4 border-b border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 space-y-2.5 shrink-0">
+                    <div class="relative">
+                        <Search class="h-4 w-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                        <input
+                            v-model="otherStaffSearchQuery"
+                            type="text"
+                            placeholder="Ketik nama, NIP, ruangan/unit, atau jabatan staf..."
+                            class="w-full pl-10 pr-9 py-2.5 text-xs sm:text-sm rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none focus:border-slate-900 dark:focus:border-slate-300 transition shadow-2xs"
+                        />
+                        <button
+                            v-if="otherStaffSearchQuery"
+                            type="button"
+                            @click="otherStaffSearchQuery = ''"
+                            class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                            title="Bersihkan Pencarian"
+                        >
+                            <X class="h-4 w-4" />
+                        </button>
+                    </div>
+                    <div class="flex items-center justify-between text-xs px-1 text-slate-500 dark:text-slate-400 flex-wrap gap-2">
+                        <span>Menampilkan <strong>{{ modalStaffList.length }}</strong> staf RS</span>
+                        <span v-if="selectedStaffList.length > 0" class="text-slate-900 dark:text-white font-bold flex items-center gap-1.5">
+                            <span class="h-2 w-2 rounded-full bg-slate-900 dark:bg-white animate-pulse"></span>
+                            <span>{{ selectedStaffList.length }} staf terpilih (di urutan teratas)</span>
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Staff List (Grid 2 Kolom Responsif dengan Checklist Bulat) -->
+                <div class="p-4 sm:p-5 overflow-y-auto flex-1 min-h-0 sm:max-h-[calc(88vh-190px)]">
+                    <div v-if="modalStaffList.length > 0" class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div
+                            v-for="staff in modalStaffList"
+                            :key="'modal-' + (staff.type || 's') + '-' + staff.id"
+                            @click="toggleStaffFromModal(staff)"
+                            :class="[
+                                'flex items-center justify-between p-3.5 rounded-xl border select-none transition cursor-pointer shadow-2xs',
+                                isStaffSelected(staff)
+                                    ? 'bg-slate-900 text-white border-slate-900 shadow-sm dark:bg-slate-800 dark:border-slate-700'
+                                    : 'bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 hover:border-slate-400 dark:hover:border-slate-600'
+                            ]"
+                        >
+                            <div class="flex items-center gap-3 min-w-0 flex-1 mr-2">
+                                <!-- Bulatan selector dengan ikon centang saat dipilih (seperti di luar) -->
+                                <div :class="[
+                                    'h-4 w-4 rounded-full flex items-center justify-center shrink-0 transition-all',
+                                    isStaffSelected(staff)
+                                        ? 'bg-white shadow-xs'
+                                        : 'border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800'
+                                ]">
+                                    <Check 
+                                        v-if="isStaffSelected(staff)" 
+                                        class="h-2.5 w-2.5 stroke-[3] text-slate-900" 
+                                    />
+                                </div>
+
+                                <div class="min-w-0 flex-1">
                                     <div class="flex items-center gap-1.5 flex-wrap">
-                                        <span class="text-xs font-bold text-slate-800 dark:text-slate-100">
+                                        <span :class="['text-xs font-semibold truncate', isStaffSelected(staff) ? 'text-white' : 'text-slate-800 dark:text-slate-100']">
                                             {{ staff.name }}
                                         </span>
-                                        <span v-if="staff.unit_name" class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                                        <span 
+                                            v-if="isStaffSelected(staff)" 
+                                            class="px-1.5 py-0.5 rounded text-[10px] font-semibold border bg-white/20 text-white border-white/30"
+                                        >
+                                            ✓ Terpilih
+                                        </span>
+                                        <span 
+                                            v-if="staff.unit_name && staff.unit_name !== '-'" 
+                                            :class="[
+                                                'px-1.5 py-0.5 rounded text-[10px] font-medium border truncate max-w-[150px]',
+                                                isStaffSelected(staff)
+                                                    ? 'bg-white/10 text-white/90 border-white/20'
+                                                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                                            ]"
+                                            :title="staff.unit_name"
+                                        >
                                             {{ staff.unit_name }}
                                         </span>
                                     </div>
-                                    <p class="text-[10.5px] text-slate-400 mt-0.5">
-                                        {{ staff.role }} • NIP: {{ staff.nip }} • Saldo: {{ staff.total_points }} Poin
-                                    </p>
+                                    <div :class="['text-[10px] font-normal mt-0.5 truncate', isStaffSelected(staff) ? 'text-white/80' : 'text-slate-500 dark:text-slate-400']">
+                                        {{ staff.role }} • NIP: {{ staff.nip }}
+                                    </div>
                                 </div>
-                                <button
-                                    type="button"
-                                    @click="addOtherStaff(staff)"
-                                    class="h-8 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 dark:bg-slate-200 dark:hover:bg-white active:scale-95 text-white dark:text-slate-900 text-xs font-semibold shrink-0 transition flex items-center gap-1 shadow-xs cursor-pointer"
-                                >
-                                    <Plus class="h-3.5 w-3.5" />
-                                    <span>Pilih Staf</span>
-                                </button>
                             </div>
 
-                            <div v-if="availableOtherHospitalStaff.length === 0" class="text-center py-8 text-xs text-slate-400">
-                                <Users class="h-8 w-8 mx-auto text-slate-300 dark:text-slate-600 mb-1.5" />
-                                <p v-if="otherStaffSearchQuery">
-                                    Tidak ada staf yang cocok dengan pencarian "{{ otherStaffSearchQuery }}".
-                                </p>
-                                <p v-else>
-                                    Semua staf aktif rumah sakit sudah masuk dalam daftar.
-                                </p>
+                            <div class="text-right shrink-0">
+                                <span :class="[
+                                    'text-[11px] font-semibold block',
+                                    isStaffSelected(staff) ? 'text-white' : 'text-slate-700 dark:text-slate-300'
+                                ]">
+                                    {{ staff.total_points }} Poin
+                                </span>
                             </div>
-                        </div>
-
-                        <!-- Modal Footer -->
-                        <div class="p-3.5 border-t border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 flex items-center justify-between">
-                            <span class="text-[11px] text-slate-400">
-                                {{ availableOtherHospitalStaff.length }} staf tersedia
-                            </span>
-                            <button
-                                type="button"
-                                @click="showAddOtherStaffModal = false"
-                                class="h-9 px-4 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition cursor-pointer"
-                            >
-                                Tutup
-                            </button>
                         </div>
                     </div>
+
+                    <div v-else class="text-center py-12 text-xs text-slate-400 space-y-2">
+                        <Users class="h-10 w-10 mx-auto text-slate-300 dark:text-slate-600 mb-2" />
+                        <p v-if="otherStaffSearchQuery" class="text-sm font-medium text-slate-600 dark:text-slate-300">
+                            Tidak ada staf yang cocok dengan pencarian "{{ otherStaffSearchQuery }}".
+                        </p>
+                        <p v-else class="text-sm font-medium text-slate-600 dark:text-slate-300">
+                            Tidak ada data staf rumah sakit yang tersedia.
+                        </p>
+                    </div>
                 </div>
-            </Transition>
-        </Teleport>
+            </div>
+        </Modal>
     </AuthenticatedLayout>
 </template>

@@ -172,6 +172,10 @@ Route::middleware('auth')->group(function () {
         // Alias compatibility
         Route::get('/staff', fn () => redirect()->route('staff-management.index'))->name('staff.index');
 
+        // Master Data 4: Audit Laporan Masyarakat & Koreksi Verifikasi
+        Route::get('/admin/report-audit', [\App\Http\Controllers\ReportAuditController::class, 'index'])->name('admin.report-audit.index');
+        Route::put('/admin/report-audit/{id}', [\App\Http\Controllers\ReportAuditController::class, 'update'])->name('admin.report-audit.update');
+
         // Generator QR Code
         Route::get('/admin/qr-generator', [\App\Http\Controllers\QrGeneratorController::class, 'index'])->name('admin.qr-generator.index');
         Route::get('/admin/qr-code', fn () => redirect()->route('admin.qr-generator.index'))->name('admin.qr-code.index');

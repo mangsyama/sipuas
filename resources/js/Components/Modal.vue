@@ -18,6 +18,10 @@ const props = defineProps({
         type: Boolean,
         default: false,
     },
+    pushHistory: {
+        type: Boolean,
+        default: false,
+    },
 });
 
 const emit = defineEmits(['close']);
@@ -40,26 +44,30 @@ watch(
             showSlot.value = true;
 
             dialog.value?.showModal();
-            window.addEventListener('popstate', handlePopState);
-            try {
-                window.history.pushState({ modalOpen: true }, '');
-                pushHistoryFlag = true;
-            } catch (e) {
-                // ignore
-            }
-        } else {
-            document.body.style.overflow = '';
-            window.removeEventListener('popstate', handlePopState);
-
-            if (pushHistoryFlag && window.history.state && window.history.state.modalOpen) {
-                pushHistoryFlag = false;
+            if (props.pushHistory) {
+                window.addEventListener('popstate', handlePopState);
                 try {
-                    window.history.back();
+                    window.history.pushState({ modalOpen: true }, '');
+                    pushHistoryFlag = true;
                 } catch (e) {
                     // ignore
                 }
-            } else {
-                pushHistoryFlag = false;
+            }
+        } else {
+            document.body.style.overflow = '';
+            if (props.pushHistory) {
+                window.removeEventListener('popstate', handlePopState);
+
+                if (pushHistoryFlag && window.history.state && window.history.state.modalOpen) {
+                    pushHistoryFlag = false;
+                    try {
+                        window.history.back();
+                    } catch (e) {
+                        // ignore
+                    }
+                } else {
+                    pushHistoryFlag = false;
+                }
             }
 
             setTimeout(() => {
@@ -108,6 +116,9 @@ const maxWidthClass = computed(() => {
         lg: 'sm:max-w-lg',
         xl: 'sm:max-w-xl',
         '2xl': 'sm:max-w-2xl',
+        '3xl': 'sm:max-w-3xl',
+        '4xl': 'sm:max-w-4xl',
+        '5xl': 'sm:max-w-5xl',
     }[props.maxWidth];
 });
 </script>
